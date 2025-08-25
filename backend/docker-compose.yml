@@ -1,0 +1,113 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: quizspark-postgres
+    environment:
+      POSTGRES_DB: quizspark_db
+      POSTGRES_USER: quizspark_user
+      POSTGRES_PASSWORD: quizspark_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - quizspark-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: quizspark-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - quizspark-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Main API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quizspark-api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://quizspark_user:quizspark_password@postgres:5432/quizspark_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: 29a4976e684ff14dd0079108d69099e2
+      PORT: 3000
+      MATCH_SERVICE_URL: http://match-service:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - quizspark-network
+    restart: unless-stopped
+    volumes:
+      - ./uploads:/app/uploads
+
+  # Match Service (WebSocket)
+  match-service:
+    build:
+      context: ./match-service
+      dockerfile: Dockerfile
+    container_name: quizspark-match-service
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: 29a4976e684ff14dd0079108d69099e2
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - redis
+    networks:
+      - quizspark-network
+    restart: unless-stopped
+
+  # pgAdmin (Database UI)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: quizspark-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - quizspark-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (Optional - commented out until nginx.conf is created)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: quizspark-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf
+  #     - ./ssl:/etc/nginx/ssl
+  #   depends_on:
+  #     - api
+  #     - match-service
+  #   networks:
+  #     - quizspark-network
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  quizspark-network:
+    driver: bridge

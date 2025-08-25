@@ -72,21 +72,6 @@ services:
       - quizspark-network
     restart: unless-stopped
 
-  # pgAdmin (Database UI)
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: quizspark-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local
-      PGADMIN_DEFAULT_PASSWORD: admin123
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    networks:
-      - quizspark-network
-    restart: unless-stopped
-
   # Nginx Reverse Proxy (Optional - commented out until nginx.conf is created)
   # nginx:
   #   image: nginx:alpine

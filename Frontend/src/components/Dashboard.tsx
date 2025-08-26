@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import StatsCards from './StatsCards';
 import StudentsPerCourseChart from './StudentsPerCourseChart';
@@ -7,10 +8,22 @@ import QuizzesPerCourseChart from './QuizzesPerCourseChart';
 import FloatingAddButton from './FloatingAddButton';
 import ContentViews from './ContentViews';
 import { dashboardStats } from '../data/mockData';
+import { authService } from '../services/auth.service';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      navigate('/login');
+    }
+  };
 
   const renderDashboardContent = () => {
     if (activeTab === 'courses' || activeTab === 'faculties' || activeTab === 'students') {
@@ -52,9 +65,14 @@ const Dashboard = () => {
                 />
               </div>
               
-              <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
-                <div className="w-6 h-6 bg-gray-400 rounded-full"></div>
-              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="text-sm">Logout</span>
+              </button>
             </div>
           </div>
         </header>

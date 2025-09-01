@@ -23,10 +23,20 @@ app.use(helmet({
 }));
 
 // CORS configuration
+const allowedOrigins = [
+  'http://localhost:5173', // Vite dev
+  'http://localhost:4173', // Alternate Vite
+  process.env.FRONTEND_URL || '' // Production frontend
+];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
-    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:4173'],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow non-browser requests (e.g. Postman)
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

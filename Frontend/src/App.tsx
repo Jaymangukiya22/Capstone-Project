@@ -1,8 +1,13 @@
-import Dashboard from './components/Dashboard'
+import DashboardLayout from "@/components/dashboard/layout"
+import DashboardPage from "@/components/dashboard/page"
 import './App.css'
 
 function App() {
-  return <Dashboard />
+  return (
+    <DashboardLayout>
+      <DashboardPage />
+    </DashboardLayout>
+  )
 }
 
 export default App

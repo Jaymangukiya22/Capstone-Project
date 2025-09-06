@@ -4,7 +4,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -34,13 +33,14 @@ export function AddCategoryModal({ open, onOpenChange, onAddCategory, categories
   const [parentId, setParentId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!name.trim()) return
 
     setIsLoading(true)
     try {
-      await onAddCategory(name.trim(), description.trim() || undefined, parentId || undefined)
+      const finalParentId = parentId === "none" ? undefined : parentId || undefined
+      await onAddCategory(name.trim(), description.trim() || undefined, finalParentId)
       setName("")
       setDescription("")
       setParentId("")
@@ -86,7 +86,7 @@ export function AddCategoryModal({ open, onOpenChange, onAddCategory, categories
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-6">
+        <div className="px-6 pb-6 space-y-6">
           <div className="space-y-2">
             <Label htmlFor="category-name" className="text-sm font-medium text-gray-900 dark:text-gray-100">
               Category Name <span className="text-red-500">*</span>
@@ -124,7 +124,7 @@ export function AddCategoryModal({ open, onOpenChange, onAddCategory, categories
                 <SelectValue placeholder="Select parent category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None (Root Category)</SelectItem>
+                <SelectItem value="none">None (Root Category)</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     {category.name}
@@ -134,7 +134,7 @@ export function AddCategoryModal({ open, onOpenChange, onAddCategory, categories
             </Select>
           </div>
 
-          <DialogFooter className="flex space-x-3 pt-4">
+          <div className="flex space-x-3 pt-4">
             <Button
               type="button"
               variant="outline"
@@ -145,14 +145,14 @@ export function AddCategoryModal({ open, onOpenChange, onAddCategory, categories
               Cancel
             </Button>
             <Button 
-              type="submit" 
+              onClick={handleSubmit}
               disabled={isLoading || !name.trim()}
               className="flex-1 h-11 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
             >
               {isLoading ? "Creating..." : "Add Category"}
             </Button>
-          </DialogFooter>
-        </form>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -1,0 +1,695 @@
+{
+  "meta": {
+    "project": "Quiz App Backend",
+    "date": "2025-09-04",
+    "prepared_by": "Software Development Manager"
+  },
+  "product_overview": "A scalable and robust backend system designed for a real-time quiz platform enabling hierarchical categorization, quiz and question management, caching for performance, and basic authentication.",
+  "core_goals": [
+    "Provide a hierarchical category management system supporting infinite nesting for quizzes.",
+    "Enable creation, retrieval, update, and deletion of quizzes with metadata including difficulty and time limits.",
+    "Support robust question management with multiple choice options and validation.",
+    "Improve performance using Redis caching for quiz and category data.",
+    "Ensure development-stage security via basic authentication.",
+    "Containerize application for easy deployment via Docker.",
+    "Provide health monitoring and efficient database operations."
+  ],
+  "key_features": [
+    "Hierarchical Categories with self-join relationships supporting unlimited nesting.",
+    "Full CRUD API for quiz management including difficulty levels and optional time limits.",
+    "Question management allowing 2-4 options per question with support for single or multiple correct answers.",
+    "Redis caching layer for fast retrieval with automatic expiration: 5 minutes for quizzes, 10 minutes for categories.",
+    "Basic authentication middleware with username 'aryan' and password 'admin' for development.",
+    "Health check endpoint to monitor system status and uptime.",
+    "Docker-compose setup including PostgreSQL, Redis, and backend services.",
+    "TypeScript codebase with Prisma ORM for type-safe DB access and migrations."
+  ],
+  "user_flow_summary": [
+    "Users authenticate using basic auth credentials to access APIs.",
+    "Users create and manage categories using the category endpoints to organize quizzes hierarchically.",
+    "Users manage quizzes by creating, listing, updating, and deleting quizzes with optional category filters.",
+    "Users add, update, retrieve, and delete questions linked to quizzes, ensuring valid options and correct answers.",
+    "System caches frequently accessed quiz and category data to improve response times transparently.",
+    "Users monitor application status via the health check endpoint for uptime assurance."
+  ],
+  "validation_criteria": [
+    "Categories can be created with or without a parent, supporting deep hierarchical nesting.",
+    "Quizzes must include required fields (title, category) and validate difficulty enumeration and time limits.",
+    "Questions must have 2-4 options with at least one marked correct; validation errors returned otherwise.",
+    "Redis cache stores quiz data for 5 minutes and category data for 10 minutes with consistent invalidation after updates.",
+    "All API endpoints require successful basic authentication before access.",
+    "Health check endpoint returns status 200 and proper JSON response indicating service health.",
+    "Docker deployment must start all services and expose APIs correctly on the configured ports."
+  ],
+  "code_summary": {
+    "tech_stack": [
+      "TypeScript",
+      "Node.js",
+      "Express",
+      "PostgreSQL",
+      "Prisma",
+      "Redis",
+      "Docker"
+    ],
+    "features": [
+      {
+        "name": "Category Management API",
+        "description": "Hierarchical category system with self-join relationships for organizing quizzes",
+        "files": [
+          "src/controllers/categoryController.ts",
+          "src/services/categoryService.ts",
+          "src/routes/categoryRoutes.ts",
+          "prisma/schema.prisma"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "paths": {
+            "/api/categories": {
+              "post": {
+                "summary": "Create a new category",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "parentId": {
+                            "type": "integer",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "responses": {
+                  "201": {
+                    "description": "Category created successfully"
+                  },
+                  "400": {
+                    "description": "Validation error"
+                  }
+                }
+              },
+              "get": {
+                "summary": "Get all categories with optional hierarchy",
+                "parameters": [
+                  {
+                    "name": "hierarchy",
+                    "in": "query",
+                    "schema": {
+                      "type": "boolean"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Categories retrieved successfully"
+                  }
+                }
+              }
+            },
+            "/api/categories/{id}": {
+              "get": {
+                "summary": "Get category by ID",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Category found"
+                  },
+                  "404": {
+                    "description": "Category not found"
+                  }
+                }
+              },
+              "put": {
+                "summary": "Update category",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "parentId": {
+                            "type": "integer",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Category updated"
+                  },
+                  "404": {
+                    "description": "Category not found"
+                  }
+                }
+              },
+              "delete": {
+                "summary": "Delete category",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Category deleted"
+                  },
+                  "404": {
+                    "description": "Category not found"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Quiz Management API",
+        "description": "Create and manage quizzes with metadata including difficulty levels and time limits",
+        "files": [
+          "src/controllers/quizController.ts",
+          "src/services/quizService.ts",
+          "src/routes/quizRoutes.ts",
+          "prisma/schema.prisma"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "paths": {
+            "/api/quizzes": {
+              "post": {
+                "summary": "Create a new quiz",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "categoryId": {
+                            "type": "integer"
+                          },
+                          "difficulty": {
+                            "type": "string",
+                            "enum": [
+                              "EASY",
+                              "MEDIUM",
+                              "HARD"
+                            ]
+                          },
+                          "timeLimit": {
+                            "type": "integer",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "categoryId"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "responses": {
+                  "201": {
+                    "description": "Quiz created successfully"
+                  },
+                  "400": {
+                    "description": "Validation error"
+                  }
+                }
+              },
+              "get": {
+                "summary": "Get all quizzes with optional category filter",
+                "parameters": [
+                  {
+                    "name": "categoryId",
+                    "in": "query",
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Quizzes retrieved successfully"
+                  }
+                }
+              }
+            },
+            "/api/quizzes/{id}": {
+              "get": {
+                "summary": "Get quiz by ID with full details including questions and answers",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Quiz found with questions and answers"
+                  },
+                  "404": {
+                    "description": "Quiz not found"
+                  }
+                }
+              },
+              "put": {
+                "summary": "Update quiz",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Quiz updated"
+                  },
+                  "404": {
+                    "description": "Quiz not found"
+                  }
+                }
+              },
+              "delete": {
+                "summary": "Delete quiz",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Quiz deleted"
+                  },
+                  "404": {
+                    "description": "Quiz not found"
+                  }
+                }
+              }
+            },
+            "/api/quizzes/{id}/stats": {
+              "get": {
+                "summary": "Get quiz statistics",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Quiz statistics retrieved"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Question Management API",
+        "description": "Manage quiz questions with 2-4 options and support for single or multiple correct answers",
+        "files": [
+          "src/controllers/questionController.ts",
+          "src/services/questionService.ts",
+          "src/routes/questionRoutes.ts",
+          "prisma/schema.prisma"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "paths": {
+            "/api/questions": {
+              "post": {
+                "summary": "Create a standalone question",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "quizId": {
+                            "type": "integer"
+                          },
+                          "questionText": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 4,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "optionText": {
+                                  "type": "string"
+                                },
+                                "isCorrect": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "optionText",
+                                "isCorrect"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "quizId",
+                          "questionText",
+                          "options"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "responses": {
+                  "201": {
+                    "description": "Question created successfully"
+                  },
+                  "400": {
+                    "description": "Validation error - must have at least one correct answer"
+                  }
+                }
+              }
+            },
+            "/api/questions/quiz/{quizId}": {
+              "post": {
+                "summary": "Add question to specific quiz",
+                "parameters": [
+                  {
+                    "name": "quizId",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "questionText": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 4,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "optionText": {
+                                  "type": "string"
+                                },
+                                "isCorrect": {
+                                  "type": "boolean"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "questionText",
+                          "options"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "responses": {
+                  "201": {
+                    "description": "Question added to quiz"
+                  },
+                  "400": {
+                    "description": "Validation error"
+                  },
+                  "404": {
+                    "description": "Quiz not found"
+                  }
+                }
+              }
+            },
+            "/api/questions/{quizId}": {
+              "get": {
+                "summary": "Get all questions for a quiz",
+                "parameters": [
+                  {
+                    "name": "quizId",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Questions retrieved successfully"
+                  },
+                  "404": {
+                    "description": "Quiz not found"
+                  }
+                }
+              }
+            },
+            "/api/questions/single/{id}": {
+              "get": {
+                "summary": "Get question by ID",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Question found"
+                  },
+                  "404": {
+                    "description": "Question not found"
+                  }
+                }
+              },
+              "put": {
+                "summary": "Update question",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Question updated"
+                  },
+                  "404": {
+                    "description": "Question not found"
+                  }
+                }
+              },
+              "delete": {
+                "summary": "Delete question",
+                "parameters": [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Question deleted"
+                  },
+                  "404": {
+                    "description": "Question not found"
+                  }
+                }
+              }
+            },
+            "/api/questions/{quizId}/stats": {
+              "get": {
+                "summary": "Get question statistics for a quiz",
+                "parameters": [
+                  {
+                    "name": "quizId",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "integer"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "Question statistics retrieved"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Authentication Middleware",
+        "description": "Basic authentication system for development with username/password validation",
+        "files": [
+          "src/middleware/auth.ts"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "components": {
+            "securitySchemes": {
+              "basicAuth": {
+                "type": "http",
+                "scheme": "basic",
+                "description": "Basic authentication with username: aryan, password: admin"
+              }
+            }
+          },
+          "security": [
+            {
+              "basicAuth": []
+            }
+          ]
+        }
+      },
+      {
+        "name": "Redis Caching System",
+        "description": "High-performance caching for quiz data and categories with automatic invalidation",
+        "files": [
+          "src/utils/redis.ts"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "Redis Caching",
+            "description": "Internal caching system - Quiz details cached for 5 minutes, categories for 10 minutes"
+          }
+        }
+      },
+      {
+        "name": "Health Check API",
+        "description": "System health monitoring endpoint for application status",
+        "files": [
+          "src/server.ts"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "paths": {
+            "/health": {
+              "get": {
+                "summary": "Health check endpoint",
+                "responses": {
+                  "200": {
+                    "description": "Service is healthy",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "timestamp": {
+                              "type": "string"
+                            },
+                            "service": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

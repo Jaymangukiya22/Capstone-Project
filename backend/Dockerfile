@@ -1,52 +1,58 @@
-# Builder stage
-FROM node:18-bullseye AS builder
+# Use Node.js 18 LTS (Debian-based, not Alpine)
+FROM node:18-slim
 
-# Install dependencies for Prisma
-RUN apt-get update \
-  && apt-get install -y openssl \
-  && rm -rf /var/lib/apt/lists/*
-
+# Set working directory
 WORKDIR /app
 
-COPY package*.json tsconfig.json ./
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    curl \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./ 
+COPY tsconfig.json ./
+
+# Install all dependencies (including dev for build)
 RUN npm ci
 
-COPY src ./src
+# Copy source code
+COPY . .
 COPY prisma ./prisma
 
-# Dummy DB URL just for prisma generate
-ENV DATABASE_URL="postgresql://user:pass@localhost:5432/placeholder?schema=public"
-
+# Generate Prisma client
 RUN npx prisma generate
+
+# Build TypeScript
 RUN npm run build
 
-# Production stage
-FROM node:18-bullseye-slim AS production
+# Install production deps + ts-node for seeding
+RUN npm ci --only=production \
+    && npm install ts-node \
+    && npm cache clean --force
 
-# Install dumb-init for signal handling
-RUN apt-get update \
-  && apt-get install -y dumb-init openssl \
-  && rm -rf /var/lib/apt/lists/*
+# Create logs directory
+RUN mkdir -p logs
 
-WORKDIR /app
+# Create non-root user
+RUN addgroup --system nodejs
+RUN adduser --system --ingroup nodejs nextjs
 
-COPY package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
+# Change ownership
+RUN chown -R nextjs:nodejs /app
+USER nextjs
 
-# Create uploads directory and app user
-RUN groupadd -g 1001 nodejs \
- && useradd -m -u 1001 -g nodejs quizspark \
- && mkdir -p uploads \
- && chown -R quizspark:nodejs /app
-
-USER quizspark
-
+# Expose port
 EXPOSE 3000
 
+# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+  CMD curl -f http://localhost:3000/health || exit 1
 
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/server.js"]
+# Start script
+COPY --chown=nextjs:nodejs start.sh ./ 
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]

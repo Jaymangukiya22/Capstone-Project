@@ -1,98 +1,78 @@
+version: '3.8'
+
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: quizspark-postgres
+    container_name: quiz-postgres
     environment:
-      POSTGRES_DB: quizspark_db
-      POSTGRES_USER: quizspark_user
-      POSTGRES_PASSWORD: quizspark_password
+      POSTGRES_USER: quiz_user
+      POSTGRES_PASSWORD: quiz_password
+      POSTGRES_DB: quiz_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
-      - quizspark-network
-    restart: unless-stopped
+      - quiz-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz_user -d quiz_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: quizspark-redis
+    container_name: quiz-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
-      - quizspark-network
-    restart: unless-stopped
-    command: redis-server --appendonly yes
+      - quiz-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Main API Service
-  api:
+  # Backend Application
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: quizspark-api
+    working_dir: /app
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://quizspark_user:quizspark_password@postgres:5432/quizspark_db
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: 29a4976e684ff14dd0079108d69099e2
+      DATABASE_URL: "postgresql://quiz_user:quiz_password@postgres:5432/quiz_db?schema=public"
+      REDIS_URL: "redis://redis:6379"
       PORT: 3000
-      MATCH_SERVICE_URL: http://match-service:3001
+      NODE_ENV: development
+      BASIC_AUTH_USERNAME: aryan
+      BASIC_AUTH_PASSWORD: admin
+      JWT_SECRET: a8e27c593b7494948e9b5159f94a50f8
+      JWT_EXPIRES_IN: 24h
+      CACHE_TTL: 300
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
-      - quizspark-network
-    restart: unless-stopped
+      - quiz-network
     volumes:
-      - ./uploads:/app/uploads
-
-  # Match Service (WebSocket)
-  match-service:
-    build:
-      context: ./match-service
-      dockerfile: Dockerfile
-    container_name: quizspark-match-service
-    environment:
-      NODE_ENV: production
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: 29a4976e684ff14dd0079108d69099e2
-      PORT: 3001
-    ports:
-      - "3001:3001"
-    depends_on:
-      - redis
-    networks:
-      - quizspark-network
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npx prisma generate && npm run dev"
     restart: unless-stopped
-
-  # Nginx Reverse Proxy (Optional - commented out until nginx.conf is created)
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: quizspark-nginx
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf
-  #     - ./ssl:/etc/nginx/ssl
-  #   depends_on:
-  #     - api
-  #     - match-service
-  #   networks:
-  #     - quizspark-network
-  #   restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  quizspark-network:
+  quiz-network:
     driver: bridge

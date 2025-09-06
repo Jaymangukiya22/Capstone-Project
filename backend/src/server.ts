@@ -1,15 +1,22 @@
-import 'module-alias/register';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
 
-import { connectDatabase, connectRedis, disconnectDatabase } from '@/config/database.config';
-import routes from '@/routes/index.routes';
-import { errorHandler, notFoundHandler } from '@/middleware/error.middleware';
+// Import routes
+import categoryRoutes from './routes/categoryRoutes';
+import quizRoutes from './routes/quizRoutes';
+import questionRoutes from './routes/questionRoutes';
+
+// Import middleware
+import { errorHandler } from './middleware/errorHandler';
+import { basicAuth } from './middleware/auth';
+
+// Import Redis service
+import { redisService } from './utils/redis';
 
 // Load environment variables
 dotenv.config();
@@ -17,104 +24,78 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+// Initialize Prisma Client
+export const prisma = new PrismaClient();
 
-// CORS configuration
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
-    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:4173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-}));
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(compression());
+app.use(morgan('combined'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.',
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    service: 'Quiz App Backend',
+    version: '1.0.0'
+  });
 });
 
-app.use(limiter);
+// API Routes with basic authentication
+app.use('/api/categories', basicAuth, categoryRoutes);
+app.use('/api/quizzes', basicAuth, quizRoutes);
+app.use('/api/questions', basicAuth, questionRoutes);
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.originalUrl}`
+  });
+});
 
-// Compression middleware
-app.use(compression());
-
-// Logging middleware
-if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan('combined'));
-}
-
-// Routes
-app.use(routes);
-
-// Error handling middleware (must be last)
-app.use(notFoundHandler);
+// Error handling middleware
 app.use(errorHandler);
 
 // Graceful shutdown
-const gracefulShutdown = async (signal: string) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-  
-  try {
-    await disconnectDatabase();
-    console.log('Database connections closed.');
-    process.exit(0);
-  } catch (error) {
-    console.error('Error during shutdown:', error);
-    process.exit(1);
-  }
-};
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT, shutting down gracefully...');
+  await prisma.$disconnect();
+  await redisService.disconnect();
+  process.exit(0);
+});
 
-// Handle shutdown signals
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, shutting down gracefully...');
+  await prisma.$disconnect();
+  await redisService.disconnect();
+  process.exit(0);
+});
 
 // Start server
-const startServer = async () => {
+async function startServer() {
   try {
-    // Connect to databases
-    await connectDatabase();
-    await connectRedis();
-    
-    // Start HTTP server
-    const server = app.listen(PORT, () => {
-      console.log(`🚀 QuizSpark API Server running on port ${PORT}`);
-      console.log(`📚 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-      console.log(`📖 API docs: http://localhost:${PORT}/api/v1`);
-    });
+    // Connect to Redis
+    await redisService.connect();
+    console.log('✅ Connected to Redis');
 
-    // Handle server errors
-    server.on('error', (error: any) => {
-      if (error.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already in use`);
-      } else {
-        console.error('❌ Server error:', error);
-      }
-      process.exit(1);
-    });
+    // Test database connection
+    await prisma.$connect();
+    console.log('✅ Connected to PostgreSQL');
 
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
-};
+}
 
-// Start the server
 startServer();
-
-export default app;

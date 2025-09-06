@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "backendAuthType": "basic token",
+  "backendUsername": "aryan",
+  "backendPassword": "admin",
+  "executionArgs": {
+    "projectName": "Backend",
+    "projectPath": "d:\\Projects\\Capstone-Project\\Backend",
+    "testIds": [],
+    "additionalInstruction": "Generate comprehensive tests for the quiz app backend including category hierarchy validation, quiz creation with proper validation, question creation with 2-4 options and at least one correct answer, basic authentication tests, and API response format validation. Focus on testing the core functionality described in the PRD.",
+    "envs": {
+      "API_KEY": "sk-user-DSegDld3xLWKmUmgxI6mNJqCYqRfOFSNmsHTyTg590z_HJJ5vqKnLYsyjjGxT61O8xxTYkY157Rq9-jbMJGoFmqyUOHvhrbkG9nWnm9UZKjqsU2os3LCgauJkAup5kGdi_E"
+    }
+  }
+}

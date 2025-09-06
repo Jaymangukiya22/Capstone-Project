@@ -1,262 +1,248 @@
-/// <reference types="node" />
-import { PrismaClient, UserRole } from '@prisma/client';
-import { hashPassword } from '../src/utils/password.utils';
+import { PrismaClient, Difficulty } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seed...');
+  console.log('🌱 Starting database seeding...');
 
-  // Create admin user
-  const adminPassword = await hashPassword('Admin123!');
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@quizspark.com' },
+  // Create root categories
+  const scienceCategory = await prisma.category.upsert({
+    where: { id: 1 },
     update: {},
     create: {
-      email: 'admin@quizspark.com',
-      username: 'admin',
-      password: adminPassword,
-      firstName: 'System',
-      lastName: 'Administrator',
-      role: UserRole.ADMIN,
+      name: 'Science',
     },
   });
 
-  // Create faculty user
-  const facultyPassword = await hashPassword('Faculty123!');
-  const faculty = await prisma.user.upsert({
-    where: { email: 'faculty@quizspark.com' },
+  const sportsCategory = await prisma.category.upsert({
+    where: { id: 2 },
     update: {},
     create: {
-      email: 'faculty@quizspark.com',
-      username: 'drsmith',
-      password: facultyPassword,
-      firstName: 'Dr. John',
-      lastName: 'Smith',
-      role: UserRole.FACULTY,
+      name: 'Sports',
     },
   });
 
-  // Create student users
-  const studentPassword = await hashPassword('Student123!');
-  const student1 = await prisma.user.upsert({
-    where: { email: 'student1@quizspark.com' },
+  const technologyCategory = await prisma.category.upsert({
+    where: { id: 3 },
     update: {},
     create: {
-      email: 'student1@quizspark.com',
-      username: 'alice_wonder',
-      password: studentPassword,
-      firstName: 'Alice',
-      lastName: 'Wonder',
-      role: UserRole.STUDENT,
+      name: 'Technology',
     },
   });
 
-  const student2 = await prisma.user.upsert({
-    where: { email: 'student2@quizspark.com' },
+  // Create subcategories for Science
+  const physicsCategory = await prisma.category.upsert({
+    where: { id: 4 },
     update: {},
     create: {
-      email: 'student2@quizspark.com',
-      username: 'bob_builder',
-      password: studentPassword,
-      firstName: 'Bob',
-      lastName: 'Builder',
-      role: UserRole.STUDENT,
+      name: 'Physics',
+      parentId: scienceCategory.id,
     },
   });
 
-  // Create sample course
-  const course = await prisma.course.upsert({
-    where: { code: 'CS101' },
+  const quantumMechanicsCategory = await prisma.category.upsert({
+    where: { id: 5 },
     update: {},
     create: {
-      title: 'Introduction to Computer Science',
-      description: 'A comprehensive introduction to computer science fundamentals including programming, algorithms, and data structures.',
-      code: 'CS101',
-      creatorId: faculty.id,
-      isActive: true,
+      name: 'Quantum Mechanics',
+      parentId: physicsCategory.id,
     },
   });
 
-  // Enroll students in the course
-  await prisma.enrollment.upsert({
-    where: {
-      userId_courseId: {
-        userId: student1.id,
-        courseId: course.id,
-      },
-    },
+  // Create subcategories for Sports
+  const cricketCategory = await prisma.category.upsert({
+    where: { id: 6 },
     update: {},
     create: {
-      userId: student1.id,
-      courseId: course.id,
+      name: 'Cricket',
+      parentId: sportsCategory.id,
     },
   });
 
-  await prisma.enrollment.upsert({
-    where: {
-      userId_courseId: {
-        userId: student2.id,
-        courseId: course.id,
-      },
-    },
+  const t20Category = await prisma.category.upsert({
+    where: { id: 7 },
     update: {},
     create: {
-      userId: student2.id,
-      courseId: course.id,
+      name: 'T20',
+      parentId: cricketCategory.id,
     },
   });
 
-  // Create ELO ratings for students
-  await prisma.eloRating.upsert({
-    where: {
-      userId_courseId: {
-        userId: student1.id,
-        courseId: course.id,
-      },
-    },
+  // Create subcategories for Technology
+  const programmingCategory = await prisma.category.upsert({
+    where: { id: 8 },
     update: {},
     create: {
-      userId: student1.id,
-      courseId: course.id,
-      rating: 1200,
+      name: 'Programming',
+      parentId: technologyCategory.id,
     },
   });
 
-  await prisma.eloRating.upsert({
-    where: {
-      userId_courseId: {
-        userId: student2.id,
-        courseId: course.id,
-      },
-    },
+  const javascriptCategory = await prisma.category.upsert({
+    where: { id: 9 },
     update: {},
     create: {
-      userId: student2.id,
-      courseId: course.id,
-      rating: 1200,
+      name: 'JavaScript',
+      parentId: programmingCategory.id,
     },
   });
 
-  // Create sample quiz
-  const quiz = await prisma.quiz.create({
-    data: {
-      title: 'Programming Fundamentals Quiz',
-      description: 'Test your knowledge of basic programming concepts',
-      timeLimit: 30,
-      creatorId: faculty.id,
-      courseId: course.id,
-      status: 'DRAFT',
-      questions: {
-        create: [
-          {
-            text: 'What is the time complexity of binary search?',
-            timeLimit: 30,
-            points: 100,
-            order: 1,
-            options: {
-              create: [
-                { text: 'O(n)', order: 1, isCorrect: false },
-                { text: 'O(log n)', order: 2, isCorrect: true },
-                { text: 'O(n²)', order: 3, isCorrect: false },
-                { text: 'O(1)', order: 4, isCorrect: false },
-              ],
-            },
-          },
-          {
-            text: 'Which data structure follows LIFO principle?',
-            timeLimit: 25,
-            points: 100,
-            order: 2,
-            options: {
-              create: [
-                { text: 'Queue', order: 1, isCorrect: false },
-                { text: 'Array', order: 2, isCorrect: false },
-                { text: 'Stack', order: 3, isCorrect: true },
-                { text: 'Linked List', order: 4, isCorrect: false },
-              ],
-            },
-          },
-          {
-            text: 'What does "OOP" stand for?',
-            timeLimit: 20,
-            points: 100,
-            order: 3,
-            options: {
-              create: [
-                { text: 'Object-Oriented Programming', order: 1, isCorrect: true },
-                { text: 'Open-Source Programming', order: 2, isCorrect: false },
-                { text: 'Optimized Object Processing', order: 3, isCorrect: false },
-                { text: 'Operational Output Protocol', order: 4, isCorrect: false },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    include: {
-      questions: true,
+  console.log('✅ Categories created');
+
+  // Create sample quizzes
+  const physicsQuiz = await prisma.quiz.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      title: 'Basic Physics Concepts',
+      description: 'Test your knowledge of fundamental physics principles',
+      categoryId: physicsCategory.id,
+      difficulty: Difficulty.MEDIUM,
+      timeLimit: 600, // 10 minutes
     },
   });
 
-  // Create another course
-  const mathCourse = await prisma.course.create({
-    data: {
-      title: 'Discrete Mathematics',
-      description: 'Mathematical foundations for computer science',
-      code: 'MATH201',
-      creatorId: faculty.id,
-      isActive: true,
+  const quantumQuiz = await prisma.quiz.upsert({
+    where: { id: 2 },
+    update: {},
+    create: {
+      title: 'Quantum Mechanics Fundamentals',
+      description: 'Advanced concepts in quantum mechanics',
+      categoryId: quantumMechanicsCategory.id,
+      difficulty: Difficulty.HARD,
+      timeLimit: 900, // 15 minutes
     },
   });
 
-  // Create leaderboard for the course
-  const leaderboard = await prisma.leaderboard.create({
-    data: {
-      courseId: course.id,
-      season: 'current',
-      entries: {
-        create: [
-          {
-            userId: student1.id,
-            rank: 1,
-            rating: 1200,
-            matches: 0,
-            wins: 0,
-            losses: 0,
-            winRate: 0,
-          },
-          {
-            userId: student2.id,
-            rank: 2,
-            rating: 1200,
-            matches: 0,
-            wins: 0,
-            losses: 0,
-            winRate: 0,
-          },
-        ],
-      },
-    },
-    include: {
-      entries: true,
+  const cricketQuiz = await prisma.quiz.upsert({
+    where: { id: 3 },
+    update: {},
+    create: {
+      title: 'T20 Cricket Rules',
+      description: 'Test your knowledge of T20 cricket format',
+      categoryId: t20Category.id,
+      difficulty: Difficulty.EASY,
+      timeLimit: 300, // 5 minutes
     },
   });
 
-  console.log('✅ Database seeded successfully!');
-  console.log('\n📊 Created:');
-  console.log(`👤 Admin: ${admin.email} (password: Admin123!)`);
-  console.log(`👨‍🏫 Faculty: ${faculty.email} (password: Faculty123!)`);
-  console.log(`👨‍🎓 Student 1: ${student1.email} (password: Student123!)`);
-  console.log(`👩‍🎓 Student 2: ${student2.email} (password: Student123!)`);
-  console.log(`📚 Course: ${course.title} (${course.code})`);
-  console.log(`📝 Quiz: ${quiz.title} (${quiz.questions.length} questions)`);
-  console.log(`🏆 Leaderboard: ${leaderboard.entries.length} entries`);
+  const jsQuiz = await prisma.quiz.upsert({
+    where: { id: 4 },
+    update: {},
+    create: {
+      title: 'JavaScript Fundamentals',
+      description: 'Basic JavaScript concepts and syntax',
+      categoryId: javascriptCategory.id,
+      difficulty: Difficulty.MEDIUM,
+      timeLimit: 480, // 8 minutes
+    },
+  });
+
+  console.log('✅ Quizzes created');
+
+  // Create sample questions for Physics Quiz
+  const physicsQ1 = await prisma.question.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      quizId: physicsQuiz.id,
+      questionText: 'What is the speed of light in vacuum?',
+    },
+  });
+
+  await prisma.option.createMany({
+    data: [
+      { questionId: physicsQ1.id, optionText: '3 × 10⁸ m/s', isCorrect: true },
+      { questionId: physicsQ1.id, optionText: '3 × 10⁶ m/s', isCorrect: false },
+      { questionId: physicsQ1.id, optionText: '3 × 10¹⁰ m/s', isCorrect: false },
+      { questionId: physicsQ1.id, optionText: '3 × 10⁴ m/s', isCorrect: false },
+    ],
+    skipDuplicates: true,
+  });
+
+  const physicsQ2 = await prisma.question.upsert({
+    where: { id: 2 },
+    update: {},
+    create: {
+      quizId: physicsQuiz.id,
+      questionText: 'Which of the following are fundamental forces in nature?',
+    },
+  });
+
+  await prisma.option.createMany({
+    data: [
+      { questionId: physicsQ2.id, optionText: 'Gravitational force', isCorrect: true },
+      { questionId: physicsQ2.id, optionText: 'Electromagnetic force', isCorrect: true },
+      { questionId: physicsQ2.id, optionText: 'Centrifugal force', isCorrect: false },
+      { questionId: physicsQ2.id, optionText: 'Strong nuclear force', isCorrect: true },
+    ],
+    skipDuplicates: true,
+  });
+
+  // Create sample questions for JavaScript Quiz
+  const jsQ1 = await prisma.question.upsert({
+    where: { id: 3 },
+    update: {},
+    create: {
+      quizId: jsQuiz.id,
+      questionText: 'Which of the following is used to declare a variable in JavaScript?',
+    },
+  });
+
+  await prisma.option.createMany({
+    data: [
+      { questionId: jsQ1.id, optionText: 'var', isCorrect: true },
+      { questionId: jsQ1.id, optionText: 'let', isCorrect: true },
+      { questionId: jsQ1.id, optionText: 'const', isCorrect: true },
+      { questionId: jsQ1.id, optionText: 'variable', isCorrect: false },
+    ],
+    skipDuplicates: true,
+  });
+
+  const jsQ2 = await prisma.question.upsert({
+    where: { id: 4 },
+    update: {},
+    create: {
+      quizId: jsQuiz.id,
+      questionText: 'What does JSON stand for?',
+    },
+  });
+
+  await prisma.option.createMany({
+    data: [
+      { questionId: jsQ2.id, optionText: 'JavaScript Object Notation', isCorrect: true },
+      { questionId: jsQ2.id, optionText: 'Java Standard Object Notation', isCorrect: false },
+    ],
+    skipDuplicates: true,
+  });
+
+  // Create sample questions for Cricket Quiz
+  const cricketQ1 = await prisma.question.upsert({
+    where: { id: 5 },
+    update: {},
+    create: {
+      quizId: cricketQuiz.id,
+      questionText: 'How many overs are there in a T20 match per team?',
+    },
+  });
+
+  await prisma.option.createMany({
+    data: [
+      { questionId: cricketQ1.id, optionText: '20', isCorrect: true },
+      { questionId: cricketQ1.id, optionText: '50', isCorrect: false },
+      { questionId: cricketQ1.id, optionText: '10', isCorrect: false },
+      { questionId: cricketQ1.id, optionText: '25', isCorrect: false },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅ Questions and options created');
+  console.log('🎉 Database seeding completed successfully!');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error seeding database:', e);
+    console.error('❌ Error during seeding:', e);
     process.exit(1);
   })
   .finally(async () => {

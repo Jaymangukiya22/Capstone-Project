@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FolderTree, Layers, FileQuestion, Plus } from "lucide-react"
 import type { Stats } from "@/types"
 
@@ -13,8 +12,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
       value: stats.totalCategories,
       icon: FolderTree,
       color: "text-blue-600 dark:text-blue-400",
-      bgColor: "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900",
-      borderColor: "border-blue-200 dark:border-blue-800",
       change: "+12% from last month",
       changeColor: "text-green-600 dark:text-green-400"
     },
@@ -23,8 +20,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
       value: stats.totalQuizzes,
       icon: FileQuestion,
       color: "text-green-600 dark:text-green-400",
-      bgColor: "bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900",
-      borderColor: "border-green-200 dark:border-green-800",
       change: "+8% from last month",
       changeColor: "text-green-600 dark:text-green-400"
     },
@@ -32,9 +27,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       title: "Subcategories",
       value: stats.totalSubcategories,
       icon: Layers,
-      color: "text-orange-600 dark:text-orange-400", 
-      bgColor: "bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900",
-      borderColor: "border-orange-200 dark:border-orange-800",
+      color: "text-orange-600 dark:text-orange-400",
       change: "+5% from last month",
       changeColor: "text-green-600 dark:text-green-400"
     },
@@ -43,8 +36,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
       value: stats.recentlyAdded,
       icon: Plus,
       color: "text-purple-600 dark:text-purple-400",
-      bgColor: "bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900",
-      borderColor: "border-purple-200 dark:border-purple-800",
       change: "+23% from last month",
       changeColor: "text-green-600 dark:text-green-400"
     }
@@ -55,23 +46,21 @@ export function StatsCards({ stats }: StatsCardsProps) {
       {cards.map((card) => {
         const Icon = card.icon
         return (
-          <Card key={card.title} className={`border ${card.borderColor} shadow-sm hover:shadow-md transition-shadow duration-200`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div key={card.title} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 {card.title}
-              </CardTitle>
-              <div className={`p-2.5 rounded-xl shadow-sm ${card.bgColor}`}>
-                <Icon className={`h-5 w-5 ${card.color}`} />
+              </h3>
+              <div className="w-8 h-8 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                <Icon className={`h-4 w-4 ${card.color}`} />
               </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{card.value}</div>
-              <p className={`text-xs font-medium ${card.changeColor} flex items-center`}>
-                <span className="mr-1">↗</span>
-                {card.change}
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-1">{card.value}</div>
+            <p className={`text-xs ${card.changeColor} flex items-center`}>
+              <span className="mr-1">↗</span>
+              {card.change}
+            </p>
+          </div>
         )
       })}
     </div>

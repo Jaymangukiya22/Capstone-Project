@@ -167,15 +167,8 @@ export function Categories() {
     setShowAddQuizModal(true)
   }
 
-  // Wrapper functions for DetailPanel (no parameters)
-  const handleAddSubcategoryFromPanel = () => {
-    setShowAddSubcategoryModal(true)
-  }
-
-  const handleAddQuizFromPanel = () => {
-    if (selectedItem?.type === 'subcategory') {
-      setSelectedSubcategoryForQuiz(selectedItem.id)
-    }
+  const handleAddQuizFromPanel = (parentId: string) => {
+    setSelectedSubcategoryForQuiz(parentId)
     setShowAddQuizModal(true)
   }
 
@@ -188,7 +181,7 @@ export function Categories() {
   )
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Breadcrumbs */}
       <Breadcrumb>
         <BreadcrumbList>
@@ -204,25 +197,25 @@ export function Categories() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900 dark:to-indigo-900 rounded-xl">
-            <FolderTree className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        <div className="flex items-center space-x-4">
+          <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+            <FolderTree className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Category Management</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Organize and manage your quiz categories with drag-and-drop functionality
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Category Management</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Organize and manage your quiz categories
             </p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
             <span>2 Active Sessions</span>
           </div>
           <Button 
             onClick={() => setShowAddCategoryModal(true)} 
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
             size="sm"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -269,12 +262,11 @@ export function Categories() {
 
         {/* Detail Panel */}
         <div className="xl:col-span-1">
-          <DetailPanel
-            selectedItem={selectedItem}
-            categories={categories}
-            onAddSubcategory={handleAddSubcategoryFromPanel}
-            onAddQuiz={handleAddQuizFromPanel}
-          />
+          <DetailPanel 
+          selectedItem={selectedItem} 
+          categories={filteredCategories}
+          onAddQuiz={handleAddQuizFromPanel}
+        />  
         </div>
       </div>
 

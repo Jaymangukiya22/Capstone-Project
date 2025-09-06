@@ -1,26 +1,27 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Edit, Plus, Calendar, FileQuestion, Layers } from "lucide-react"
+import { Edit, Plus, Calendar, FileQuestion, Layers, FolderTree } from "lucide-react"
 import type { Category, Subcategory, Quiz } from "@/types"
 
 interface DetailPanelProps {
   selectedItem: { type: 'category' | 'subcategory' | 'quiz'; id: string } | null
   categories: Category[]
-  onAddSubcategory: () => void
-  onAddQuiz: () => void
+  onAddQuiz: (parentId: string) => void
 }
 
-export function DetailPanel({ selectedItem, categories, onAddSubcategory, onAddQuiz }: DetailPanelProps) {
+export function DetailPanel({ selectedItem, categories, onAddQuiz }: DetailPanelProps) {
   if (!selectedItem) {
     return (
-      <Card className="h-full">
-        <CardContent className="flex items-center justify-center h-full">
-          <div className="text-center text-muted-foreground">
-            <FileQuestion className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Select a category, subcategory, or quiz to view details</p>
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg h-full">
+        <div className="flex items-center justify-center h-full p-8">
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+              <FolderTree className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Select a Category</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Choose a category from the tree to view and edit its details</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
@@ -51,7 +52,7 @@ export function DetailPanel({ selectedItem, categories, onAddSubcategory, onAddQ
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
     }).format(date)
   }
@@ -59,83 +60,102 @@ export function DetailPanel({ selectedItem, categories, onAddSubcategory, onAddQ
   if (selectedData.type === 'category') {
     const category = selectedData.data as Category
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
-              <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                <FileQuestion className="h-5 w-5 text-blue-600" />
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg h-full">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <Layers className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
-              <span>{category.name}</span>
-            </CardTitle>
-            <div className="flex space-x-2">
-              <Button size="sm" variant="outline">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button size="sm" onClick={onAddSubcategory}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Subcategory
-              </Button>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{category.name}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Category</p>
+              </div>
             </div>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Basic Information */}
           <div>
-            <h3 className="font-semibold mb-2">Basic Information</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Name:</span>
-                <span>{category.name}</span>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Basic Information</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Name:</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{category.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Parent Category:</span>
+                <span className="text-sm text-gray-900 dark:text-white">{category.name}</span>
               </div>
               {category.description && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Description:</span>
-                  <span>{category.description}</span>
+                <div className="flex justify-between items-start">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Description:</span>
+                  <span className="text-sm text-gray-900 dark:text-white text-right max-w-48">{category.description}</span>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Statistics */}
           <div>
-            <h3 className="font-semibold mb-2">Statistics</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center space-x-2">
-                <Layers className="h-4 w-4 text-orange-600" />
-                <div>
-                  <div className="text-lg font-bold">{category.subcategories.length}</div>
-                  <div className="text-xs text-muted-foreground">Subcategories</div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Statistics</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Quizzes</span>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <FileQuestion className="h-4 w-4 text-green-600" />
-                <div>
-                  <div className="text-lg font-bold">
-                    {category.subcategories.reduce((acc, sub) => acc + sub.quizzes.length, 0)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Quizzes</div>
-                </div>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {category.subcategories.reduce((acc, sub) => acc + sub.quizzes.length, 0)}
+                </span>
               </div>
             </div>
           </div>
 
+          {/* Metadata */}
           <div>
-            <h3 className="font-semibold mb-2">Metadata</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Created:</span>
-                <span>{formatDate(category.createdAt)}</span>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Metadata</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Created:</span>
+                </div>
+                <span className="text-sm text-gray-900 dark:text-white">{formatDate(category.createdAt)}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Updated:</span>
-                <span>{formatDate(category.updatedAt)}</span>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Updated:</span>
+                </div>
+                <span className="text-sm text-gray-900 dark:text-white">{formatDate(category.updatedAt)}</span>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Quick Actions */}
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <Button 
+                onClick={() => onAddQuiz(category.id)}
+                variant="outline" 
+                className="w-full justify-start text-sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Quiz
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -143,76 +163,100 @@ export function DetailPanel({ selectedItem, categories, onAddSubcategory, onAddQ
     const subcategory = selectedData.data as Subcategory
     const parentCategory = selectedData.parent as Category
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
-              <div className="p-2 bg-orange-50 dark:bg-orange-950 rounded-lg">
-                <Layers className="h-5 w-5 text-orange-600" />
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg h-full">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <Layers className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
-              <span>{subcategory.name}</span>
-            </CardTitle>
-            <div className="flex space-x-2">
-              <Button size="sm" variant="outline">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button size="sm" onClick={onAddQuiz}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Quiz
-              </Button>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{subcategory.name}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Subcategory</p>
+              </div>
             </div>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Basic Information */}
           <div>
-            <h3 className="font-semibold mb-2">Basic Information</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Name:</span>
-                <span>{subcategory.name}</span>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Basic Information</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Name:</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{subcategory.name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Parent Category:</span>
-                <span>{parentCategory.name}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Parent Category:</span>
+                <span className="text-sm text-gray-900 dark:text-white">{parentCategory.name}</span>
               </div>
               {subcategory.description && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Description:</span>
-                  <span>{subcategory.description}</span>
+                <div className="flex justify-between items-start">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Description:</span>
+                  <span className="text-sm text-gray-900 dark:text-white text-right max-w-48">{subcategory.description}</span>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Statistics */}
           <div>
-            <h3 className="font-semibold mb-2">Statistics</h3>
-            <div className="flex items-center space-x-2">
-              <FileQuestion className="h-4 w-4 text-green-600" />
-              <div>
-                <div className="text-lg font-bold">{subcategory.quizzes.length}</div>
-                <div className="text-xs text-muted-foreground">Quizzes</div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Statistics</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Quizzes</span>
+                </div>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">{subcategory.quizzes.length}</span>
               </div>
             </div>
           </div>
 
+          {/* Metadata */}
           <div>
-            <h3 className="font-semibold mb-2">Metadata</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Created:</span>
-                <span>{formatDate(subcategory.createdAt)}</span>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Metadata</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Created:</span>
+                </div>
+                <span className="text-sm text-gray-900 dark:text-white">{formatDate(subcategory.createdAt)}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Updated:</span>
-                <span>{formatDate(subcategory.updatedAt)}</span>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Updated:</span>
+                </div>
+                <span className="text-sm text-gray-900 dark:text-white">{formatDate(subcategory.updatedAt)}</span>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Quick Actions */}
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <Button 
+                onClick={() => onAddQuiz(subcategory.id)}
+                variant="outline" 
+                className="w-full justify-start text-sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Quiz
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -220,57 +264,75 @@ export function DetailPanel({ selectedItem, categories, onAddSubcategory, onAddQ
     const quiz = selectedData.data as Quiz
     const parentSubcategory = selectedData.parent as Subcategory
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <div className="p-2 bg-green-50 dark:bg-green-950 rounded-lg">
-              <FileQuestion className="h-5 w-5 text-green-600" />
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg h-full">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <FileQuestion className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{quiz.name}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Quiz • {quiz.mode} Mode</p>
+              </div>
             </div>
-            <span>{quiz.name}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Basic Information */}
           <div>
-            <h3 className="font-semibold mb-2">Basic Information</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Name:</span>
-                <span>{quiz.name}</span>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Basic Information</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Name:</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{quiz.name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Mode:</span>
-                <span className="bg-secondary px-2 py-1 rounded text-xs">{quiz.mode}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Mode:</span>
+                <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full font-medium text-gray-700 dark:text-gray-300 capitalize">{quiz.mode}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subcategory:</span>
-                <span>{parentSubcategory.name}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Subcategory:</span>
+                <span className="text-sm text-gray-900 dark:text-white">{parentSubcategory.name}</span>
               </div>
               {quiz.description && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Description:</span>
-                  <span>{quiz.description}</span>
+                <div className="flex justify-between items-start">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Description:</span>
+                  <span className="text-sm text-gray-900 dark:text-white text-right max-w-48">{quiz.description}</span>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Metadata */}
           <div>
-            <h3 className="font-semibold mb-2">Metadata</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Created:</span>
-                <span>{formatDate(quiz.createdAt)}</span>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Metadata</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Created:</span>
+                </div>
+                <span className="text-sm text-gray-900 dark:text-white">{formatDate(quiz.createdAt)}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Updated:</span>
-                <span>{formatDate(quiz.updatedAt)}</span>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Updated:</span>
+                </div>
+                <span className="text-sm text-gray-900 dark:text-white">{formatDate(quiz.updatedAt)}</span>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 

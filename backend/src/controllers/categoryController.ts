@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { categoryService } from '../services/categoryService';
-import { createCategorySchema } from '../utils/validation';
+import { categorySchema } from '../utils/validation';
 
 export class CategoryController {
   async createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { error, value } = createCategorySchema.validate(req.body);
+      const { error, value } = categorySchema.validate(req.body);
       if (error) {
         res.status(400).json({
           error: 'Validation error',
@@ -90,7 +90,7 @@ export class CategoryController {
         return;
       }
 
-      const { error, value } = createCategorySchema.validate(req.body);
+      const { error, value } = categorySchema.validate(req.body);
       if (error) {
         res.status(400).json({
           error: 'Validation error',

@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout/Layout"
 import { Categories } from "@/pages/Categories"
 import { QuizBuilder } from "@/pages/QuizBuilder"
 import { ThemeProvider } from "@/hooks/useTheme"
+import { ApiTest } from "@/components/ApiTest"
 
 function App() {
   // Simple routing based on current path
@@ -11,6 +12,8 @@ function App() {
     switch (currentPath) {
       case '/quiz-builder':
         return <QuizBuilder />
+      case '/api-test':
+        return <ApiTest />
       case '/categories':
       default:
         return <Categories />

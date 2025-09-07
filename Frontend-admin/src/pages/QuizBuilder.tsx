@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -25,7 +25,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { FileQuestion, RotateCcw, Save, BookOpen, Settings, Rocket } from "lucide-react"
-import { mockCategories } from "@/data/mockData"
+import { categoryService, quizService } from "@/services"
 import { QuestionsTab } from "@/components/questions/QuestionsTab"
 import { QuizSettingsTab } from "@/components/quiz-settings/QuizSettingsTab"
 import { PublishReviewTab } from "@/components/publish/PublishReviewTab"
@@ -33,6 +33,7 @@ import type { Category } from "@/types"
 import type { Question } from "@/types/question"
 import type { QuizSettings } from "@/types/quiz-settings"
 import { defaultQuizSettings } from "@/types/quiz-settings"
+import type { CreateQuizDto } from "@/types/api"
 
 interface QuizFormData {
   title: string
@@ -43,7 +44,10 @@ interface QuizFormData {
 }
 
 export function QuizBuilder() {
-  const [categories] = useState<Category[]>(mockCategories)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState<QuizFormData>({
     title: "",
     description: "",
@@ -53,6 +57,46 @@ export function QuizBuilder() {
   })
   const [questions, setQuestions] = useState<Question[]>([])
   const [quizSettings, setQuizSettings] = useState<QuizSettings>(defaultQuizSettings)
+
+  // Load categories from API
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  const loadCategories = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const apiCategories = await categoryService.getAllCategories()
+      
+      // Transform API categories to match frontend format
+      const transformedCategories: Category[] = apiCategories.map((apiCategory: any) => ({
+        id: apiCategory.id.toString(),
+        name: apiCategory.name,
+        description: undefined,
+        subcategories: apiCategory.children?.map((child: any) => ({
+          id: child.id.toString(),
+          name: child.name,
+          description: undefined,
+          categoryId: apiCategory.id.toString(),
+          quizzes: [],
+          createdAt: new Date(child.createdAt),
+          updatedAt: new Date(child.updatedAt)
+        })) || [],
+        createdAt: new Date(apiCategory.createdAt),
+        updatedAt: new Date(apiCategory.updatedAt)
+      }))
+      
+      setCategories(transformedCategories)
+      
+    } catch (err) {
+      console.error('Failed to load categories:', err)
+      setError('Failed to load categories. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const selectedCategory = categories.find(cat => cat.id === formData.categoryId)
   const availableSubcategories = selectedCategory?.subcategories || []
@@ -76,15 +120,72 @@ export function QuizBuilder() {
     })
   }
 
-  const handleSave = () => {
-    console.log("Quiz Details:", formData)
-    // TODO: Implement actual save functionality
+  const handleSave = async () => {
+    if (!isFormValid) return
+    
+    try {
+      setSaving(true)
+      setError(null)
+      
+      const quizData: CreateQuizDto = {
+        title: formData.title,
+        description: formData.description,
+        categoryId: parseInt(formData.subcategoryId || formData.categoryId),
+        difficulty: 'MEDIUM' as const, // Default difficulty
+        timeLimit: 30 // Default time limit
+      }
+      
+      const newQuiz = await quizService.createQuiz(quizData)
+      
+      console.log('Quiz created successfully:', newQuiz)
+      
+      // Reset form after successful save
+      setFormData({
+        title: "",
+        description: "",
+        tags: "",
+        categoryId: "",
+        subcategoryId: "",
+      })
+      
+    } catch (err) {
+      console.error('Failed to save quiz:', err)
+      setError('Failed to save quiz. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const isFormValid = formData.title.trim() && formData.description.trim()
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading categories...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-red-600 dark:text-red-400 text-sm">
+              {error}
+            </div>
+            <button 
+              onClick={() => setError(null)}
+              className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       {/* Breadcrumbs */}
       <Breadcrumb>
         <BreadcrumbList>
@@ -289,11 +390,11 @@ export function QuizBuilder() {
                 </Button>
                 <Button
                   onClick={handleSave}
-                  disabled={!isFormValid}
+                  disabled={!isFormValid || saving}
                   className="bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
-                  <span>Save Quiz</span>
+                  <span>{saving ? 'Saving...' : 'Save Quiz'}</span>
                 </Button>
               </div>
             </div>

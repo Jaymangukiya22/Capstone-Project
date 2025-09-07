@@ -1,21 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { quizService } from '../services/quizService';
-import { createQuizSchema } from '../utils/validation';
+import { validateQuiz } from '../utils/validation';
 
 export class QuizController {
   async createQuiz(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { error, value } = createQuizSchema.validate(req.body);
+      const { error, value } = validateQuiz(req.body);
       if (error) {
         res.status(400).json({
+          success: false,
           error: 'Validation error',
           message: error.details[0].message
         });
         return;
       }
 
-      const { title, description, categoryId, difficulty, timeLimit } = value;
-      const quiz = await quizService.createQuiz(title, description, categoryId, difficulty, timeLimit);
+      const quiz = await quizService.createQuiz(value);
 
       res.status(201).json({
         success: true,
@@ -59,22 +59,31 @@ export class QuizController {
 
   async getAllQuizzes(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      const filters: any = {};
       
-      if (categoryId && isNaN(categoryId)) {
-        res.status(400).json({
-          error: 'Invalid category ID',
-          message: 'Category ID must be a number'
-        });
-        return;
+      if (req.query.difficulty) {
+        filters.difficulty = req.query.difficulty;
+      }
+      
+      if (req.query.categoryId) {
+        filters.categoryId = parseInt(req.query.categoryId as string);
+      }
+      
+      if (req.query.limit) {
+        filters.limit = parseInt(req.query.limit as string);
+      }
+      
+      if (req.query.offset) {
+        filters.offset = parseInt(req.query.offset as string);
       }
 
-      const quizzes = await quizService.getAllQuizzes(categoryId);
+      const result = await quizService.getAllQuizzes(filters);
 
       res.status(200).json({
         success: true,
-        data: quizzes,
-        count: quizzes.length,
+        data: result.quizzes,
+        total: result.total,
+        count: result.quizzes.length,
         message: 'Quizzes retrieved successfully'
       });
     } catch (error) {
@@ -87,14 +96,23 @@ export class QuizController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
+          success: false,
           error: 'Invalid quiz ID',
           message: 'Quiz ID must be a number'
         });
         return;
       }
 
-      const { title, description, categoryId, difficulty, timeLimit } = req.body;
-      const quiz = await quizService.updateQuiz(id, title, description, categoryId, difficulty, timeLimit);
+      const quiz = await quizService.updateQuiz(id, req.body);
+      
+      if (!quiz) {
+        res.status(404).json({
+          success: false,
+          error: 'Quiz not found',
+          message: `Quiz with ID ${id} does not exist`
+        });
+        return;
+      }
 
       res.status(200).json({
         success: true,

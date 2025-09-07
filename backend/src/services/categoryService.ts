@@ -1,182 +1,199 @@
-import { PrismaClient, Category } from '@prisma/client';
-import { redisService } from '../utils/redis';
+import { prisma } from '../server';
+import { logInfo, logError } from '../utils/logger';
 
-const prisma = new PrismaClient();
+export interface CreateCategoryData {
+  name: string;
+  parentId?: number | null;
+}
 
 export class CategoryService {
-  async createCategory(name: string, parentId?: number): Promise<Category> {
-    // Validate parent exists if provided
-    if (parentId) {
-      const parent = await prisma.category.findUnique({
-        where: { id: parentId }
+  async createCategory(data: CreateCategoryData): Promise<any> {
+    try {
+      // Validate parent exists if provided
+      if (data.parentId) {
+        const parent = await prisma.category.findUnique({
+          where: { id: data.parentId }
+        });
+        if (!parent) {
+          throw new Error('Parent category not found');
+        }
+      }
+
+      const category = await prisma.category.create({
+        data: {
+          name: data.name,
+          parentId: data.parentId
+        },
+        include: {
+          parent: true,
+          children: true
+        }
       });
-      if (!parent) {
-        throw new Error('Parent category not found');
-      }
+
+      logInfo('Category created', { categoryId: category.id });
+      return category;
+    } catch (error) {
+      logError('Failed to create category', error as Error, { data });
+      throw error;
     }
-
-    const category = await prisma.category.create({
-      data: {
-        name,
-        parentId
-      }
-    });
-
-    // Invalidate categories cache
-    await redisService.invalidateCategoriesCache();
-
-    return category;
   }
 
-  async getAllCategories(): Promise<Category[]> {
-    // Try to get from cache first
-    const cached = await redisService.getCachedCategories();
-    if (cached) {
-      return cached;
-    }
-
-    // Fetch from database with hierarchy
-    const categories = await prisma.category.findMany({
-      include: {
-        children: {
-          include: {
-            children: {
-              include: {
-                children: true // Support up to 4 levels deep
-              }
+  async getAllCategories(): Promise<any[]> {
+    try {
+      const categories = await prisma.category.findMany({
+        include: {
+          parent: true,
+          children: true,
+          _count: {
+            select: {
+              children: true,
+              quizzes: true
             }
           }
         },
-        parent: true,
-        _count: {
-          select: {
-            quizzes: true
-          }
+        orderBy: {
+          name: 'asc'
         }
-      },
-      orderBy: [
-        { parentId: 'asc' },
-        { name: 'asc' }
-      ]
-    });
+      });
 
-    // Cache the result
-    await redisService.cacheCategories(categories, 600); // Cache for 10 minutes
-
-    return categories;
+      logInfo('Retrieved all categories', { count: categories.length });
+      return categories;
+    } catch (error) {
+      logError('Failed to retrieve categories', error as Error);
+      throw error;
+    }
   }
 
-  async getCategoryById(id: number): Promise<Category | null> {
-    return await prisma.category.findUnique({
-      where: { id },
-      include: {
-        children: true,
-        parent: true,
-        quizzes: {
-          select: {
-            id: true,
-            title: true,
-            difficulty: true,
-            _count: {
-              select: {
-                questions: true
-              }
-            }
-          }
-        },
-        _count: {
-          select: {
-            quizzes: true
-          }
+  async getCategoryById(id: number): Promise<any | null> {
+    try {
+      const category = await prisma.category.findUnique({
+        where: { id },
+        include: {
+          parent: true,
+          children: true
+          // Removed invalid includes
         }
+      });
+
+      if (category) {
+        logInfo('Retrieved category by ID', { categoryId: id });
+      } else {
+        logInfo('Category not found', { categoryId: id });
       }
-    });
+
+      return category;
+    } catch (error) {
+      logError('Failed to retrieve category by ID', error as Error, { categoryId: id });
+      throw error;
+    }
   }
 
-  async getCategoryHierarchy(): Promise<Category[]> {
-    // Get root categories (no parent) with full hierarchy
-    return await prisma.category.findMany({
-      where: {
-        parentId: null
-      },
-      include: {
-        children: {
-          include: {
-            children: {
-              include: {
-                children: {
-                  include: {
-                    _count: {
-                      select: {
-                        quizzes: true
-                      }
-                    }
-                  }
-                },
-                _count: {
-                  select: {
-                    quizzes: true
-                  }
+  async getCategoryHierarchy(): Promise<any[]> {
+    try {
+      // Get root categories (no parent) with full hierarchy
+      const rootCategories = await prisma.category.findMany({
+        where: {
+          parentId: null
+        },
+        include: {
+          children: {
+            include: {
+              children: {
+                include: {
+                  children: true
                 }
               }
-            },
-            _count: {
-              select: {
-                quizzes: true
-              }
             }
           }
         },
-        _count: {
-          select: {
-            quizzes: true
+        orderBy: {
+          name: 'asc'
+        }
+      });
+
+      logInfo('Retrieved category hierarchy', { rootCount: rootCategories.length });
+      return rootCategories;
+    } catch (error) {
+      logError('Failed to retrieve category hierarchy', error as Error);
+      throw error;
+    }
+  }
+
+  async updateCategory(id: number, data: Partial<CreateCategoryData>): Promise<any> {
+    try {
+      // Check if category exists
+      const existingCategory = await prisma.category.findUnique({
+        where: { id }
+      });
+
+      if (!existingCategory) {
+        return null;
+      }
+
+      // Filter out description field as it doesn't exist in schema
+      const { description, ...validData } = data as any;
+
+      // Validate parent relationship if parentId is being updated
+      if (validData.parentId !== undefined) {
+        if (validData.parentId) {
+          const parent = await prisma.category.findUnique({
+            where: { id: validData.parentId }
+          });
+          if (!parent) {
+            throw new Error('Parent category not found');
           }
         }
-      },
-      orderBy: {
-        name: 'asc'
       }
-    });
-  }
 
-  async updateCategory(id: number, name: string, parentId?: number): Promise<Category> {
-    // Validate parent exists if provided and is not the same as current category
-    if (parentId && parentId !== id) {
-      const parent = await prisma.category.findUnique({
-        where: { id: parentId }
+      const updatedCategory = await prisma.category.update({
+        where: { id },
+        data: validData,
+        include: {
+          parent: true,
+          children: true
+        }
       });
-      if (!parent) {
-        throw new Error('Parent category not found');
-      }
 
-      // Check for circular reference
-      const isCircular = await this.checkCircularReference(id, parentId);
-      if (isCircular) {
-        throw new Error('Circular reference detected');
-      }
+      logInfo('Category updated', { categoryId: id });
+      return updatedCategory;
+    } catch (error) {
+      logError('Failed to update category', error as Error, { categoryId: id, data });
+      throw error;
     }
-
-    const category = await prisma.category.update({
-      where: { id },
-      data: {
-        name,
-        parentId: parentId === id ? null : parentId
-      }
-    });
-
-    // Invalidate categories cache
-    await redisService.invalidateCategoriesCache();
-
-    return category;
   }
 
-  async deleteCategory(id: number): Promise<void> {
-    await prisma.category.delete({
-      where: { id }
-    });
+  async deleteCategory(id: number): Promise<boolean> {
+    try {
+      // Check if category has children
+      const children = await prisma.category.findMany({
+        where: { parentId: id }
+      });
 
-    // Invalidate categories cache
-    await redisService.invalidateCategoriesCache();
+      if (children.length > 0) {
+        throw new Error('Cannot delete category with subcategories');
+      }
+
+      // Check if any quizzes reference this category
+      const quizCount = await prisma.quiz.count({
+        where: { 
+          categoryId: id
+        }
+      });
+
+      if (quizCount > 0) {
+        throw new Error('Cannot delete category with associated quizzes');
+      }
+
+      await prisma.category.delete({
+        where: { id }
+      });
+
+      logInfo('Category deleted', { categoryId: id });
+      return true;
+    } catch (error) {
+      logError('Failed to delete category', error as Error, { categoryId: id });
+      throw error;
+    }
   }
 
   private async checkCircularReference(categoryId: number, parentId: number): Promise<boolean> {

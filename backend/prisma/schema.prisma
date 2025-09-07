@@ -17,63 +17,53 @@ enum Difficulty {
 }
 
 model Category {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(100)
-  parentId  Int?     @map("parent_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Self-referencing relationship for hierarchy
-  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children Category[] @relation("CategoryHierarchy")
-
-  // Quizzes belonging to this category
-  quizzes Quiz[]
+  id        Int        @id @default(autoincrement()) @map("id")
+  name      String     @map("name") @db.VarChar(100)
+  parentId  Int?       @map("parent_id")
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryHierarchy")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  quizzes   Quiz[]
 
   @@map("categories")
 }
 
 model Quiz {
-  id          Int        @id @default(autoincrement())
-  title       String     @db.VarChar(200)
-  description String?    @db.Text
+  id          Int        @id @default(autoincrement()) @map("id")
+  title       String     @map("title") @db.VarChar(200)
+  description String?    @map("description") @db.Text
   categoryId  Int        @map("category_id")
-  difficulty  Difficulty @default(MEDIUM)
-  timeLimit   Int?       @map("time_limit") // in seconds
+  category    Category   @relation(fields: [categoryId], references: [id])
+  difficulty  Difficulty @default(MEDIUM) @map("difficulty")
+  timeLimit   Int?       @map("time_limit")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
-
-  // Relationships
-  category  Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  questions Question[]
+  questions   Question[]
 
   @@map("quizzes")
 }
 
 model Question {
-  id           Int    @id @default(autoincrement())
-  quizId       Int    @map("quiz_id")
-  questionText String @map("question_text") @db.Text
+  id           Int      @id @default(autoincrement()) @map("id")
+  quizId       Int      @map("quiz_id")
+  quiz         Quiz     @relation(fields: [quizId], references: [id])
+  questionText String   @map("question_text") @db.Text
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
-  // Relationships
-  quiz    Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  options Option[]
+  options      Option[]
 
   @@map("questions")
 }
 
 model Option {
-  id         Int     @id @default(autoincrement())
-  questionId Int     @map("question_id")
-  optionText String  @map("option_text") @db.Text
-  isCorrect  Boolean @default(false) @map("is_correct")
+  id         Int      @id @default(autoincrement()) @map("id")
+  questionId Int      @map("question_id")
+  question   Question @relation(fields: [questionId], references: [id])
+  optionText String   @map("option_text") @db.Text
+  isCorrect  Boolean  @default(false) @map("is_correct")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
-
-  // Relationships
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@map("options")
 }

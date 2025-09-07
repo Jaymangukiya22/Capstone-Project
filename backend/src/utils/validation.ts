@@ -9,10 +9,10 @@ export const categorySchema = Joi.object({
 // Quiz validation schemas
 export const createQuizSchema = Joi.object({
   title: Joi.string().min(1).max(200).required(),
-  description: Joi.string().optional(),
-  categoryId: Joi.number().integer().positive().required(),
+  description: Joi.string().optional().allow(''),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').default('MEDIUM'),
-  timeLimit: Joi.number().integer().positive().optional()
+  timeLimit: Joi.number().integer().positive().optional(),
+  categoryId: Joi.number().integer().positive().optional()
 });
 
 // Question validation schemas

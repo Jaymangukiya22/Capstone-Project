@@ -1,36 +1,46 @@
-# Quiz App Backend - Module 1
+# Quiz Management System Backend
 
-A scalable backend application for a real-time quiz platform built with Node.js, Express, PostgreSQL, Prisma, and Redis.
+A production-ready backend for a comprehensive Quiz Management System built with Node.js, Express.js, Prisma ORM, PostgreSQL, and Docker. Features advanced logging, observability, and comprehensive API testing.
 
 ## 🚀 Features
 
-- **Hierarchical Categories**: Self-join category system supporting unlimited nesting
-- **Quiz Management**: Create and manage quizzes with metadata (title, description, difficulty, time limits)
-- **Question System**: Support for 2-4 option questions with single or multiple correct answers
-- **Redis Caching**: High-performance caching for quiz data and categories
+- **Hierarchical Categories**: Self-referencing category system with unlimited nesting levels
+- **Advanced Quiz Management**: Support for multiple game types (STANDARD, TIMED, MULTIPLAYER, TOURNAMENT)
+- **Flexible Question System**: MCQ (2-4 options) and Boolean questions with multiple correct answers
+- **Observability**: Winston logging, OpenTelemetry tracing, Prometheus metrics
+- **Production Middleware**: Request logging, error handling, CORS, compression, security headers
 - **Basic Authentication**: Development-ready auth system (aryan:admin)
-- **Docker Ready**: Complete containerization with docker-compose
+- **Docker Ready**: Multi-stage builds with auto-migrations and health checks
 - **TypeScript**: Full type safety throughout the application
 - **Prisma ORM**: Type-safe database operations with automatic migrations
+- **API Testing**: Comprehensive Postman collection with automated tests
 
 ## 🏗 Architecture
 
 ```
 src/
-├── controllers/     # HTTP request handlers
-├── services/        # Business logic layer
+├── controllers/     # HTTP request handlers with validation
+├── services/        # Business logic layer with logging
 ├── routes/          # API route definitions
-├── middleware/      # Custom middleware (auth, error handling)
-├── utils/           # Utilities (Redis, validation)
-└── server.ts        # Application entry point
+├── middleware/      # Request logging, error handling, auth
+├── utils/           # Validation schemas, Winston logger
+├── tracing.ts       # OpenTelemetry configuration
+└── server.ts        # Application entry point with metrics
 ```
 
 ## 📊 Database Schema
 
-- **Categories**: Hierarchical structure with self-join relationships
-- **Quizzes**: Belong to categories with difficulty and time limit metadata
-- **Questions**: Multiple questions per quiz
-- **Options**: 2-4 options per question with correct answer flags
+### Core Models
+- **Quiz**: Game metadata (name, type, timing, bonuses, tags)
+- **Question**: Text content with MCQ/Boolean flag
+- **Option**: Answer choices with correctness flag
+- **Category**: Hierarchical structure with self-referencing parentId
+
+### Key Features
+- **Game Types**: STANDARD, TIMED, MULTIPLAYER, TOURNAMENT
+- **Question Types**: MCQ (2-4 options) and Boolean (2 options)
+- **Hierarchical Categories**: Unlimited nesting with level tracking
+- **Flexible Options**: Multiple correct answers supported
 
 ## 🔌 API Endpoints
 
@@ -42,21 +52,25 @@ src/
 - `DELETE /api/categories/:id` - Delete category
 
 ### Quizzes
-- `POST /api/quizzes` - Create quiz under a category
-- `GET /api/quizzes` - List all quizzes (optional categoryId filter)
-- `GET /api/quizzes/:id` - Get quiz with questions and answers
-- `PUT /api/quizzes/:id` - Update quiz
-- `DELETE /api/quizzes/:id` - Delete quiz
-- `GET /api/quizzes/:id/stats` - Get quiz statistics
+- `POST /api/quizzes` - Create quiz with game type and settings
+- `GET /api/quizzes` - List quizzes with filters (gameType, tags, pagination)
+- `GET /api/quizzes/:id` - Get quiz with questions and options
+- `PUT /api/quizzes/:id` - Update quiz metadata
+- `DELETE /api/quizzes/:id` - Delete quiz and cascade questions
+- `GET /api/quizzes/:id/stats` - Get comprehensive quiz statistics
 
 ### Questions
 - `POST /api/questions` - Create standalone question
-- `POST /api/questions/quiz/:quizId` - Add question to specific quiz
+- `POST /api/questions/quiz/:quizId` - Add MCQ/Boolean question to quiz
 - `GET /api/questions/:quizId` - Get all questions for a quiz
-- `GET /api/questions/single/:id` - Get question by ID
-- `PUT /api/questions/single/:id` - Update question
-- `DELETE /api/questions/single/:id` - Delete question
+- `GET /api/questions/single/:id` - Get question by ID with options
+- `PUT /api/questions/single/:id` - Update question and options
+- `DELETE /api/questions/single/:id` - Delete question and options
 - `GET /api/questions/:quizId/stats` - Get question statistics
+
+### Observability
+- `GET /health` - Health check endpoint
+- `GET /metrics` - Prometheus metrics endpoint
 
 ## 🐳 Docker Setup
 

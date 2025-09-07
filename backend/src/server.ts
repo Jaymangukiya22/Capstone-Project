@@ -1,9 +1,12 @@
+// Initialize tracing first
+import './tracing';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import compression from 'compression';
 import dotenv from 'dotenv';
+import promBundle from 'express-prom-bundle';
 import { PrismaClient } from '@prisma/client';
 
 // Import routes
@@ -13,10 +16,10 @@ import questionRoutes from './routes/questionRoutes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
-import { basicAuth } from './middleware/auth';
+import { requestLogger } from './middleware/requestLogger';
 
-// Import Redis service
-import { redisService } from './utils/redis';
+// Import utilities
+import { logInfo, logError } from './utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -27,11 +30,24 @@ const PORT = process.env.PORT || 3000;
 // Initialize Prisma Client
 export const prisma = new PrismaClient();
 
+// Prometheus metrics middleware
+const metricsMiddleware = promBundle({
+  includeMethod: true,
+  includePath: true,
+  includeStatusCode: true,
+  includeUp: true,
+  customLabels: { project_name: 'quiz-app-backend' },
+  promClient: {
+    collectDefaultMetrics: {},
+  },
+});
+
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(compression());
-app.use(morgan('combined'));
+app.use(metricsMiddleware);
+app.use(requestLogger);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -40,19 +56,24 @@ app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'Quiz App Backend',
-    version: '1.0.0'
+    service: 'Quiz Management System Backend',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// API Routes with basic authentication
-app.use('/api/categories', basicAuth, categoryRoutes);
-app.use('/api/quizzes', basicAuth, quizRoutes);
-app.use('/api/questions', basicAuth, questionRoutes);
+// Metrics endpoint (exposed by express-prom-bundle)
+// Available at /metrics
+
+// API Routes
+app.use('/api/categories', categoryRoutes);
+app.use('/api/quizzes', quizRoutes);
+app.use('/api/questions', questionRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
+    success: false,
     error: 'Route not found',
     message: `Cannot ${req.method} ${req.originalUrl}`
   });
@@ -63,37 +84,34 @@ app.use(errorHandler);
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('Received SIGINT, shutting down gracefully...');
+  logInfo('Received SIGINT, shutting down gracefully...');
   await prisma.$disconnect();
-  await redisService.disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM, shutting down gracefully...');
+  logInfo('Received SIGTERM, shutting down gracefully...');
   await prisma.$disconnect();
-  await redisService.disconnect();
   process.exit(0);
 });
 
 // Start server
 async function startServer() {
   try {
-    // Connect to Redis
-    await redisService.connect();
-    console.log('✅ Connected to Redis');
-
     // Test database connection
     await prisma.$connect();
-    console.log('✅ Connected to PostgreSQL');
+    logInfo('Connected to PostgreSQL database');
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
-      console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logInfo('Server started successfully', {
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development',
+        healthCheck: `http://localhost:${PORT}/health`,
+        metrics: `http://localhost:${PORT}/metrics`
+      });
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logError('Failed to start server', error as Error);
     process.exit(1);
   }
 }

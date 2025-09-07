@@ -1,4 +1,4 @@
-# Use Node.js 18 LTS (Debian-based, not Alpine)
+# Use Node.js 18 LTS
 FROM node:18-slim
 
 # Set working directory
@@ -9,29 +9,19 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     curl \
     openssl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./ 
 COPY tsconfig.json ./
 
-# Install all dependencies (including dev for build)
+# Install all dependencies
 RUN npm ci
 
 # Copy source code
 COPY . .
 COPY prisma ./prisma
-
-# Generate Prisma client
-RUN npx prisma generate
-
-# Build TypeScript
-RUN npm run build
-
-# Install production deps + ts-node for seeding
-RUN npm ci --only=production \
-    && npm install ts-node \
-    && npm cache clean --force
 
 # Create logs directory
 RUN mkdir -p logs

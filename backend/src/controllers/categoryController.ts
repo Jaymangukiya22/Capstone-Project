@@ -1,21 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { categoryService } from '../services/categoryService';
-import { categorySchema } from '../utils/validation';
+import { validateCategory } from '../utils/validation';
 
 export class CategoryController {
   async createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { error, value } = categorySchema.validate(req.body);
+      const { error, value } = validateCategory(req.body);
       if (error) {
         res.status(400).json({
+          success: false,
           error: 'Validation error',
           message: error.details[0].message
         });
         return;
       }
 
-      const { name, parentId } = value;
-      const category = await categoryService.createCategory(name, parentId);
+      const category = await categoryService.createCategory(value);
 
       res.status(201).json({
         success: true,
@@ -84,23 +84,14 @@ export class CategoryController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
+          success: false,
           error: 'Invalid category ID',
           message: 'Category ID must be a number'
         });
         return;
       }
 
-      const { error, value } = categorySchema.validate(req.body);
-      if (error) {
-        res.status(400).json({
-          error: 'Validation error',
-          message: error.details[0].message
-        });
-        return;
-      }
-
-      const { name, parentId } = value;
-      const category = await categoryService.updateCategory(id, name, parentId);
+      const category = await categoryService.updateCategory(id, req.body);
 
       res.status(200).json({
         success: true,
@@ -117,13 +108,23 @@ export class CategoryController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
+          success: false,
           error: 'Invalid category ID',
           message: 'Category ID must be a number'
         });
         return;
       }
 
-      await categoryService.deleteCategory(id);
+      const success = await categoryService.deleteCategory(id);
+      
+      if (!success) {
+        res.status(404).json({
+          success: false,
+          error: 'Category not found',
+          message: `Category with ID ${id} does not exist`
+        });
+        return;
+      }
 
       res.status(200).json({
         success: true,

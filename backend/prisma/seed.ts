@@ -1,4 +1,4 @@
-import { PrismaClient, Difficulty } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -89,17 +89,85 @@ async function main() {
 
   console.log('✅ Categories created');
 
-  // Create sample quizzes
+  // Create a quiz with questions and options
+  // Create a quiz
   const physicsQuiz = await prisma.quiz.upsert({
     where: { id: 1 },
     update: {},
     create: {
-      title: 'Basic Physics Concepts',
-      description: 'Test your knowledge of fundamental physics principles',
+      title: 'Basic Physics Quiz',
+      description: 'A basic quiz about physics concepts',
+      difficulty: 'MEDIUM',
+      timeLimit: 30,
       categoryId: physicsCategory.id,
-      difficulty: Difficulty.MEDIUM,
-      timeLimit: 600, // 10 minutes
     },
+  });
+
+  // Create questions for the physics quiz
+  const question1 = await prisma.question.create({
+    data: {
+      quizId: physicsQuiz.id,
+      questionText: 'What is the force that attracts two objects with mass?',
+    },
+  });
+
+  // Create options for question 1
+  await prisma.option.createMany({
+    data: [
+      {
+        questionId: question1.id,
+        optionText: 'Gravity',
+        isCorrect: true,
+      },
+      {
+        questionId: question1.id,
+        optionText: 'Electromagnetic force',
+        isCorrect: false,
+      },
+      {
+        questionId: question1.id,
+        optionText: 'Centrifugal force',
+        isCorrect: false,
+      },
+      {
+        questionId: question1.id,
+        optionText: 'Strong nuclear force',
+        isCorrect: false,
+      },
+    ],
+  });
+
+  const question2 = await prisma.question.create({
+    data: {
+      quizId: physicsQuiz.id,
+      questionText: 'What is the speed of light in vacuum?',
+    },
+  });
+
+  // Create options for question 2
+  await prisma.option.createMany({
+    data: [
+      {
+        questionId: question2.id,
+        optionText: '3 × 10⁸ m/s',
+        isCorrect: true,
+      },
+      {
+        questionId: question2.id,
+        optionText: '3 × 10⁶ m/s',
+        isCorrect: false,
+      },
+      {
+        questionId: question2.id,
+        optionText: '3 × 10¹⁰ m/s',
+        isCorrect: false,
+      },
+      {
+        questionId: question2.id,
+        optionText: '3 × 10⁴ m/s',
+        isCorrect: false,
+      },
+    ],
   });
 
   const quantumQuiz = await prisma.quiz.upsert({
@@ -107,133 +175,158 @@ async function main() {
     update: {},
     create: {
       title: 'Quantum Mechanics Fundamentals',
-      description: 'Advanced concepts in quantum mechanics',
+      description: 'A quiz about quantum mechanics concepts',
+      difficulty: 'HARD',
+      timeLimit: 45,
       categoryId: quantumMechanicsCategory.id,
-      difficulty: Difficulty.HARD,
-      timeLimit: 900, // 15 minutes
+      questions: {
+        create: [
+          {
+            questionText: 'What is the principle of wave-particle duality?',
+            options: {
+              create: [
+                {
+                  optionText: 'Particles can exhibit wave-like behavior',
+                  isCorrect: true,
+                },
+                {
+                  optionText: 'Waves can exhibit particle-like behavior',
+                  isCorrect: true,
+                },
+                {
+                  optionText: 'Particles and waves are mutually exclusive',
+                  isCorrect: false,
+                },
+                {
+                  optionText: 'The principle is only applicable to macroscopic objects',
+                  isCorrect: false,
+                },
+              ],
+            },
+          },
+        ],
+      },
     },
   });
 
-  const cricketQuiz = await prisma.quiz.upsert({
+  const techQuiz = await prisma.quiz.upsert({
     where: { id: 3 },
     update: {},
     create: {
-      title: 'T20 Cricket Rules',
-      description: 'Test your knowledge of T20 cricket format',
-      categoryId: t20Category.id,
-      difficulty: Difficulty.EASY,
-      timeLimit: 300, // 5 minutes
-    },
-  });
-
-  const jsQuiz = await prisma.quiz.upsert({
-    where: { id: 4 },
-    update: {},
-    create: {
-      title: 'JavaScript Fundamentals',
-      description: 'Basic JavaScript concepts and syntax',
-      categoryId: javascriptCategory.id,
-      difficulty: Difficulty.MEDIUM,
-      timeLimit: 480, // 8 minutes
+      title: 'Technology Trivia',
+      description: 'A quiz about technology and programming',
+      difficulty: 'EASY',
+      timeLimit: 20,
+      categoryId: technologyCategory.id,
+      questions: {
+        create: [
+          {
+            questionText: 'What is the most popular programming language?',
+            options: {
+              create: [
+                {
+                  optionText: 'JavaScript',
+                  isCorrect: true,
+                },
+                {
+                  optionText: 'Python',
+                  isCorrect: false,
+                },
+                {
+                  optionText: 'Java',
+                  isCorrect: false,
+                },
+                {
+                  optionText: 'C++',
+                  isCorrect: false,
+                },
+              ],
+            },
+          },
+        ],
+      },
     },
   });
 
   console.log('✅ Quizzes created');
 
-  // Create sample questions for Physics Quiz
-  const physicsQ1 = await prisma.question.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      quizId: physicsQuiz.id,
-      questionText: 'What is the speed of light in vacuum?',
-    },
-  });
 
-  await prisma.option.createMany({
-    data: [
-      { questionId: physicsQ1.id, optionText: '3 × 10⁸ m/s', isCorrect: true },
-      { questionId: physicsQ1.id, optionText: '3 × 10⁶ m/s', isCorrect: false },
-      { questionId: physicsQ1.id, optionText: '3 × 10¹⁰ m/s', isCorrect: false },
-      { questionId: physicsQ1.id, optionText: '3 × 10⁴ m/s', isCorrect: false },
-    ],
-    skipDuplicates: true,
-  });
-
-  const physicsQ2 = await prisma.question.upsert({
-    where: { id: 2 },
-    update: {},
-    create: {
-      quizId: physicsQuiz.id,
-      questionText: 'Which of the following are fundamental forces in nature?',
-    },
-  });
-
-  await prisma.option.createMany({
-    data: [
-      { questionId: physicsQ2.id, optionText: 'Gravitational force', isCorrect: true },
-      { questionId: physicsQ2.id, optionText: 'Electromagnetic force', isCorrect: true },
-      { questionId: physicsQ2.id, optionText: 'Centrifugal force', isCorrect: false },
-      { questionId: physicsQ2.id, optionText: 'Strong nuclear force', isCorrect: true },
-    ],
-    skipDuplicates: true,
-  });
-
-  // Create sample questions for JavaScript Quiz
-  const jsQ1 = await prisma.question.upsert({
-    where: { id: 3 },
-    update: {},
-    create: {
-      quizId: jsQuiz.id,
-      questionText: 'Which of the following is used to declare a variable in JavaScript?',
-    },
-  });
-
-  await prisma.option.createMany({
-    data: [
-      { questionId: jsQ1.id, optionText: 'var', isCorrect: true },
-      { questionId: jsQ1.id, optionText: 'let', isCorrect: true },
-      { questionId: jsQ1.id, optionText: 'const', isCorrect: true },
-      { questionId: jsQ1.id, optionText: 'variable', isCorrect: false },
-    ],
-    skipDuplicates: true,
-  });
-
-  const jsQ2 = await prisma.question.upsert({
+  // Create a JavaScript quiz
+  const jsQuiz = await prisma.quiz.upsert({
     where: { id: 4 },
     update: {},
     create: {
-      quizId: jsQuiz.id,
-      questionText: 'What does JSON stand for?',
-    },
+      title: 'JavaScript Fundamentals',
+      description: 'A quiz about JavaScript programming',
+      difficulty: 'EASY',
+      timeLimit: 25,
+      categoryId: javascriptCategory.id,
+      questions: {
+        create: [
+          {
+            questionText: 'Which of the following is used to declare a variable in JavaScript?',
+            options: {
+              create: [
+                { optionText: 'var', isCorrect: true },
+                { optionText: 'let', isCorrect: true },
+                { optionText: 'const', isCorrect: true },
+                { optionText: 'variable', isCorrect: false }
+              ]
+            }
+          },
+          {
+            questionText: 'What does JSON stand for?',
+            options: {
+              create: [
+                { optionText: 'JavaScript Object Notation', isCorrect: true },
+                { optionText: 'Java Standard Object Notation', isCorrect: false },
+                { optionText: 'JavaScript Object Naming', isCorrect: false },
+                { optionText: 'JavaScript Oriented Notation', isCorrect: false }
+              ]
+            }
+          }
+        ]
+      }
+    }
   });
 
-  await prisma.option.createMany({
-    data: [
-      { questionId: jsQ2.id, optionText: 'JavaScript Object Notation', isCorrect: true },
-      { questionId: jsQ2.id, optionText: 'Java Standard Object Notation', isCorrect: false },
-    ],
-    skipDuplicates: true,
-  });
-
-  // Create sample questions for Cricket Quiz
-  const cricketQ1 = await prisma.question.upsert({
+  // Create a Cricket quiz
+  const cricketQuiz = await prisma.quiz.upsert({
     where: { id: 5 },
     update: {},
     create: {
-      quizId: cricketQuiz.id,
-      questionText: 'How many overs are there in a T20 match per team?',
-    },
-  });
-
-  await prisma.option.createMany({
-    data: [
-      { questionId: cricketQ1.id, optionText: '20', isCorrect: true },
-      { questionId: cricketQ1.id, optionText: '50', isCorrect: false },
-      { questionId: cricketQ1.id, optionText: '10', isCorrect: false },
-      { questionId: cricketQ1.id, optionText: '25', isCorrect: false },
-    ],
-    skipDuplicates: true,
+      title: 'Cricket Trivia',
+      description: 'A quiz about cricket',
+      difficulty: 'MEDIUM',
+      timeLimit: 20,
+      categoryId: cricketCategory.id,
+      questions: {
+        create: [
+          {
+            questionText: 'How many overs are there in a T20 match per team?',
+            options: {
+              create: [
+                { optionText: '20', isCorrect: true },
+                { optionText: '50', isCorrect: false },
+                { optionText: '10', isCorrect: false },
+                { optionText: '25', isCorrect: false }
+              ]
+            }
+          },
+          {
+            questionText: 'Which country won the first ever Cricket World Cup in 1975?',
+            options: {
+              create: [
+                { optionText: 'West Indies', isCorrect: true },
+                { optionText: 'Australia', isCorrect: false },
+                { optionText: 'England', isCorrect: false },
+                { optionText: 'India', isCorrect: false }
+              ]
+            }
+          }
+        ]
+      }
+    }
   });
 
   console.log('✅ Questions and options created');

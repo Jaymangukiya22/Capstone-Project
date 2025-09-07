@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { questionService } from '../services/questionService';
-import { createQuestionSchema, addQuestionSchema } from '../utils/validation';
+import { validateQuestion, addQuestionSchema } from '../utils/validation';
 
 export class QuestionController {
   async createQuestion(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { error, value } = createQuestionSchema.validate(req.body);
+      const { error, value } = validateQuestion(req.body);
       if (error) {
         res.status(400).json({
+          success: false,
           error: 'Validation error',
           message: error.details[0].message
         });
@@ -31,6 +32,7 @@ export class QuestionController {
       const quizId = parseInt(req.params.quizId);
       if (isNaN(quizId)) {
         res.status(400).json({
+          success: false,
           error: 'Invalid quiz ID',
           message: 'Quiz ID must be a number'
         });
@@ -40,6 +42,7 @@ export class QuestionController {
       const { error, value } = addQuestionSchema.validate(req.body);
       if (error) {
         res.status(400).json({
+          success: false,
           error: 'Validation error',
           message: error.details[0].message
         });
@@ -47,11 +50,11 @@ export class QuestionController {
       }
 
       const { questionText, options } = value;
-      const question = await questionService.addQuestionToQuiz(quizId, questionText, options);
+      const createdQuestion = await questionService.addQuestionToQuiz(quizId, questionText, options);
 
       res.status(201).json({
         success: true,
-        data: question,
+        data: createdQuestion,
         message: 'Question added to quiz successfully'
       });
     } catch (error) {
@@ -118,6 +121,7 @@ export class QuestionController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
+          success: false,
           error: 'Invalid question ID',
           message: 'Question ID must be a number'
         });
@@ -126,23 +130,11 @@ export class QuestionController {
 
       const { questionText, options } = req.body;
       
-      // Validate options if provided
-      if (options) {
-        const { error } = addQuestionSchema.validate({ questionText: questionText || 'temp', options });
-        if (error) {
-          res.status(400).json({
-            error: 'Validation error',
-            message: error.details[0].message
-          });
-          return;
-        }
-      }
-
-      const question = await questionService.updateQuestion(id, questionText, options);
+      const updatedQuestion = await questionService.updateQuestion(id, questionText, options);
 
       res.status(200).json({
         success: true,
-        data: question,
+        data: updatedQuestion,
         message: 'Question updated successfully'
       });
     } catch (error) {

@@ -9,19 +9,19 @@ router.post('/', questionController.createQuestion.bind(questionController));
 // POST /api/questions/quiz/:quizId - Add question to specific quiz
 router.post('/quiz/:quizId', questionController.addQuestionToQuiz.bind(questionController));
 
-// GET /api/questions/:quizId - Get all questions for a quiz
-router.get('/:quizId', questionController.getQuestionsByQuizId.bind(questionController));
+// GET /api/questions/quiz/:quizId - Get all questions for a quiz
+router.get('/quiz/:quizId', questionController.getQuestionsByQuizId.bind(questionController));
 
-// GET /api/questions/single/:id - Get question by ID
-router.get('/single/:id', questionController.getQuestionById.bind(questionController));
+// GET /api/questions/quiz/:quizId/stats - Get question statistics for a quiz
+router.get('/quiz/:quizId/stats', questionController.getQuestionStats.bind(questionController));
 
-// PUT /api/questions/single/:id - Update question
-router.put('/single/:id', questionController.updateQuestion.bind(questionController));
+// GET /api/questions/:id - Get question by ID
+router.get('/:id', questionController.getQuestionById.bind(questionController));
 
-// DELETE /api/questions/single/:id - Delete question
-router.delete('/single/:id', questionController.deleteQuestion.bind(questionController));
+// PUT /api/questions/:id - Update question
+router.put('/:id', questionController.updateQuestion.bind(questionController));
 
-// GET /api/questions/:quizId/stats - Get question statistics for a quiz
-router.get('/:quizId/stats', questionController.getQuestionStats.bind(questionController));
+// DELETE /api/questions/:id - Delete question
+router.delete('/:id', questionController.deleteQuestion.bind(questionController));
 
 export default router;

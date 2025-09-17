@@ -1,24 +1,17 @@
-import { useState } from "react"
-import { Plus, Search, FolderTree } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { StatsCards } from "@/components/categories/StatsCards"
-import { CategoryTree } from "@/components/categories/CategoryTree"
-import { DetailPanel } from "@/components/categories/DetailPanel"
-import { AddCategoryModal } from "@/components/categories/modals/AddCategoryModal"
-import { AddSubcategoryModal } from "@/components/categories/modals/AddSubcategoryModal"
-import { AddQuizModal } from "@/components/categories/modals/AddQuizModal"
-import { mockCategories, mockStats } from "@/data/mockData"
-import type { Category, Subcategory, Quiz, QuizMode } from "@/types"
-
+import { useState } from 'react'
+import { Plus, Search, FolderTree} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { CategoryTree } from '@/components/categories/CategoryTree'
+import { AddCategoryModal } from '@/components/categories/modals/AddCategoryModal'
+import { AddSubcategoryModal } from '@/components/categories/modals/AddSubcategoryModal'
+import { AddQuizModal } from '@/components/categories/modals/AddQuizModal'
+import { mockCategories, mockStats } from '@/data/mockData'
+import { addSubcategoryToTree } from '@/utils/categoryUtils'
+import type { Category, Subcategory, Quiz, QuizMode } from '@/types'
+import { StatsCards } from '@/components/categories/StatsCards'
+import { DetailPanel } from '@/components/categories/DetailPanel'
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, BreadcrumbPage  } from '@/components/ui/breadcrumb'
 export function Categories() {
   const [categories, setCategories] = useState<Category[]>(mockCategories)
   const [stats, setStats] = useState(mockStats)
@@ -52,6 +45,7 @@ export function Categories() {
         name,
         description,
         categoryId: parentId,
+        subcategories: [],
         quizzes: [],
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -70,23 +64,33 @@ export function Categories() {
     }
   }
 
-  const handleAddSubcategory = async (name: string, categoryId: string, description?: string) => {
-    const newSubcategory: Subcategory = {
+  // Modular function to save subcategory - can be replaced with API call later
+  const saveSubcategory = async (newSubcategory: Omit<Subcategory, 'subcategories'>, parentId: string, parentType: 'category' | 'subcategory') => {
+    // This is a placeholder function that currently updates state
+    // Later, this can be replaced with an API call like:
+    // const response = await api.createSubcategory(newSubcategory, parentId, parentType)
+    // return response.data
+    
+    const updatedCategories = addSubcategoryToTree(categories, newSubcategory, parentId, parentType)
+    setCategories(updatedCategories)
+    setStats(prev => ({ ...prev, totalSubcategories: prev.totalSubcategories + 1, recentlyAdded: prev.recentlyAdded + 1 }))
+  }
+
+  const handleAddSubcategory = async (name: string, parentId: string, parentType: 'category' | 'subcategory', description?: string) => {
+    const newSubcategory: Omit<Subcategory, 'subcategories'> = {
       id: Date.now().toString(),
       name,
       description,
-      categoryId,
+      categoryId: parentType === 'category' ? parentId : categories.find(cat => 
+        cat.subcategories.some(sub => sub.id === parentId)
+      )?.id || parentId,
+      parentSubcategoryId: parentType === 'subcategory' ? parentId : undefined,
       quizzes: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     }
-
-    setCategories(prev => prev.map(category => 
-      category.id === categoryId 
-        ? { ...category, subcategories: [...category.subcategories, newSubcategory] }
-        : category
-    ))
-    setStats(prev => ({ ...prev, totalSubcategories: prev.totalSubcategories + 1, recentlyAdded: prev.recentlyAdded + 1 }))
+    
+    await saveSubcategory(newSubcategory, parentId, parentType)
   }
 
   const handleAddQuiz = async (name: string, mode: QuizMode, subcategoryId: string, description?: string) => {

@@ -10,12 +10,7 @@ import {
 import { cn } from "@/lib/utils"
 
 const navigation = [
-  {
-    name: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
-    current: false,
-  },
+  
   {
     name: "Categories",
     href: "/categories",
@@ -107,28 +102,14 @@ export function Sidebar() {
             Content Management
           </div>
           <a
-            href="/question-editor"
+            href="/question-bank"
             className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
           >
             <FileQuestion className="mr-3 h-5 w-5 text-gray-400 dark:text-gray-500" />
-            Question Editor
+            Question Bank
           </a>
         </div>
 
-        <div className="pt-6">
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-            Live Operations
-          </div>
-          <a
-            href="/live-monitor"
-            className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
-          >
-            <div className="mr-3 h-5 w-5 flex items-center justify-center">
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-            </div>
-            Live Monitor
-          </a>
-        </div>
       </nav>
 
       {/* Bottom Navigation */}

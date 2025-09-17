@@ -12,6 +12,8 @@ export interface Subcategory {
   name: string;
   description?: string;
   categoryId: string;
+  parentSubcategoryId?: string; // For nested subcategories
+  subcategories: Subcategory[]; // Child subcategories
   quizzes: Quiz[];
   createdAt: Date;
   updatedAt: Date;

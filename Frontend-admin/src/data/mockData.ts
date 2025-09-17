@@ -20,6 +20,29 @@ export const mockCategories: Category[] = [
         name: "Computer Science",
         description: "Programming, algorithms, and software development",
         categoryId: "1",
+        subcategories: [
+          {
+            id: "1-1-sub-1",
+            name: "MERN Stack",
+            description: "MongoDB, Express, React, Node.js development",
+            categoryId: "1",
+            parentSubcategoryId: "1-1",
+            subcategories: [],
+            createdAt: new Date("2024-01-17"),
+            updatedAt: new Date("2024-01-17"),
+            quizzes: [
+              {
+                id: "1-1-sub-1-quiz-1",
+                name: "React Hooks Advanced",
+                description: "Advanced React hooks patterns",
+                mode: "1v1",
+                subcategoryId: "1-1-sub-1",
+                createdAt: new Date("2024-01-17"),
+                updatedAt: new Date("2024-01-17"),
+              },
+            ],
+          },
+        ],
         createdAt: new Date("2024-01-16"),
         updatedAt: new Date("2024-01-18"),
         quizzes: [
@@ -48,6 +71,7 @@ export const mockCategories: Category[] = [
         name: "Physics",
         description: "Physics concepts and principles",
         categoryId: "1",
+        subcategories: [],
         createdAt: new Date("2024-01-16"),
         updatedAt: new Date("2024-01-19"),
         quizzes: [
@@ -76,6 +100,7 @@ export const mockCategories: Category[] = [
         name: "World History",
         description: "Major world historical events",
         categoryId: "2",
+        subcategories: [],
         createdAt: new Date("2024-01-11"),
         updatedAt: new Date("2024-01-12"),
         quizzes: [
@@ -113,6 +138,7 @@ export const mockCategories: Category[] = [
         name: "Classic Literature",
         description: "Famous literary works and authors",
         categoryId: "3",
+        subcategories: [],
         createdAt: new Date("2024-01-06"),
         updatedAt: new Date("2024-01-07"),
         quizzes: [

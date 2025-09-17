@@ -1,101 +1,92 @@
-import { prisma } from '../server';
+import { PrismaClient } from '@prisma/client';
 import { logInfo, logError } from '../utils/logger';
-import { Prisma as PrismaTypes, Quiz as PrismaQuiz, Question as PrismaQuestion, Option as PrismaOption, Category } from '@prisma/client';
 
-// Type definitions from Prisma
-type Quiz = PrismaTypes.QuizGetPayload<{
-  include: {
-    questions: {
-      include: {
-        options: true;
-      };
-    };
-  };
-}>;
+enum Difficulty {
+  EASY = 'EASY',
+  MEDIUM = 'MEDIUM',
+  HARD = 'HARD'
+}
 
-type Question = PrismaTypes.QuestionGetPayload<{
-  include: {
-    options: true;
-  };
-}>;
-
-type Option = PrismaTypes.OptionGetPayload<{}>;
-
-// Extend base types with relationships
-type QuestionWithOptions = PrismaQuestion & {
-  options: PrismaOption[];
-};
-
-type QuizWithRelations = Omit<PrismaQuiz, 'questions'> & {
-  questions?: QuestionWithOptions[];
-  category?: Category;
-};
+const prisma = new PrismaClient();
 
 export interface CreateQuizData {
   title: string;
   description?: string;
-  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-  timeLimit?: number | null;
-  questions?: Array<{
-    questionText: string;
-    options: Array<{
-      optionText: string;
-      isCorrect: boolean;
-    }>;
-  }>;
-  categoryId?: number; // For internal use
+  difficulty?: Difficulty;
+  timeLimit?: number;
+  maxQuestions?: number;
+  categoryId: number;
+  createdById: number;
+}
+
+export interface AssignQuestionsData {
+  quizId: number;
+  questionIds: number[];
+}
+
+export interface QuizSearchFilters {
+  difficulty?: Difficulty;
+  categoryId?: number;
+  search?: string;
+  page?: number;
+  limit?: number;
 }
 
 export class QuizService {
-  async createQuiz(quizData: CreateQuizData): Promise<QuizWithRelations> {
+  async createQuiz(quizData: CreateQuizData) {
     try {
-      // CategoryId is required, use default category if not provided
-      const finalCategoryId = quizData.categoryId || 1;
-      
       // Verify category exists
       const category = await prisma.category.findUnique({
-        where: { id: finalCategoryId }
+        where: { id: quizData.categoryId }
       });
 
       if (!category) {
-        throw new Error(`Category with ID ${finalCategoryId} not found`);
-      }
-
-      const quizDataWithRelations: any = {
-        title: quizData.title,
-        description: quizData.description,
-        difficulty: quizData.difficulty || 'MEDIUM',
-        timeLimit: quizData.timeLimit,
-        categoryId: finalCategoryId
-      };
-
-      if (quizData.questions) {
-        quizDataWithRelations.questions = {
-          create: quizData.questions.map(q => ({
-            questionText: q.questionText,
-            options: {
-              create: q.options.map(opt => ({
-                optionText: opt.optionText,
-                isCorrect: opt.isCorrect
-              }))
-            }
-          }))
-        };
+        throw new Error(`Category with ID ${quizData.categoryId} not found`);
       }
 
       const quiz = await prisma.quiz.create({
-        data: quizDataWithRelations,
+
+        data: {
+          title: quizData.title,
+          description: quizData.description,
+          difficulty: quizData.difficulty || 'MEDIUM',
+          timeLimit: quizData.timeLimit,
+          maxQuestions: quizData.maxQuestions,
+          categoryId: quizData.categoryId,
+          createdById: quizData.createdById
+        },
         include: {
-          questions: {
-            include: {
-              options: true
+          category: true,
+          createdBy: {
+            select: {
+              id: true,
+              username: true
             }
           },
-          category: true
+          quizQuestions: {
+            include: {
+              question: {
+                include: {
+
+
+
+
+                  
+                  options: true
+                }
+              }
+            }
+          },
+          _count: {
+            select: {
+              quizQuestions: true,
+              attempts: true
+            }
+          }
         }
       });
 
-      logInfo('Quiz created', { quizId: quiz.id });
+      logInfo('Quiz created', { quizId: quiz.id, title: quiz.title });
       return quiz;
     } catch (error) {
       logError('Failed to create quiz', error as Error, { title: quizData.title });
@@ -103,62 +94,150 @@ export class QuizService {
     }
   }
 
-  async getAllQuizzes(filters?: {
-    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-    categoryId?: number;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ quizzes: Quiz[]; total: number }> {
+  async assignQuestionsToQuiz(data: AssignQuestionsData) {
     try {
-      const where: any = {};
-      
-      if (filters?.difficulty) {
+      // Verify quiz exists
+      const quiz = await prisma.quiz.findUnique({
+        where: { id: data.quizId }
+      });
+
+      if (!quiz) {
+        throw new Error('Quiz not found');
+      }
+
+      // Verify all questions exist
+      const questions = await prisma.questionBankItem.findMany({
+        where: {
+          id: { in: data.questionIds },
+          isActive: true
+        }
+      });
+
+      if (questions.length !== data.questionIds.length) {
+        throw new Error('Some questions not found or inactive');
+      }
+
+      // Remove existing question assignments
+      await prisma.quizQuestion.deleteMany({
+        where: { quizId: data.quizId }
+      });
+
+      // Create new assignments
+      const assignments = await prisma.quizQuestion.createMany({
+        data: data.questionIds.map((questionId, index) => ({
+          quizId: data.quizId,
+          questionId,
+          order: index + 1
+        }))
+      });
+
+      logInfo('Questions assigned to quiz', { 
+        quizId: data.quizId, 
+        questionsAssigned: assignments.count 
+      });
+
+      return assignments;
+    } catch (error) {
+      logError('Failed to assign questions to quiz', error as Error);
+      throw error;
+    }
+  }
+
+  async searchQuizzes(filters: QuizSearchFilters) {
+    try {
+      const page = filters.page || 1;
+      const limit = filters.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const where: any = { isActive: true };
+
+      if (filters.difficulty) {
         where.difficulty = filters.difficulty;
       }
-      
-      if (filters?.categoryId) {
+
+      if (filters.categoryId) {
         where.categoryId = filters.categoryId;
+      }
+
+      if (filters.search) {
+        where.OR = [
+          { title: { contains: filters.search, mode: 'insensitive' } },
+          { description: { contains: filters.search, mode: 'insensitive' } }
+        ];
       }
 
       const [quizzes, total] = await Promise.all([
         prisma.quiz.findMany({
           where,
           include: {
-            questions: {
-              include: {
-                options: true
+            category: true,
+            createdBy: {
+              select: {
+                id: true,
+                username: true
               }
             },
-            category: true
+            _count: {
+              select: {
+                quizQuestions: true,
+                attempts: true
+              }
+            }
           },
           orderBy: {
             createdAt: 'desc'
           },
-          take: filters?.limit || 50,
-          skip: filters?.offset || 0
+          skip,
+          take: limit
         }),
         prisma.quiz.count({ where })
       ]);
 
-      logInfo('Retrieved quizzes', { count: quizzes.length, total });
-      return { quizzes, total };
+      return {
+        quizzes,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      };
     } catch (error) {
-      logError('Failed to retrieve quizzes', error as Error);
+      logError('Failed to search quizzes', error as Error);
       throw error;
     }
   }
 
-  async getQuizById(id: number): Promise<QuizWithRelations | null> {
+  async getQuizById(id: number) {
     try {
       const quiz = await prisma.quiz.findUnique({
-        where: { id },
+        where: { id, isActive: true },
         include: {
-          questions: {
-            include: {
-              options: true
+          category: true,
+          createdBy: {
+            select: {
+              id: true,
+              username: true
             }
           },
-          category: true
+          quizQuestions: {
+            include: {
+              question: {
+                include: {
+                  options: true
+                }
+              }
+            },
+            orderBy: {
+              order: 'asc'
+            }
+          },
+          _count: {
+            select: {
+              quizQuestions: true,
+              attempts: true
+            }
+          }
         }
       });
 
@@ -175,7 +254,56 @@ export class QuizService {
     }
   }
 
-  async updateQuiz(id: number, data: Partial<CreateQuizData>): Promise<QuizWithRelations> {
+  async getQuizForPlay(id: number, userId: number) {
+    try {
+      const quiz = await prisma.quiz.findUnique({
+        where: { id, isActive: true },
+        include: {
+          category: true,
+          quizQuestions: {
+            include: {
+              question: {
+                include: {
+                  options: {
+                    select: {
+                      id: true,
+                      optionText: true
+                      // Don't include isCorrect for players
+                    }
+                  }
+                }
+              }
+            },
+            orderBy: {
+              order: 'asc'
+            }
+          }
+        }
+      });
+
+      if (!quiz) {
+        return null;
+      }
+
+      // Shuffle questions if maxQuestions is set
+      let questions = quiz.quizQuestions;
+      if (quiz.maxQuestions && questions.length > quiz.maxQuestions) {
+        questions = questions
+          .sort(() => Math.random() - 0.5)
+          .slice(0, quiz.maxQuestions);
+      }
+
+      return {
+        ...quiz,
+        quizQuestions: questions
+      };
+    } catch (error) {
+      logError('Failed to get quiz for play', error as Error, { quizId: id, userId });
+      throw error;
+    }
+  }
+
+  async updateQuiz(id: number, data: Partial<CreateQuizData>) {
     try {
       // Check if quiz exists
       const existingQuiz = await prisma.quiz.findUnique({
@@ -186,29 +314,39 @@ export class QuizService {
         throw new Error('Quiz not found');
       }
 
-      // Prepare update data
-      const updateData: any = {
-        title: data.title,
-        description: data.description,
-        difficulty: data.difficulty,
-        timeLimit: data.timeLimit
-      };
-
-      // Remove undefined values
-      Object.keys(updateData).forEach(key => 
-        updateData[key] === undefined && delete updateData[key]
-      );
-
       const updatedQuiz = await prisma.quiz.update({
         where: { id },
-        data: updateData,
+        data: {
+          title: data.title,
+          description: data.description,
+          difficulty: data.difficulty,
+          timeLimit: data.timeLimit,
+          maxQuestions: data.maxQuestions,
+          categoryId: data.categoryId
+        },
         include: {
-          questions: {
-            include: {
-              options: true
+          category: true,
+          createdBy: {
+            select: {
+              id: true,
+              username: true
             }
           },
-          category: true
+          quizQuestions: {
+            include: {
+              question: {
+                include: {
+                  options: true
+                }
+              }
+            }
+          },
+          _count: {
+            select: {
+              quizQuestions: true,
+              attempts: true
+            }
+          }
         }
       });
 
@@ -222,11 +360,12 @@ export class QuizService {
 
   async deleteQuiz(id: number): Promise<boolean> {
     try {
-      await prisma.quiz.delete({
-        where: { id }
+      await prisma.quiz.update({
+        where: { id },
+        data: { isActive: false }
       });
       
-      logInfo('Quiz deleted successfully', { quizId: id });
+      logInfo('Quiz deleted (soft delete)', { quizId: id });
       return true;
     } catch (error) {
       logError('Failed to delete quiz', error as Error, { quizId: id });
@@ -234,28 +373,36 @@ export class QuizService {
     }
   }
 
-  async updateQuestionCount(quizId: number): Promise<number> {
-    try {
-      const questionCount = await prisma.question.count({
-        where: { quizId }
-      });
-
-      logInfo('Quiz question count retrieved', { quizId, questionCount });
-      return questionCount;
-    } catch (error) {
-      logError('Failed to get question count', error as Error, { quizId });
-      throw error;
-    }
-  }
-
-  async getQuizStats(id: number): Promise<any> {
+  async getQuizStats(id: number) {
     try {
       const quiz = await prisma.quiz.findUnique({
         where: { id },
         include: {
-          questions: {
+          quizQuestions: {
             include: {
-              options: true
+              question: {
+                include: {
+                  options: true
+                }
+              }
+            }
+          },
+          attempts: {
+            select: {
+              id: true,
+              score: true,
+              status: true,
+              user: {
+                select: {
+                  username: true
+                }
+              }
+            }
+          },
+          _count: {
+            select: {
+              quizQuestions: true,
+              attempts: true
             }
           }
         }
@@ -265,12 +412,10 @@ export class QuizService {
         return null;
       }
 
-      const totalQuestions = quiz.questions.length;
-      const totalOptions = quiz.questions.reduce((sum:number, q:Question) => sum + q.options.length, 0);
-      const correctOptions = quiz.questions.reduce(
-        (sum:number, q:Question) => sum + q.options.filter((o:Option) => o.isCorrect).length, 
-        0
-      );
+      const completedAttempts = quiz.attempts.filter((a: any) => a.status === 'COMPLETED');
+      const averageScore = completedAttempts.length > 0 
+        ? completedAttempts.reduce((sum: number, a: any) => sum + a.score, 0) / completedAttempts.length 
+        : 0;
 
       const stats = {
         id: quiz.id,
@@ -278,18 +423,54 @@ export class QuizService {
         description: quiz.description,
         difficulty: quiz.difficulty,
         timeLimit: quiz.timeLimit,
+        maxQuestions: quiz.maxQuestions,
         categoryId: quiz.categoryId,
-        totalQuestions,
-        totalOptions,
-        correctOptions,
+        totalQuestions: quiz._count.quizQuestions,
+        totalAttempts: quiz._count.attempts,
+        completedAttempts: completedAttempts.length,
+        averageScore: Math.round(averageScore * 100) / 100,
         createdAt: quiz.createdAt,
         updatedAt: quiz.updatedAt
       };
 
-      logInfo('Quiz stats retrieved', { quizId: id, totalQuestions });
+      logInfo('Quiz stats retrieved', { quizId: id, totalQuestions: stats.totalQuestions });
       return stats;
     } catch (error) {
       logError('Failed to retrieve quiz stats', error as Error, { quizId: id });
+      throw error;
+    }
+  }
+
+  async getPopularQuizzes(limit = 10) {
+    try {
+      const quizzes = await prisma.quiz.findMany({
+        where: { isActive: true },
+        include: {
+          category: true,
+          createdBy: {
+            select: {
+              id: true,
+              username: true
+            }
+          },
+          _count: {
+            select: {
+              attempts: true,
+              quizQuestions: true
+            }
+          }
+        },
+        orderBy: {
+          attempts: {
+            _count: 'desc'
+          }
+        },
+        take: limit
+      });
+
+      return quizzes;
+    } catch (error) {
+      logError('Failed to get popular quizzes', error as Error);
       throw error;
     }
   }

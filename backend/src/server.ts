@@ -13,6 +13,9 @@ import { PrismaClient } from '@prisma/client';
 import categoryRoutes from './routes/categoryRoutes';
 import quizRoutes from './routes/quizRoutes';
 import questionRoutes from './routes/questionRoutes';
+import authRoutes from './routes/authRoutes';
+import questionBankRoutes from './routes/questionBankRoutes';
+import quizAttemptRoutes from './routes/quizAttemptRoutes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -66,9 +69,12 @@ app.get('/health', (req, res) => {
 // Available at /metrics
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/questions', questionRoutes);
+app.use('/api/question-bank', questionBankRoutes);
+app.use('/api/quiz-attempts', quizAttemptRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -16,6 +16,58 @@ enum Difficulty {
   HARD
 }
 
+enum UserRole {
+  ADMIN
+  PLAYER
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum MatchStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MatchType {
+  SOLO
+  MULTIPLAYER
+  TOURNAMENT
+}
+
+// User Management
+model User {
+  id              Int             @id @default(autoincrement()) @map("id")
+  username        String          @unique @map("username") @db.VarChar(50)
+  email           String          @unique @map("email") @db.VarChar(100)
+  passwordHash    String          @map("password_hash") @db.VarChar(255)
+  role            UserRole        @default(PLAYER) @map("role")
+  firstName       String?         @map("first_name") @db.VarChar(50)
+  lastName        String?         @map("last_name") @db.VarChar(50)
+  avatar          String?         @map("avatar") @db.VarChar(255)
+  eloRating       Int             @default(1200) @map("elo_rating")
+  totalMatches    Int             @default(0) @map("total_matches")
+  wins            Int             @default(0) @map("wins")
+  losses          Int             @default(0) @map("losses")
+  isActive        Boolean         @default(true) @map("is_active")
+  lastLoginAt     DateTime?       @map("last_login_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  quizAttempts    QuizAttempt[]
+  matchPlayers    MatchPlayer[]
+  createdQuizzes  Quiz[]          @relation("QuizCreator")
+  createdQuestions QuestionBankItem[] @relation("QuestionCreator")
+
+  @@map("users")
+}
+
 model Category {
   id        Int        @id @default(autoincrement()) @map("id")
   name      String     @map("name") @db.VarChar(100)
@@ -24,9 +76,44 @@ model Category {
   children  Category[] @relation("CategoryHierarchy")
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
-  quizzes   Quiz[]
+  
+  // Relations
+  quizzes         Quiz[]
+  questionBankItems QuestionBankItem[]
 
   @@map("categories")
+}
+
+// Question Bank - Reusable question pool
+model QuestionBankItem {
+  id           Int      @id @default(autoincrement()) @map("id")
+  questionText String   @map("question_text") @db.Text
+  categoryId   Int      @map("category_id")
+  category     Category @relation(fields: [categoryId], references: [id])
+  difficulty   Difficulty @default(MEDIUM) @map("difficulty")
+  createdById  Int      @map("created_by_id")
+  createdBy    User     @relation("QuestionCreator", fields: [createdById], references: [id])
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  options      QuestionBankOption[]
+  quizQuestions QuizQuestion[]
+
+  @@map("question_bank_items")
+}
+
+model QuestionBankOption {
+  id         Int              @id @default(autoincrement()) @map("id")
+  questionId Int              @map("question_id")
+  question   QuestionBankItem @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  optionText String           @map("option_text") @db.Text
+  isCorrect  Boolean          @default(false) @map("is_correct")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  @@map("question_bank_options")
 }
 
 model Quiz {
@@ -36,18 +123,42 @@ model Quiz {
   categoryId  Int        @map("category_id")
   category    Category   @relation(fields: [categoryId], references: [id])
   difficulty  Difficulty @default(MEDIUM) @map("difficulty")
-  timeLimit   Int?       @map("time_limit")
+  timeLimit   Int?       @map("time_limit") // in minutes
+  maxQuestions Int?      @map("max_questions") // limit questions per attempt
+  isActive    Boolean    @default(true) @map("is_active")
+  createdById Int        @map("created_by_id")
+  createdBy   User       @relation("QuizCreator", fields: [createdById], references: [id])
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
-  questions   Question[]
+  
+  // Relations
+  quizQuestions QuizQuestion[]
+  legacyQuestions Question[] @relation("QuizLegacyQuestions")
+  attempts    QuizAttempt[]
+  matches     Match[]
 
   @@map("quizzes")
 }
 
+// Junction table for Quiz and QuestionBankItem (many-to-many)
+model QuizQuestion {
+  id         Int              @id @default(autoincrement()) @map("id")
+  quizId     Int              @map("quiz_id")
+  quiz       Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionId Int              @map("question_id")
+  question   QuestionBankItem @relation(fields: [questionId], references: [id])
+  order      Int?             @map("order") // for question ordering in quiz
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@unique([quizId, questionId])
+  @@map("quiz_questions")
+}
+
+// Legacy Question model (keeping for backward compatibility)
 model Question {
   id           Int      @id @default(autoincrement()) @map("id")
   quizId       Int      @map("quiz_id")
-  quiz         Quiz     @relation(fields: [quizId], references: [id])
+  quiz         Quiz     @relation("QuizLegacyQuestions", fields: [quizId], references: [id])
   questionText String   @map("question_text") @db.Text
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -66,4 +177,74 @@ model Option {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("options")
+}
+
+// Quiz Attempts and History
+model QuizAttempt {
+  id          Int               @id @default(autoincrement()) @map("id")
+  userId      Int               @map("user_id")
+  user        User              @relation(fields: [userId], references: [id])
+  quizId      Int               @map("quiz_id")
+  quiz        Quiz              @relation(fields: [quizId], references: [id])
+  score       Int               @default(0) @map("score")
+  totalQuestions Int            @map("total_questions")
+  correctAnswers Int            @default(0) @map("correct_answers")
+  timeSpent   Int?              @map("time_spent") // in seconds
+  status      QuizAttemptStatus @default(IN_PROGRESS) @map("status")
+  startedAt   DateTime          @default(now()) @map("started_at")
+  completedAt DateTime?         @map("completed_at")
+  
+  // Relations
+  answers     QuizAnswer[]
+
+  @@map("quiz_attempts")
+}
+
+model QuizAnswer {
+  id              Int         @id @default(autoincrement()) @map("id")
+  attemptId       Int         @map("attempt_id")
+  attempt         QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId      Int         @map("question_id") // references QuestionBankItem
+  selectedOptions String[]    @map("selected_options") // JSON array of selected option IDs
+  isCorrect       Boolean     @map("is_correct")
+  timeSpent       Int?        @map("time_spent") // in seconds
+  answeredAt      DateTime    @default(now()) @map("answered_at")
+
+  @@map("quiz_answers")
+}
+
+// Multiplayer Match System
+model Match {
+  id          Int         @id @default(autoincrement()) @map("id")
+  quizId      Int         @map("quiz_id")
+  quiz        Quiz        @relation(fields: [quizId], references: [id])
+  matchCode   String      @unique @map("match_code") @db.VarChar(10) // for joining matches
+  type        MatchType   @default(MULTIPLAYER) @map("type")
+  status      MatchStatus @default(WAITING) @map("status")
+  maxPlayers  Int         @default(10) @map("max_players")
+  timeLimit   Int?        @map("time_limit") // override quiz time limit
+  startedAt   DateTime?   @map("started_at")
+  endedAt     DateTime?   @map("ended_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  
+  // Relations
+  players     MatchPlayer[]
+
+  @@map("matches")
+}
+
+model MatchPlayer {
+  id        Int      @id @default(autoincrement()) @map("id")
+  matchId   Int      @map("match_id")
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  score     Int      @default(0) @map("score")
+  rank      Int?     @map("rank") // final ranking in match
+  isReady   Boolean  @default(false) @map("is_ready")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+  leftAt    DateTime? @map("left_at")
+
+  @@unique([matchId, userId])
+  @@map("match_players")
 }

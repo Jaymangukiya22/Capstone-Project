@@ -1,4 +1,3 @@
-import { NodeSDK } from '@opentelemetry/sdk-node';
-declare const sdk: NodeSDK;
+declare const sdk: any;
 export default sdk;
 //# sourceMappingURL=tracing.d.ts.map

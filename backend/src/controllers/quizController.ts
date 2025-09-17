@@ -1,173 +1,284 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response } from 'express';
 import { quizService } from '../services/quizService';
-import { validateQuiz } from '../utils/validation';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { logError } from '../utils/logger';
 
-export class QuizController {
-  async createQuiz(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { error, value } = validateQuiz(req.body);
-      if (error) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation error',
-          message: error.details[0].message
-        });
-        return;
-      }
+export const createQuiz = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { title, description, difficulty, timeLimit, maxQuestions, categoryId } = req.body;
+    const createdById = req.user!.id;
 
-      const quiz = await quizService.createQuiz(value);
+    const quiz = await quizService.createQuiz({
+      title,
+      description,
+      difficulty,
+      timeLimit,
+      maxQuestions,
+      categoryId,
+      createdById
+    });
 
-      res.status(201).json({
-        success: true,
-        data: quiz,
-        message: 'Quiz created successfully'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.status(201).json({
+      success: true,
+      data: { quiz },
+      message: 'Quiz created successfully'
+    });
+  } catch (error) {
+    logError('Error creating quiz', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create quiz',
+      message: 'An error occurred while creating the quiz'
+    });
   }
+};
 
-  async getQuizById(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        res.status(400).json({
-          error: 'Invalid quiz ID',
-          message: 'Quiz ID must be a number'
-        });
-        return;
-      }
+export const assignQuestionsToQuiz = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const quizId = parseInt(req.params.id);
+    const { questionIds } = req.body;
 
-      const quiz = await quizService.getQuizById(id);
-      if (!quiz) {
-        res.status(404).json({
-          error: 'Quiz not found',
-          message: `Quiz with ID ${id} does not exist`
-        });
-        return;
-      }
-
-      res.status(200).json({
-        success: true,
-        data: quiz,
-        message: 'Quiz retrieved successfully'
+    if (isNaN(quizId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid quiz ID',
+        message: 'Quiz ID must be a number'
       });
-    } catch (error) {
-      next(error);
+      return;
     }
+
+    const result = await quizService.assignQuestionsToQuiz({
+      quizId,
+      questionIds
+    });
+
+    res.json({
+      success: true,
+      data: result,
+      message: 'Questions assigned to quiz successfully'
+    });
+  } catch (error) {
+    logError('Error assigning questions to quiz', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to assign questions',
+      message: 'An error occurred while assigning questions to quiz'
+    });
   }
+};
 
-  async getAllQuizzes(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const filters: any = {};
-      
-      if (req.query.difficulty) {
-        filters.difficulty = req.query.difficulty;
-      }
-      
-      if (req.query.categoryId) {
-        filters.categoryId = parseInt(req.query.categoryId as string);
-      }
-      
-      if (req.query.limit) {
-        filters.limit = parseInt(req.query.limit as string);
-      }
-      
-      if (req.query.offset) {
-        filters.offset = parseInt(req.query.offset as string);
-      }
+export const searchQuizzes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const filters = {
+      difficulty: req.query.difficulty as any,
+      categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
+      search: req.query.search as string,
+      page: req.query.page ? parseInt(req.query.page as string) : 1,
+      limit: req.query.limit ? parseInt(req.query.limit as string) : 20
+    };
 
-      const result = await quizService.getAllQuizzes(filters);
+    const result = await quizService.searchQuizzes(filters);
 
-      res.status(200).json({
-        success: true,
-        data: result.quizzes,
-        total: result.total,
-        count: result.quizzes.length,
-        message: 'Quizzes retrieved successfully'
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    logError('Error searching quizzes', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search quizzes',
+      message: 'An error occurred while searching quizzes'
+    });
+  }
+};
+
+export const getQuizById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid quiz ID',
+        message: 'Quiz ID must be a number'
       });
-    } catch (error) {
-      next(error);
+      return;
     }
-  }
 
-  async updateQuiz(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid quiz ID',
-          message: 'Quiz ID must be a number'
-        });
-        return;
-      }
-
-      const quiz = await quizService.updateQuiz(id, req.body);
-      
-      if (!quiz) {
-        res.status(404).json({
-          success: false,
-          error: 'Quiz not found',
-          message: `Quiz with ID ${id} does not exist`
-        });
-        return;
-      }
-
-      res.status(200).json({
-        success: true,
-        data: quiz,
-        message: 'Quiz updated successfully'
+    const quiz = await quizService.getQuizById(id);
+    if (!quiz) {
+      res.status(404).json({
+        success: false,
+        error: 'Quiz not found',
+        message: `Quiz with ID ${id} does not exist`
       });
-    } catch (error) {
-      next(error);
+      return;
     }
+
+    res.json({
+      success: true,
+      data: { quiz },
+      message: 'Quiz retrieved successfully'
+    });
+  } catch (error) {
+    logError('Error fetching quiz', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch quiz',
+      message: 'An error occurred while fetching the quiz'
+    });
   }
+};
 
-  async deleteQuiz(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        res.status(400).json({
-          error: 'Invalid quiz ID',
-          message: 'Quiz ID must be a number'
-        });
-        return;
-      }
+export const getQuizForPlay = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id);
+    const userId = req.user!.id;
 
-      await quizService.deleteQuiz(id);
-
-      res.status(200).json({
-        success: true,
-        message: 'Quiz deleted successfully'
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid quiz ID',
+        message: 'Quiz ID must be a number'
       });
-    } catch (error) {
-      next(error);
+      return;
     }
-  }
 
-  async getQuizStats(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        res.status(400).json({
-          error: 'Invalid quiz ID',
-          message: 'Quiz ID must be a number'
-        });
-        return;
-      }
-
-      const stats = await quizService.getQuizStats(id);
-
-      res.status(200).json({
-        success: true,
-        data: stats,
-        message: 'Quiz statistics retrieved successfully'
+    const quiz = await quizService.getQuizForPlay(id, userId);
+    if (!quiz) {
+      res.status(404).json({
+        success: false,
+        error: 'Quiz not found',
+        message: `Quiz with ID ${id} does not exist`
       });
-    } catch (error) {
-      next(error);
+      return;
     }
-  }
-}
 
-export const quizController = new QuizController();
+    res.json({
+      success: true,
+      data: { quiz },
+      message: 'Quiz retrieved for play successfully'
+    });
+  } catch (error) {
+    logError('Error fetching quiz for play', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch quiz',
+      message: 'An error occurred while fetching the quiz'
+    });
+  }
+};
+
+export const updateQuiz = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid quiz ID',
+        message: 'Quiz ID must be a number'
+      });
+      return;
+    }
+
+    const quiz = await quizService.updateQuiz(id, req.body);
+
+    res.json({
+      success: true,
+      data: { quiz },
+      message: 'Quiz updated successfully'
+    });
+  } catch (error) {
+    logError('Error updating quiz', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update quiz',
+      message: 'An error occurred while updating the quiz'
+    });
+  }
+};
+
+export const deleteQuiz = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid quiz ID',
+        message: 'Quiz ID must be a number'
+      });
+      return;
+    }
+
+    await quizService.deleteQuiz(id);
+
+    res.json({
+      success: true,
+      message: 'Quiz deleted successfully'
+    });
+  } catch (error) {
+    logError('Error deleting quiz', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete quiz',
+      message: 'An error occurred while deleting the quiz'
+    });
+  }
+};
+
+export const getQuizStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid quiz ID',
+        message: 'Quiz ID must be a number'
+      });
+      return;
+    }
+
+    const stats = await quizService.getQuizStats(id);
+    if (!stats) {
+      res.status(404).json({
+        success: false,
+        error: 'Quiz not found',
+        message: `Quiz with ID ${id} does not exist`
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: { stats },
+      message: 'Quiz statistics retrieved successfully'
+    });
+  } catch (error) {
+    logError('Error fetching quiz stats', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch quiz stats',
+      message: 'An error occurred while fetching quiz statistics'
+    });
+  }
+};
+
+export const getPopularQuizzes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+    const quizzes = await quizService.getPopularQuizzes(limit);
+
+    res.json({
+      success: true,
+      data: { quizzes },
+      message: 'Popular quizzes retrieved successfully'
+    });
+  } catch (error) {
+    logError('Error fetching popular quizzes', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch popular quizzes',
+      message: 'An error occurred while fetching popular quizzes'
+    });
+  }
+};

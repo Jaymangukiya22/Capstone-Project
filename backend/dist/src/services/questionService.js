@@ -189,6 +189,9 @@ class QuestionService {
                 (0, logger_1.logInfo)('Question not found for deletion', { questionId: id });
                 return false;
             }
+            await server_1.prisma.option.deleteMany({
+                where: { questionId: id }
+            });
             await server_1.prisma.question.delete({
                 where: { id }
             });

@@ -1,24 +1,38 @@
 import { Router } from 'express';
-import { quizController } from '../controllers/quizController';
+import {
+  createQuiz,
+  assignQuestionsToQuiz,
+  searchQuizzes,
+  getQuizById,
+  getQuizForPlay,
+  updateQuiz,
+  deleteQuiz,
+  getQuizStats,
+  getPopularQuizzes
+} from '../controllers/quizController';
+import { authenticateToken, requireAdmin, requirePlayer } from '../middleware/auth';
+import { validateRequest } from '../middleware/validation';
+import {
+  createQuizSchema,
+  assignQuestionsSchema
+} from '../utils/validation';
 
 const router = Router();
 
-// POST /api/quizzes - Create a new quiz
-router.post('/', quizController.createQuiz.bind(quizController));
+// All routes require authentication
+router.use(authenticateToken);
 
-// GET /api/quizzes - Get all quizzes (with optional categoryId query param)
-router.get('/', quizController.getAllQuizzes.bind(quizController));
+// Public routes (for all authenticated users)
+router.get('/search', searchQuizzes);
+router.get('/popular', getPopularQuizzes);
+router.get('/:id', getQuizById);
+router.get('/:id/play', requirePlayer, getQuizForPlay);
+router.get('/:id/stats', getQuizStats);
 
-// GET /api/quizzes/:id - Get quiz by ID with full details
-router.get('/:id', quizController.getQuizById.bind(quizController));
-
-// PUT /api/quizzes/:id - Update quiz
-router.put('/:id', quizController.updateQuiz.bind(quizController));
-
-// DELETE /api/quizzes/:id - Delete quiz
-router.delete('/:id', quizController.deleteQuiz.bind(quizController));
-
-// GET /api/quizzes/:id/stats - Get quiz statistics
-router.get('/:id/stats', quizController.getQuizStats.bind(quizController));
+// Admin-only routes
+router.post('/', requireAdmin, validateRequest(createQuizSchema), createQuiz);
+router.put('/:id', requireAdmin, validateRequest(createQuizSchema), updateQuiz);
+router.delete('/:id', requireAdmin, deleteQuiz);
+router.post('/:id/questions', requireAdmin, validateRequest(assignQuestionsSchema), assignQuestionsToQuiz);
 
 export default router;

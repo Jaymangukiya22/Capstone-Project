@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { questionService } from '../services/questionService';
-import { validateQuestion, addQuestionSchema } from '../utils/validation';
+import { validateQuestion } from '../utils/validation';
 
 export class QuestionController {
   async createQuestion(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -39,7 +39,7 @@ export class QuestionController {
         return;
       }
 
-      const { error, value } = addQuestionSchema.validate(req.body);
+      const { error, value } = validateQuestion(req.body);
       if (error) {
         res.status(400).json({
           success: false,

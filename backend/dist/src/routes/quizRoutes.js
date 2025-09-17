@@ -2,12 +2,19 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const quizController_1 = require("../controllers/quizController");
+const auth_1 = require("../middleware/auth");
+const validation_1 = require("../middleware/validation");
+const validation_2 = require("../utils/validation");
 const router = (0, express_1.Router)();
-router.post('/', quizController_1.quizController.createQuiz.bind(quizController_1.quizController));
-router.get('/', quizController_1.quizController.getAllQuizzes.bind(quizController_1.quizController));
-router.get('/:id', quizController_1.quizController.getQuizById.bind(quizController_1.quizController));
-router.put('/:id', quizController_1.quizController.updateQuiz.bind(quizController_1.quizController));
-router.delete('/:id', quizController_1.quizController.deleteQuiz.bind(quizController_1.quizController));
-router.get('/:id/stats', quizController_1.quizController.getQuizStats.bind(quizController_1.quizController));
+router.use(auth_1.authenticateToken);
+router.get('/search', quizController_1.searchQuizzes);
+router.get('/popular', quizController_1.getPopularQuizzes);
+router.get('/:id', quizController_1.getQuizById);
+router.get('/:id/play', auth_1.requirePlayer, quizController_1.getQuizForPlay);
+router.get('/:id/stats', quizController_1.getQuizStats);
+router.post('/', auth_1.requireAdmin, (0, validation_1.validateRequest)(validation_2.createQuizSchema), quizController_1.createQuiz);
+router.put('/:id', auth_1.requireAdmin, (0, validation_1.validateRequest)(validation_2.createQuizSchema), quizController_1.updateQuiz);
+router.delete('/:id', auth_1.requireAdmin, quizController_1.deleteQuiz);
+router.post('/:id/questions', auth_1.requireAdmin, (0, validation_1.validateRequest)(validation_2.assignQuestionsSchema), quizController_1.assignQuestionsToQuiz);
 exports.default = router;
 //# sourceMappingURL=quizRoutes.js.map

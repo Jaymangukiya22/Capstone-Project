@@ -114,15 +114,13 @@ class CategoryService {
                 where: { id }
             });
             if (!existingCategory) {
-                throw new Error('Category not found');
+                return null;
             }
-            if (data.parentId !== undefined && data.parentId !== existingCategory.parentId) {
-                if (data.parentId === id) {
-                    throw new Error('Category cannot be its own parent');
-                }
-                if (data.parentId) {
+            const { description, ...validData } = data;
+            if (validData.parentId !== undefined) {
+                if (validData.parentId) {
                     const parent = await server_1.prisma.category.findUnique({
-                        where: { id: data.parentId }
+                        where: { id: validData.parentId }
                     });
                     if (!parent) {
                         throw new Error('Parent category not found');
@@ -131,7 +129,7 @@ class CategoryService {
             }
             const updatedCategory = await server_1.prisma.category.update({
                 where: { id },
-                data,
+                data: validData,
                 include: {
                     parent: true,
                     children: true

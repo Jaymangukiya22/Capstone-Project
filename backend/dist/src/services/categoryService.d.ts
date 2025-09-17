@@ -7,7 +7,7 @@ export declare class CategoryService {
     getAllCategories(): Promise<any[]>;
     getCategoryById(id: number): Promise<any | null>;
     getCategoryHierarchy(): Promise<any[]>;
-    updateCategory(id: number, data: any): Promise<any>;
+    updateCategory(id: number, data: Partial<CreateCategoryData>): Promise<any>;
     deleteCategory(id: number): Promise<boolean>;
     private checkCircularReference;
 }

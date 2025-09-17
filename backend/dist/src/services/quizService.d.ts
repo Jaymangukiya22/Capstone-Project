@@ -1,51 +1,319 @@
-import { Prisma as PrismaTypes, Quiz as PrismaQuiz, Question as PrismaQuestion, Option as PrismaOption, Category } from '@prisma/client';
-type Quiz = PrismaTypes.QuizGetPayload<{
-    include: {
-        questions: {
-            include: {
-                options: true;
-            };
-        };
-    };
-}>;
-type QuestionWithOptions = PrismaQuestion & {
-    options: PrismaOption[];
-};
-type QuizWithRelations = Omit<PrismaQuiz, 'questions'> & {
-    questions?: QuestionWithOptions[];
-    category?: Category;
-};
+import { Difficulty } from '@prisma/client';
 export interface CreateQuizData {
     title: string;
     description?: string;
-    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-    timeLimit?: number | null;
-    questions?: Array<{
-        questionText: string;
-        options: Array<{
-            optionText: string;
-            isCorrect: boolean;
-        }>;
-    }>;
+    difficulty?: Difficulty;
+    timeLimit?: number;
+    maxQuestions?: number;
+    categoryId: number;
+    createdById: number;
+}
+export interface AssignQuestionsData {
+    quizId: number;
+    questionIds: number[];
+}
+export interface QuizSearchFilters {
+    difficulty?: Difficulty;
     categoryId?: number;
+    search?: string;
+    page?: number;
+    limit?: number;
 }
 export declare class QuizService {
-    createQuiz(quizData: Omit<CreateQuizData, 'categoryId'>, categoryId?: number): Promise<QuizWithRelations>;
-    getAllQuizzes(filters?: {
-        difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-        categoryId?: number;
-        limit?: number;
-        offset?: number;
-    }): Promise<{
-        quizzes: Quiz[];
-        total: number;
+    createQuiz(quizData: CreateQuizData): Promise<{
+        category: {
+            id: number;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            parentId: number | null;
+        };
+        createdBy: {
+            id: number;
+            username: string;
+        };
+        quizQuestions: ({
+            question: {
+                options: {
+                    id: number;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    questionId: number;
+                    optionText: string;
+                    isCorrect: boolean;
+                }[];
+            } & {
+                id: number;
+                categoryId: number;
+                difficulty: import(".prisma/client").$Enums.Difficulty;
+                isActive: boolean;
+                createdById: number;
+                createdAt: Date;
+                updatedAt: Date;
+                questionText: string;
+            };
+        } & {
+            id: number;
+            createdAt: Date;
+            order: number | null;
+            quizId: number;
+            questionId: number;
+        })[];
+        _count: {
+            quizQuestions: number;
+            attempts: number;
+        };
+    } & {
+        description: string | null;
+        id: number;
+        title: string;
+        categoryId: number;
+        difficulty: import(".prisma/client").$Enums.Difficulty;
+        timeLimit: number | null;
+        maxQuestions: number | null;
+        isActive: boolean;
+        createdById: number;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
-    getQuizById(id: number): Promise<QuizWithRelations | null>;
-    updateQuiz(id: number, data: Partial<CreateQuizData>): Promise<QuizWithRelations>;
+    assignQuestionsToQuiz(data: AssignQuestionsData): Promise<import(".prisma/client").Prisma.BatchPayload>;
+    searchQuizzes(filters: QuizSearchFilters): Promise<{
+        quizzes: ({
+            category: {
+                id: number;
+                createdAt: Date;
+                updatedAt: Date;
+                name: string;
+                parentId: number | null;
+            };
+            createdBy: {
+                id: number;
+                username: string;
+            };
+            _count: {
+                quizQuestions: number;
+                attempts: number;
+            };
+        } & {
+            description: string | null;
+            id: number;
+            title: string;
+            categoryId: number;
+            difficulty: import(".prisma/client").$Enums.Difficulty;
+            timeLimit: number | null;
+            maxQuestions: number | null;
+            isActive: boolean;
+            createdById: number;
+            createdAt: Date;
+            updatedAt: Date;
+        })[];
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            pages: number;
+        };
+    }>;
+    getQuizById(id: number): Promise<({
+        category: {
+            id: number;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            parentId: number | null;
+        };
+        createdBy: {
+            id: number;
+            username: string;
+        };
+        quizQuestions: ({
+            question: {
+                options: {
+                    id: number;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    questionId: number;
+                    optionText: string;
+                    isCorrect: boolean;
+                }[];
+            } & {
+                id: number;
+                categoryId: number;
+                difficulty: import(".prisma/client").$Enums.Difficulty;
+                isActive: boolean;
+                createdById: number;
+                createdAt: Date;
+                updatedAt: Date;
+                questionText: string;
+            };
+        } & {
+            id: number;
+            createdAt: Date;
+            order: number | null;
+            quizId: number;
+            questionId: number;
+        })[];
+        _count: {
+            quizQuestions: number;
+            attempts: number;
+        };
+    } & {
+        description: string | null;
+        id: number;
+        title: string;
+        categoryId: number;
+        difficulty: import(".prisma/client").$Enums.Difficulty;
+        timeLimit: number | null;
+        maxQuestions: number | null;
+        isActive: boolean;
+        createdById: number;
+        createdAt: Date;
+        updatedAt: Date;
+    }) | null>;
+    getQuizForPlay(id: number, userId: number): Promise<{
+        quizQuestions: ({
+            question: {
+                options: {
+                    id: number;
+                    optionText: string;
+                }[];
+            } & {
+                id: number;
+                categoryId: number;
+                difficulty: import(".prisma/client").$Enums.Difficulty;
+                isActive: boolean;
+                createdById: number;
+                createdAt: Date;
+                updatedAt: Date;
+                questionText: string;
+            };
+        } & {
+            id: number;
+            createdAt: Date;
+            order: number | null;
+            quizId: number;
+            questionId: number;
+        })[];
+        category: {
+            id: number;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            parentId: number | null;
+        };
+        description: string | null;
+        id: number;
+        title: string;
+        categoryId: number;
+        difficulty: import(".prisma/client").$Enums.Difficulty;
+        timeLimit: number | null;
+        maxQuestions: number | null;
+        isActive: boolean;
+        createdById: number;
+        createdAt: Date;
+        updatedAt: Date;
+    } | null>;
+    updateQuiz(id: number, data: Partial<CreateQuizData>): Promise<{
+        category: {
+            id: number;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            parentId: number | null;
+        };
+        createdBy: {
+            id: number;
+            username: string;
+        };
+        quizQuestions: ({
+            question: {
+                options: {
+                    id: number;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    questionId: number;
+                    optionText: string;
+                    isCorrect: boolean;
+                }[];
+            } & {
+                id: number;
+                categoryId: number;
+                difficulty: import(".prisma/client").$Enums.Difficulty;
+                isActive: boolean;
+                createdById: number;
+                createdAt: Date;
+                updatedAt: Date;
+                questionText: string;
+            };
+        } & {
+            id: number;
+            createdAt: Date;
+            order: number | null;
+            quizId: number;
+            questionId: number;
+        })[];
+        _count: {
+            quizQuestions: number;
+            attempts: number;
+        };
+    } & {
+        description: string | null;
+        id: number;
+        title: string;
+        categoryId: number;
+        difficulty: import(".prisma/client").$Enums.Difficulty;
+        timeLimit: number | null;
+        maxQuestions: number | null;
+        isActive: boolean;
+        createdById: number;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
     deleteQuiz(id: number): Promise<boolean>;
-    updateQuestionCount(quizId: number): Promise<number>;
-    getQuizStats(id: number): Promise<any>;
+    getQuizStats(id: number): Promise<{
+        id: number;
+        title: string;
+        description: string | null;
+        difficulty: import(".prisma/client").$Enums.Difficulty;
+        timeLimit: number | null;
+        maxQuestions: number | null;
+        categoryId: number;
+        totalQuestions: number;
+        totalAttempts: number;
+        completedAttempts: number;
+        averageScore: number;
+        createdAt: Date;
+        updatedAt: Date;
+    } | null>;
+    getPopularQuizzes(limit?: number): Promise<({
+        category: {
+            id: number;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            parentId: number | null;
+        };
+        createdBy: {
+            id: number;
+            username: string;
+        };
+        _count: {
+            quizQuestions: number;
+            attempts: number;
+        };
+    } & {
+        description: string | null;
+        id: number;
+        title: string;
+        categoryId: number;
+        difficulty: import(".prisma/client").$Enums.Difficulty;
+        timeLimit: number | null;
+        maxQuestions: number | null;
+        isActive: boolean;
+        createdById: number;
+        createdAt: Date;
+        updatedAt: Date;
+    })[]>;
 }
 export declare const quizService: QuizService;
-export {};
 //# sourceMappingURL=quizService.d.ts.map

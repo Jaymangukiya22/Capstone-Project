@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout/Layout"
 import { Categories } from "@/pages/Categories"
 import { QuizBuilder } from "@/pages/QuizBuilder"
+import { QuestionBank } from "@/pages/QuestionBank"
 import { ThemeProvider } from "@/hooks/useTheme"
 
 function App() {
@@ -11,6 +12,8 @@ function App() {
     switch (currentPath) {
       case '/quiz-builder':
         return <QuizBuilder />
+      case '/question-bank':
+        return <QuestionBank />
       case '/categories':
       default:
         return <Categories />

@@ -29,6 +29,26 @@ export interface Quiz {
   updatedAt: Date;
 }
 
+export interface Question {
+  id: string;
+  text: string;
+  options: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
+  correctOption: 'A' | 'B' | 'C' | 'D';
+  difficulty: 'easy' | 'intermediate' | 'hard';
+  points: number;
+  timeLimit: number; // in seconds
+  tags: string[];
+  categoryId?: string; // null for global questions
+  subcategoryId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export type QuizMode = "1v1" | "play-with-friend" | "multiplayer";
 
 export interface Stats {

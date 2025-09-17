@@ -196,15 +196,8 @@ export function PublishReviewTab({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Users className="h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium">Game Format</span>
-              </div>
-              <p className="text-lg font-semibold">{getGameTypeLabel(settings.gameType)}</p>
-              <p className="text-xs text-gray-500">Max {settings.maxPlayers} players</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+            
 
             <div className="space-y-2">
               <div className="flex items-center space-x-2">

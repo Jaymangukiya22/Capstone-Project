@@ -112,74 +112,6 @@ export function QuizSettingsTab({ quizId = "default", totalQuestions = 0 }: Quiz
 
   return (
     <div className="space-y-6">
-      {/* Game Format Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Users className="h-5 w-5" />
-            <span>Game Format</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="gameType">Game Type *</Label>
-              <Select value={settings.gameType} onValueChange={handleGameTypeChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select game type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="one-vs-one">1v1</SelectItem>
-                  <SelectItem value="play-with-friend">Play with Friend</SelectItem>
-                  <SelectItem value="multiplayer">Multiplayer</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Choose the type of game experience
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="maxPlayers">Maximum Players *</Label>
-              <Select 
-                value={settings.maxPlayers.toString()} 
-                onValueChange={(value) => handleMaxPlayersChange(parseInt(value))}
-                disabled={playersRange.disabled}
-              >
-                <SelectTrigger className={playersRange.disabled ? 'opacity-50' : ''}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: playersRange.max - playersRange.min + 1 }, (_, i) => {
-                    const value = playersRange.min + i
-                    return (
-                      <SelectItem key={value} value={value.toString()}>
-                        {value} players
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Range: {playersRange.min}-{playersRange.max} players
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
-            <div className="flex items-center space-x-2 text-blue-700 dark:text-blue-400">
-              <Clock className="h-4 w-4" />
-              <span className="font-medium">Estimated Duration</span>
-            </div>
-            <p className="text-sm text-blue-600 dark:text-blue-300 mt-1">
-              ~{settings.totalTimeLimit} minutes
-            </p>
-            <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
-              Based on {totalQuestions} questions × {settings.timePerQuestion}s per question
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Timing Settings Section */}
       <Card>
@@ -276,10 +208,7 @@ export function QuizSettingsTab({ quizId = "default", totalQuestions = 0 }: Quiz
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Game Type:</span>
-                <span className="text-sm font-semibold">{getGameTypeLabel(settings.gameType)}</span>
-              </div>
+              
               <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Maximum Players:</span>
                 <span className="text-sm font-semibold">{settings.maxPlayers}</span>

@@ -1,19 +1,18 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken, UserRole } from '../utils/auth';
+import { User, UserRole } from '../models';
+import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/auth';
 import { logInfo, logError } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
-
-const prisma = new PrismaClient();
+import { Op } from 'sequelize';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { username, email, password, firstName, lastName, role } = req.body;
 
     // Check if user already exists
-    const existingUser = await prisma.user.findFirst({
+    const existingUser = await User.findOne({
       where: {
-        OR: [
+        [Op.or]: [
           { email },
           { username }
         ]
@@ -33,26 +32,26 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const passwordHash = await hashPassword(password);
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        passwordHash,
-        firstName,
-        lastName,
-        role: role || UserRole.PLAYER
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        eloRating: true,
-        createdAt: true
-      }
+    const user = await User.create({
+      username,
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      role: role || UserRole.PLAYER
     });
+
+    // Return user without password
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      eloRating: user.eloRating,
+      createdAt: user.createdAt
+    };
 
     // Generate tokens
     const token = generateToken({
@@ -70,7 +69,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       success: true,
       message: 'User registered successfully',
       data: {
-        user,
+        user: userResponse,
         token,
         refreshToken
       }
@@ -90,22 +89,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const { email, password } = req.body;
 
     // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        passwordHash: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        eloRating: true,
-        isActive: true,
-        totalMatches: true,
-        wins: true,
-        losses: true
-      }
+    const user = await User.findOne({
+      where: { email }
     });
 
     if (!user || !user.isActive) {
@@ -129,10 +114,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() }
-    });
+    await User.update(
+      { lastLoginAt: new Date() },
+      { where: { id: user.id } }
+    );
 
     // Generate tokens
     const token = generateToken({
@@ -183,15 +168,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     const decoded = verifyRefreshToken(refreshToken);
 
     // Get user
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        isActive: true
-      }
+    const user = await User.findByPk(decoded.userId, {
+      attributes: ['id', 'username', 'email', 'role', 'isActive']
     });
 
     if (!user || !user.isActive) {
@@ -232,23 +210,12 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
   try {
     const userId = req.user?.id;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        role: true,
-        eloRating: true,
-        totalMatches: true,
-        wins: true,
-        losses: true,
-        createdAt: true,
-        lastLoginAt: true
-      }
+    const user = await User.findByPk(userId, {
+      attributes: [
+        'id', 'username', 'email', 'firstName', 'lastName', 'avatar',
+        'role', 'eloRating', 'totalMatches', 'wins', 'losses',
+        'createdAt', 'lastLoginAt'
+      ]
     });
 
     if (!user) {
@@ -277,26 +244,16 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     const userId = req.user?.id;
     const { firstName, lastName, avatar } = req.body;
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        firstName,
-        lastName,
-        avatar
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        role: true,
-        eloRating: true,
-        totalMatches: true,
-        wins: true,
-        losses: true
-      }
+    await User.update(
+      { firstName, lastName, avatar },
+      { where: { id: userId } }
+    );
+
+    const user = await User.findByPk(userId, {
+      attributes: [
+        'id', 'username', 'email', 'firstName', 'lastName', 'avatar',
+        'role', 'eloRating', 'totalMatches', 'wins', 'losses'
+      ]
     });
 
     logInfo('Profile updated successfully', { userId });

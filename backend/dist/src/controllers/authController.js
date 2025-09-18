@@ -32,7 +32,7 @@ const register = async (req, res) => {
                 passwordHash,
                 firstName,
                 lastName,
-                role: role || client_1.UserRole.PLAYER
+                role: role || auth_1.UserRole.PLAYER
             },
             select: {
                 id: true,

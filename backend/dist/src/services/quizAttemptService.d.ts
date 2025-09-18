@@ -47,7 +47,7 @@ export declare class QuizAttemptService {
             answeredAt: Date;
         };
         isCorrect: boolean;
-        correctOptionIds: number[] | undefined;
+        correctOptionIds: any[] | undefined;
     }>;
     completeQuizAttempt(data: CompleteQuizAttemptData): Promise<{
         attempt: {
@@ -119,7 +119,13 @@ export declare class QuizAttemptService {
         completedAt: Date | null;
     }) | null>;
     getUserAttempts(userId: number, page?: number, limit?: number): Promise<{
-        attempts: {
+        attempts: ({
+            quiz: {
+                id: number;
+                title: string;
+                difficulty: import(".prisma/client").$Enums.Difficulty;
+            };
+        } & {
             id: number;
             quizId: number;
             status: import(".prisma/client").$Enums.QuizAttemptStatus;
@@ -130,7 +136,7 @@ export declare class QuizAttemptService {
             correctAnswers: number;
             startedAt: Date;
             completedAt: Date | null;
-        }[];
+        })[];
         pagination: {
             page: number;
             limit: number;
@@ -140,20 +146,11 @@ export declare class QuizAttemptService {
     }>;
     getLeaderboard(quizId?: number, limit?: number): Promise<{
         rank: number;
-        user: {
-            id: number;
-            username: string;
-            firstName: string | null;
-            lastName: string | null;
-        };
-        quiz: {
-            id: number;
-            title: string;
-            difficulty: import(".prisma/client").$Enums.Difficulty;
-        };
-        score: number;
-        timeSpent: number | null;
-        completedAt: Date | null;
+        user: any;
+        quiz: any;
+        score: any;
+        timeSpent: any;
+        completedAt: any;
     }[]>;
     getUserStats(userId: number): Promise<{
         user: {
@@ -174,7 +171,12 @@ export declare class QuizAttemptService {
                 HARD: number;
             };
         };
-        recentAttempts: {
+        recentAttempts: ({
+            quiz: {
+                title: string;
+                difficulty: import(".prisma/client").$Enums.Difficulty;
+            };
+        } & {
             id: number;
             quizId: number;
             status: import(".prisma/client").$Enums.QuizAttemptStatus;
@@ -185,7 +187,7 @@ export declare class QuizAttemptService {
             correctAnswers: number;
             startedAt: Date;
             completedAt: Date | null;
-        }[];
+        })[];
     }>;
 }
 export declare const quizAttemptService: QuizAttemptService;

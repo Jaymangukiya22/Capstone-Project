@@ -28,7 +28,34 @@ export const updateProfileSchema = Joi.object({
 // Category validation schemas
 export const categorySchema = Joi.object({
   name: Joi.string().min(1).max(100).required(),
-  parentId: Joi.number().integer().positive().optional().allow(null)
+  description: Joi.string().min(1).max(500).optional().allow(null),
+  parentId: Joi.number().integer().positive().optional().allow(null),
+  isActive: Joi.boolean().optional().default(true)
+});
+
+export const categoryUpdateSchema = Joi.object({
+  name: Joi.string().min(1).max(100).optional(),
+  description: Joi.string().min(1).max(500).optional().allow(null),
+  parentId: Joi.number().integer().positive().optional().allow(null),
+  isActive: Joi.boolean().optional()
+});
+
+export const categoryQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).optional().default(1),
+  limit: Joi.number().integer().min(1).max(100).optional().default(10),
+  parentId: Joi.alternatives().try(
+    Joi.number().integer().positive(),
+    Joi.string().valid('null'),
+    Joi.allow(null)
+  ).optional(),
+  includeChildren: Joi.boolean().optional().default(false),
+  depth: Joi.number().integer().min(1).max(5).optional().default(1),
+  isActive: Joi.boolean().optional(),
+  search: Joi.string().min(1).max(100).optional(),
+  hierarchy: Joi.alternatives().try(
+    Joi.boolean(),
+    Joi.string().valid('true', 'false')
+  ).optional()
 });
 
 // Quiz validation schemas
@@ -82,9 +109,19 @@ export const assignQuestionsSchema = Joi.object({
   questionIds: Joi.array().items(Joi.number().integer().positive()).min(1).required()
 });
 
+// Question Bank Query validation
+export const questionBankQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).optional().default(1),
+  limit: Joi.number().integer().min(1).max(100).optional().default(10),
+  categoryId: Joi.number().integer().positive().optional(),
+  difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').optional(),
+  isActive: Joi.boolean().optional(),
+  search: Joi.string().min(1).max(100).optional()
+});
+
 // Search validation schemas
 export const searchQuestionsSchema = Joi.object({
-  query: Joi.string().min(1).max(200).optional(),
+  q: Joi.string().min(1).max(200).required(),
   categoryId: Joi.number().integer().positive().optional(),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').optional(),
   page: Joi.number().integer().min(1).default(1),

@@ -1,307 +1,357 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma = new client_1.PrismaClient();
 async function main() {
     console.log('🌱 Starting database seeding...');
-    const scienceCategory = await prisma.category.upsert({
-        where: { id: 1 },
-        update: {},
-        create: {
+    console.log('🧹 Cleaning existing data...');
+    await prisma.quizAttempt.deleteMany();
+    await prisma.question.deleteMany();
+    await prisma.quiz.deleteMany();
+    await prisma.category.deleteMany();
+    await prisma.user.deleteMany();
+    console.log('👥 Creating users...');
+    const hashedPassword = await bcryptjs_1.default.hash('password123', 10);
+    const admin = await prisma.user.create({
+        data: {
+            username: 'admin',
+            email: 'admin@example.com',
+            passwordHash: hashedPassword,
+            firstName: 'Admin',
+            lastName: 'User',
+            role: 'ADMIN',
+            eloRating: 1500
+        }
+    });
+    const player1 = await prisma.user.create({
+        data: {
+            username: 'john_doe',
+            email: 'john@example.com',
+            passwordHash: hashedPassword,
+            firstName: 'John',
+            lastName: 'Doe',
+            role: 'PLAYER',
+            eloRating: 1200
+        }
+    });
+    const player2 = await prisma.user.create({
+        data: {
+            username: 'jane_smith',
+            email: 'jane@example.com',
+            passwordHash: hashedPassword,
+            firstName: 'Jane',
+            lastName: 'Smith',
+            role: 'PLAYER',
+            eloRating: 1300
+        }
+    });
+    console.log('📚 Creating categories and subcategories...');
+    const scienceCategory = await prisma.category.create({
+        data: {
             name: 'Science',
-        },
+            description: 'All science-related topics'
+        }
     });
-    const sportsCategory = await prisma.category.upsert({
-        where: { id: 2 },
-        update: {},
-        create: {
-            name: 'Sports',
-        },
-    });
-    const technologyCategory = await prisma.category.upsert({
-        where: { id: 3 },
-        update: {},
-        create: {
-            name: 'Technology',
-        },
-    });
-    const physicsCategory = await prisma.category.upsert({
-        where: { id: 4 },
-        update: {},
-        create: {
+    const physicsSubcat = await prisma.category.create({
+        data: {
             name: 'Physics',
-            parentId: scienceCategory.id,
-        },
+            description: 'Physics concepts and principles',
+            parentId: scienceCategory.id
+        }
     });
-    const quantumMechanicsCategory = await prisma.category.upsert({
-        where: { id: 5 },
-        update: {},
-        create: {
-            name: 'Quantum Mechanics',
-            parentId: physicsCategory.id,
-        },
+    const chemistrySubcat = await prisma.category.create({
+        data: {
+            name: 'Chemistry',
+            description: 'Chemical reactions and compounds',
+            parentId: scienceCategory.id
+        }
     });
-    const cricketCategory = await prisma.category.upsert({
-        where: { id: 6 },
-        update: {},
-        create: {
-            name: 'Cricket',
-            parentId: sportsCategory.id,
-        },
+    const biologySubcat = await prisma.category.create({
+        data: {
+            name: 'Biology',
+            description: 'Living organisms and life processes',
+            parentId: scienceCategory.id
+        }
     });
-    const t20Category = await prisma.category.upsert({
-        where: { id: 7 },
-        update: {},
-        create: {
-            name: 'T20',
-            parentId: cricketCategory.id,
-        },
+    const mechanicsSubSubcat = await prisma.category.create({
+        data: {
+            name: 'Mechanics',
+            description: 'Motion, forces, and energy',
+            parentId: physicsSubcat.id
+        }
     });
-    const programmingCategory = await prisma.category.upsert({
-        where: { id: 8 },
-        update: {},
-        create: {
+    const thermodynamicsSubSubcat = await prisma.category.create({
+        data: {
+            name: 'Thermodynamics',
+            description: 'Heat and temperature',
+            parentId: physicsSubcat.id
+        }
+    });
+    const technologyCategory = await prisma.category.create({
+        data: {
+            name: 'Technology',
+            description: 'Computer science and technology topics'
+        }
+    });
+    const programmingSubcat = await prisma.category.create({
+        data: {
             name: 'Programming',
-            parentId: technologyCategory.id,
-        },
+            description: 'Programming languages and concepts',
+            parentId: technologyCategory.id
+        }
     });
-    const javascriptCategory = await prisma.category.upsert({
-        where: { id: 9 },
-        update: {},
-        create: {
+    const webDevSubcat = await prisma.category.create({
+        data: {
+            name: 'Web Development',
+            description: 'Frontend and backend web development',
+            parentId: technologyCategory.id
+        }
+    });
+    const javascriptSubSubcat = await prisma.category.create({
+        data: {
             name: 'JavaScript',
-            parentId: programmingCategory.id,
-        },
+            description: 'JavaScript programming language',
+            parentId: programmingSubcat.id
+        }
     });
-    console.log('✅ Categories created');
-    const physicsQuiz = await prisma.quiz.upsert({
-        where: { id: 1 },
-        update: {},
-        create: {
+    const pythonSubSubcat = await prisma.category.create({
+        data: {
+            name: 'Python',
+            description: 'Python programming language',
+            parentId: programmingSubcat.id
+        }
+    });
+    const historyCategory = await prisma.category.create({
+        data: {
+            name: 'History',
+            description: 'Historical events and periods'
+        }
+    });
+    const ancientHistorySubcat = await prisma.category.create({
+        data: {
+            name: 'Ancient History',
+            description: 'Ancient civilizations and events',
+            parentId: historyCategory.id
+        }
+    });
+    const modernHistorySubcat = await prisma.category.create({
+        data: {
+            name: 'Modern History',
+            description: 'Modern era historical events',
+            parentId: historyCategory.id
+        }
+    });
+    const sportsCategory = await prisma.category.create({
+        data: {
+            name: 'Sports',
+            description: 'Various sports and athletics'
+        }
+    });
+    const footballSubcat = await prisma.category.create({
+        data: {
+            name: 'Football',
+            description: 'Football/Soccer related questions',
+            parentId: sportsCategory.id
+        }
+    });
+    const basketballSubcat = await prisma.category.create({
+        data: {
+            name: 'Basketball',
+            description: 'Basketball related questions',
+            parentId: sportsCategory.id
+        }
+    });
+    console.log('❓ Creating questions...');
+    const physicsQuestion1 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'What is the speed of light in vacuum?',
+            difficulty: 'MEDIUM',
+            categoryId: physicsSubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: '299,792,458 m/s', isCorrect: true },
+                    { optionText: '300,000,000 m/s', isCorrect: false },
+                    { optionText: '299,000,000 m/s', isCorrect: false },
+                    { optionText: '298,792,458 m/s', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const physicsQuestion2 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'What is Newton\'s first law of motion?',
+            difficulty: 'EASY',
+            categoryId: mechanicsSubSubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: 'F = ma', isCorrect: false },
+                    { optionText: 'An object at rest stays at rest', isCorrect: true },
+                    { optionText: 'For every action there is an equal and opposite reaction', isCorrect: false },
+                    { optionText: 'E = mc²', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const jsQuestion1 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'What does "typeof null" return in JavaScript?',
+            difficulty: 'MEDIUM',
+            categoryId: javascriptSubSubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: 'null', isCorrect: false },
+                    { optionText: 'undefined', isCorrect: false },
+                    { optionText: 'object', isCorrect: true },
+                    { optionText: 'boolean', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const jsQuestion2 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'Which method is used to add an element to the end of an array?',
+            difficulty: 'EASY',
+            categoryId: javascriptSubSubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: 'push()', isCorrect: true },
+                    { optionText: 'pop()', isCorrect: false },
+                    { optionText: 'shift()', isCorrect: false },
+                    { optionText: 'unshift()', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const historyQuestion1 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'In which year did World War II end?',
+            difficulty: 'EASY',
+            categoryId: modernHistorySubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: '1944', isCorrect: false },
+                    { optionText: '1945', isCorrect: true },
+                    { optionText: '1946', isCorrect: false },
+                    { optionText: '1947', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const historyQuestion2 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'Who was the first emperor of Rome?',
+            difficulty: 'MEDIUM',
+            categoryId: ancientHistorySubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: 'Julius Caesar', isCorrect: false },
+                    { optionText: 'Augustus', isCorrect: true },
+                    { optionText: 'Nero', isCorrect: false },
+                    { optionText: 'Caligula', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const sportsQuestion1 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'How many players are on a basketball team on the court at one time?',
+            difficulty: 'EASY',
+            categoryId: basketballSubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: '4', isCorrect: false },
+                    { optionText: '5', isCorrect: true },
+                    { optionText: '6', isCorrect: false },
+                    { optionText: '7', isCorrect: false }
+                ]
+            }
+        }
+    });
+    const sportsQuestion2 = await prisma.questionBankItem.create({
+        data: {
+            questionText: 'Which country won the FIFA World Cup in 2018?',
+            difficulty: 'EASY',
+            categoryId: footballSubcat.id,
+            createdById: admin.id,
+            options: {
+                create: [
+                    { optionText: 'Brazil', isCorrect: false },
+                    { optionText: 'Germany', isCorrect: false },
+                    { optionText: 'France', isCorrect: true },
+                    { optionText: 'Argentina', isCorrect: false }
+                ]
+            }
+        }
+    });
+    console.log('📝 Creating quizzes...');
+    const physicsQuiz = await prisma.quiz.create({
+        data: {
             title: 'Basic Physics Quiz',
-            description: 'A basic quiz about physics concepts',
+            description: 'Test your knowledge of basic physics concepts',
             difficulty: 'MEDIUM',
             timeLimit: 30,
-            categoryId: physicsCategory.id,
-        },
+            maxQuestions: 10,
+            categoryId: physicsSubcat.id,
+            createdById: admin.id
+        }
     });
-    const question1 = await prisma.question.create({
+    const jsQuiz = await prisma.quiz.create({
         data: {
-            quizId: physicsQuiz.id,
-            questionText: 'What is the force that attracts two objects with mass?',
-        },
-    });
-    await prisma.option.createMany({
-        data: [
-            {
-                questionId: question1.id,
-                optionText: 'Gravity',
-                isCorrect: true,
-            },
-            {
-                questionId: question1.id,
-                optionText: 'Electromagnetic force',
-                isCorrect: false,
-            },
-            {
-                questionId: question1.id,
-                optionText: 'Centrifugal force',
-                isCorrect: false,
-            },
-            {
-                questionId: question1.id,
-                optionText: 'Strong nuclear force',
-                isCorrect: false,
-            },
-        ],
-    });
-    const question2 = await prisma.question.create({
-        data: {
-            quizId: physicsQuiz.id,
-            questionText: 'What is the speed of light in vacuum?',
-        },
-    });
-    await prisma.option.createMany({
-        data: [
-            {
-                questionId: question2.id,
-                optionText: '3 × 10⁸ m/s',
-                isCorrect: true,
-            },
-            {
-                questionId: question2.id,
-                optionText: '3 × 10⁶ m/s',
-                isCorrect: false,
-            },
-            {
-                questionId: question2.id,
-                optionText: '3 × 10¹⁰ m/s',
-                isCorrect: false,
-            },
-            {
-                questionId: question2.id,
-                optionText: '3 × 10⁴ m/s',
-                isCorrect: false,
-            },
-        ],
-    });
-    const quantumQuiz = await prisma.quiz.upsert({
-        where: { id: 2 },
-        update: {},
-        create: {
-            title: 'Quantum Mechanics Fundamentals',
-            description: 'A quiz about quantum mechanics concepts',
-            difficulty: 'HARD',
-            timeLimit: 45,
-            categoryId: quantumMechanicsCategory.id,
-            questions: {
-                create: [
-                    {
-                        questionText: 'What is the principle of wave-particle duality?',
-                        options: {
-                            create: [
-                                {
-                                    optionText: 'Particles can exhibit wave-like behavior',
-                                    isCorrect: true,
-                                },
-                                {
-                                    optionText: 'Waves can exhibit particle-like behavior',
-                                    isCorrect: true,
-                                },
-                                {
-                                    optionText: 'Particles and waves are mutually exclusive',
-                                    isCorrect: false,
-                                },
-                                {
-                                    optionText: 'The principle is only applicable to macroscopic objects',
-                                    isCorrect: false,
-                                },
-                            ],
-                        },
-                    },
-                ],
-            },
-        },
-    });
-    const techQuiz = await prisma.quiz.upsert({
-        where: { id: 3 },
-        update: {},
-        create: {
-            title: 'Technology Trivia',
-            description: 'A quiz about technology and programming',
-            difficulty: 'EASY',
-            timeLimit: 20,
-            categoryId: technologyCategory.id,
-            questions: {
-                create: [
-                    {
-                        questionText: 'What is the most popular programming language?',
-                        options: {
-                            create: [
-                                {
-                                    optionText: 'JavaScript',
-                                    isCorrect: true,
-                                },
-                                {
-                                    optionText: 'Python',
-                                    isCorrect: false,
-                                },
-                                {
-                                    optionText: 'Java',
-                                    isCorrect: false,
-                                },
-                                {
-                                    optionText: 'C++',
-                                    isCorrect: false,
-                                },
-                            ],
-                        },
-                    },
-                ],
-            },
-        },
-    });
-    console.log('✅ Quizzes created');
-    const jsQuiz = await prisma.quiz.upsert({
-        where: { id: 4 },
-        update: {},
-        create: {
             title: 'JavaScript Fundamentals',
-            description: 'A quiz about JavaScript programming',
-            difficulty: 'EASY',
-            timeLimit: 25,
-            categoryId: javascriptCategory.id,
-            questions: {
-                create: [
-                    {
-                        questionText: 'Which of the following is used to declare a variable in JavaScript?',
-                        options: {
-                            create: [
-                                { optionText: 'var', isCorrect: true },
-                                { optionText: 'let', isCorrect: true },
-                                { optionText: 'const', isCorrect: true },
-                                { optionText: 'variable', isCorrect: false }
-                            ]
-                        }
-                    },
-                    {
-                        questionText: 'What does JSON stand for?',
-                        options: {
-                            create: [
-                                { optionText: 'JavaScript Object Notation', isCorrect: true },
-                                { optionText: 'Java Standard Object Notation', isCorrect: false },
-                                { optionText: 'JavaScript Object Naming', isCorrect: false },
-                                { optionText: 'JavaScript Oriented Notation', isCorrect: false }
-                            ]
-                        }
-                    }
-                ]
-            }
-        }
-    });
-    const cricketQuiz = await prisma.quiz.upsert({
-        where: { id: 5 },
-        update: {},
-        create: {
-            title: 'Cricket Trivia',
-            description: 'A quiz about cricket',
+            description: 'Essential JavaScript concepts every developer should know',
             difficulty: 'MEDIUM',
-            timeLimit: 20,
-            categoryId: cricketCategory.id,
-            questions: {
-                create: [
-                    {
-                        questionText: 'How many overs are there in a T20 match per team?',
-                        options: {
-                            create: [
-                                { optionText: '20', isCorrect: true },
-                                { optionText: '50', isCorrect: false },
-                                { optionText: '10', isCorrect: false },
-                                { optionText: '25', isCorrect: false }
-                            ]
-                        }
-                    },
-                    {
-                        questionText: 'Which country won the first ever Cricket World Cup in 1975?',
-                        options: {
-                            create: [
-                                { optionText: 'West Indies', isCorrect: true },
-                                { optionText: 'Australia', isCorrect: false },
-                                { optionText: 'England', isCorrect: false },
-                                { optionText: 'India', isCorrect: false }
-                            ]
-                        }
-                    }
-                ]
-            }
+            timeLimit: 25,
+            maxQuestions: 15,
+            categoryId: javascriptSubSubcat.id,
+            createdById: admin.id
         }
     });
-    console.log('✅ Questions and options created');
-    console.log('🎉 Database seeding completed successfully!');
+    const historyQuiz = await prisma.quiz.create({
+        data: {
+            title: 'World History Quiz',
+            description: 'Test your knowledge of world historical events',
+            difficulty: 'EASY',
+            timeLimit: 20,
+            maxQuestions: 12,
+            categoryId: historyCategory.id,
+            createdById: admin.id
+        }
+    });
+    const sportsQuiz = await prisma.quiz.create({
+        data: {
+            title: 'Sports Trivia',
+            description: 'General sports knowledge quiz',
+            difficulty: 'EASY',
+            timeLimit: 15,
+            maxQuestions: 8,
+            categoryId: sportsCategory.id,
+            createdById: admin.id
+        }
+    });
+    console.log('✅ Database seeding completed successfully!');
+    console.log(`Created:
+  - 4 main categories
+  - 8 subcategories  
+  - 4 sub-subcategories
+  - 3 users (1 admin, 2 players)
+  - 8 questions across different categories
+  - 4 quizzes
+  `);
 }
 main()
     .catch((e) => {
-    console.error('❌ Error during seeding:', e);
+    console.error(e);
     process.exit(1);
 })
     .finally(async () => {

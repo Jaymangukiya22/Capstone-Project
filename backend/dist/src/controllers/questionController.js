@@ -37,7 +37,7 @@ class QuestionController {
                 });
                 return;
             }
-            const { error, value } = validation_1.addQuestionSchema.validate(req.body);
+            const { error, value } = (0, validation_1.validateQuestion)(req.body);
             if (error) {
                 res.status(400).json({
                     success: false,

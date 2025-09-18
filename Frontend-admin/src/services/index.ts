@@ -1,6 +1,7 @@
 // Export all services for easy importing
 export { categoryService } from './categoryService';
 export { quizService } from './quizService';
+export { authService } from './authService';
 export { questionService } from './questionService';
 export { apiClient } from './api';
 

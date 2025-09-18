@@ -1,0 +1,1363 @@
+{
+  "info": {
+    "name": "Quiz System API - Enhanced",
+    "description": "Complete API collection for the Quiz System Backend with all new features",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "quizId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attemptId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminUserId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Collection Pre-request Script",
+          "console.log('🚀 Starting API request to: ' + pm.request.url);",
+          "",
+          "// Check if we have required tokens for protected endpoints",
+          "const url = pm.request.url.toString();",
+          "if (url.includes('/api/') && !url.includes('/auth/')) {",
+          "    const authToken = pm.collectionVariables.get('authToken');",
+          "    const adminToken = pm.collectionVariables.get('adminToken');",
+          "    ",
+          "    if (!authToken && !adminToken) {",
+          "        console.log('⚠️  Warning: No authentication tokens found. Make sure to login first.');",
+          "    }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Collection Test Script",
+          "const response = pm.response.json();",
+          "",
+          "// Global test for all endpoints",
+          "pm.test('Response has correct structure', function () {",
+          "    if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "        pm.expect(response).to.have.property('success');",
+          "        if (response.success) {",
+          "            pm.expect(response).to.have.property('data');",
+          "        }",
+          "    }",
+          "});",
+          "",
+          "// Log response summary",
+          "if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    console.log('✅ Request successful - Status: ' + pm.response.code);",
+          "} else {",
+          "    console.log('❌ Request failed - Status: ' + pm.response.code);",
+          "    if (response && response.message) {",
+          "        console.log('Error: ' + response.message);",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register Player",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"role\": \"PLAYER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('userId', response.user.id);",
+                  "    console.log('Player registered with ID:', response.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\",\n  \"firstName\": \"Admin\",\n  \"lastName\": \"User\",\n  \"role\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login Player",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login Player - Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.collectionVariables.set('authToken', response.data.token);",
+                  "        pm.collectionVariables.set('userId', response.data.user.id);",
+                  "        pm.test('Player login successful', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.token).to.not.be.empty;",
+                  "        });",
+                  "        console.log('✅ Player logged in successfully - Token and UserID captured');",
+                  "    } else {",
+                  "        console.log('❌ Login failed - Invalid response structure');",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Login failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login Admin - Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.collectionVariables.set('adminToken', response.data.token);",
+                  "        pm.collectionVariables.set('adminUserId', response.data.user.id);",
+                  "        pm.test('Admin login successful', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.token).to.not.be.empty;",
+                  "            pm.expect(response.data.user.role).to.eql('ADMIN');",
+                  "        });",
+                  "        console.log('✅ Admin logged in successfully - Token captured');",
+                  "    } else {",
+                  "        console.log('❌ Admin login failed - Invalid response structure');",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Admin login failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Updated\",\n  \"lastName\": \"Name\",\n  \"avatar\": \"https://example.com/avatar.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Create Category (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Science\",\n  \"description\": \"Science related questions\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Create Category - Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.collectionVariables.set('categoryId', response.data.id);",
+                  "        pm.test('Category created successfully', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.id).to.be.a('number');",
+                  "            pm.expect(response.data.name).to.eql('Science');",
+                  "        });",
+                  "        console.log('✅ Category created - ID: ' + response.data.id);",
+                  "    } else {",
+                  "        console.log('❌ Category creation failed - Invalid response structure');",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Category creation failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Get Categories - Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.test('Categories retrieved successfully', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data).to.be.an('array');",
+                  "            pm.expect(response.pagination).to.be.an('object');",
+                  "        });",
+                  "        console.log('✅ Categories retrieved - Count: ' + response.data.length);",
+                  "    } else {",
+                  "        console.log('❌ Get categories failed - Invalid response structure');",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Get categories failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Category by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Category (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Science\",\n  \"description\": \"Updated science related questions\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Category (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "1"]
+            }
+          }
+        },
+        {
+          "name": "Search Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/search?q=science&isActive=true&includeChildren=true&depth=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "science"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                },
+                {
+                  "key": "includeChildren",
+                  "value": "true"
+                },
+                {
+                  "key": "depth",
+                  "value": "2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Category Hierarchy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories?hierarchy=true&depth=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories"],
+              "query": [
+                {
+                  "key": "hierarchy",
+                  "value": "true"
+                },
+                {
+                  "key": "depth",
+                  "value": "3"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Category Path (Breadcrumb)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/1/path",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "1", "path"]
+            }
+          }
+        },
+        {
+          "name": "Get Subcategories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/1/subcategories?depth=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories", "1", "subcategories"],
+              "query": [
+                {
+                  "key": "depth",
+                  "value": "2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Root Categories Only",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories?parentId=null&includeChildren=true&depth=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "categories"],
+              "query": [
+                {
+                  "key": "parentId",
+                  "value": "null"
+                },
+                {
+                  "key": "includeChildren",
+                  "value": "true"
+                },
+                {
+                  "key": "depth",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Question Bank",
+      "item": [
+        {
+          "name": "Create Question (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": 1,\n  \"questionText\": \"What is the capital of France?\",\n  \"difficulty\": \"EASY\",\n  \"options\": [\n    {\n      \"optionText\": \"London\",\n      \"isCorrect\": false\n    },\n    {\n      \"optionText\": \"Berlin\",\n      \"isCorrect\": false\n    },\n    {\n      \"optionText\": \"Paris\",\n      \"isCorrect\": true\n    },\n    {\n      \"optionText\": \"Madrid\",\n      \"isCorrect\": false\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank"]
+            }
+          }
+        },
+        {
+          "name": "Get All Questions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank?page=1&limit=10&categoryId=1&difficulty=EASY",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                },
+                {
+                  "key": "difficulty",
+                  "value": "EASY"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Question by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Question (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionText\": \"What is the updated capital of France?\",\n  \"difficulty\": \"MEDIUM\",\n  \"options\": [\n    {\n      \"optionText\": \"London\",\n      \"isCorrect\": false\n    },\n    {\n      \"optionText\": \"Berlin\",\n      \"isCorrect\": false\n    },\n    {\n      \"optionText\": \"Paris\",\n      \"isCorrect\": true\n    },\n    {\n      \"optionText\": \"Madrid\",\n      \"isCorrect\": false\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Question (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "1"]
+            }
+          }
+        },
+        {
+          "name": "Search Questions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/search?q=capital&categoryId=1&difficulty=EASY",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "capital"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                },
+                {
+                  "key": "difficulty",
+                  "value": "EASY"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Bulk Create Questions (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questions\": [\n    {\n      \"categoryId\": 1,\n      \"questionText\": \"What is 2+2?\",\n      \"difficulty\": \"EASY\",\n      \"options\": [\n        {\"optionText\": \"3\", \"isCorrect\": false},\n        {\"optionText\": \"4\", \"isCorrect\": true},\n        {\"optionText\": \"5\", \"isCorrect\": false}\n      ]\n    },\n    {\n      \"categoryId\": 1,\n      \"questionText\": \"What is 3+3?\",\n      \"difficulty\": \"EASY\",\n      \"options\": [\n        {\"optionText\": \"5\", \"isCorrect\": false},\n        {\"optionText\": \"6\", \"isCorrect\": true},\n        {\"optionText\": \"7\", \"isCorrect\": false}\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "bulk"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quizzes",
+      "item": [
+        {
+          "name": "Create Quiz (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Science Quiz\",\n  \"description\": \"A quiz about basic science\",\n  \"difficulty\": \"MEDIUM\",\n  \"timeLimit\": 30,\n  \"maxQuestions\": 10,\n  \"categoryId\": {{categoryId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Create Quiz - Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.collectionVariables.set('quizId', response.data.id);",
+                  "        pm.test('Quiz created successfully', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.id).to.be.a('number');",
+                  "            pm.expect(response.data.title).to.eql('Science Quiz');",
+                  "        });",
+                  "        console.log('✅ Quiz created - ID: ' + response.data.id);",
+                  "    } else {",
+                  "        console.log('❌ Quiz creation failed - Invalid response structure');",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Quiz creation failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Quizzes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes?page=1&limit=10&categoryId=1&difficulty=MEDIUM",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                },
+                {
+                  "key": "difficulty",
+                  "value": "MEDIUM"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Quiz by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes/{{quizId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes", "{{quizId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Quiz (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Science Quiz\",\n  \"description\": \"An updated quiz about basic science\",\n  \"difficulty\": \"HARD\",\n  \"timeLimit\": 45,\n  \"maxQuestions\": 15,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes/{{quizId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes", "{{quizId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Quiz (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes/{{quizId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes", "{{quizId}}"]
+            }
+          }
+        },
+        {
+          "name": "Search Quizzes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes/search?q=science&categoryId=1&difficulty=MEDIUM",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "science"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                },
+                {
+                  "key": "difficulty",
+                  "value": "MEDIUM"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assign Questions to Quiz (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionIds\": [1, 2, 3, 4, 5]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes/{{quizId}}/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes", "{{quizId}}", "questions"]
+            }
+          }
+        },
+        {
+          "name": "Get Quiz Questions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quizzes/{{quizId}}/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quizzes", "{{quizId}}", "questions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quiz Attempts",
+      "item": [
+        {
+          "name": "Start Quiz Attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quizId\": {{quizId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Start Quiz Attempt - Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.collectionVariables.set('attemptId', response.data.id);",
+                  "        pm.test('Quiz attempt started successfully', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.id).to.be.a('number');",
+                  "            pm.expect(response.data.status).to.eql('IN_PROGRESS');",
+                  "        });",
+                  "        console.log('✅ Quiz attempt started - ID: ' + response.data.id);",
+                  "    } else {",
+                  "        console.log('❌ Quiz attempt failed - Invalid response structure');",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Quiz attempt failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Answer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionId\": 1,\n  \"selectedOptions\": [2],\n  \"timeSpent\": 15\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts/{{attemptId}}/answer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts", "{{attemptId}}", "answer"]
+            }
+          }
+        },
+        {
+          "name": "Complete Quiz Attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts/{{attemptId}}/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts", "{{attemptId}}", "complete"]
+            }
+          }
+        },
+        {
+          "name": "Get Quiz Attempt Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts/{{attemptId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts", "{{attemptId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Quiz History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts/history?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts", "history"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz-attempts/leaderboard?limit=10&categoryId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "quiz-attempts", "leaderboard"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Operations",
+      "item": [
+        {
+          "name": "Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?page=1&limit=10&role=PLAYER",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "role",
+                  "value": "PLAYER"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Status (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Get System Statistics (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Database Operations",
+      "item": [
+        {
+          "name": "Seed Database (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/seed",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "seed"]
+            }
+          }
+        },
+        {
+          "name": "Clear Database (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/clear-db",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "clear-db"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Database Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/status/database",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "status", "database"]
+            }
+          }
+        },
+        {
+          "name": "API Info",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "info"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

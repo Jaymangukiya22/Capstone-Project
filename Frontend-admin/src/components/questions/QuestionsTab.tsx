@@ -1,46 +1,24 @@
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import type { DragEndEvent } from "@dnd-kit/core"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { 
-  DndContext, 
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core"
-import type { DragEndEvent } from "@dnd-kit/core"
-import { 
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { 
-  Search, 
-  Plus, 
-  Upload, 
-  Save, 
+import {
+  Plus,
+  Search,
+  Upload,
   RotateCcw,
-  Download,
-  GripVertical, 
-  Eye, 
-  Edit, 
-  Trash2
+  Save
 } from "lucide-react"
 import type { Question, QuestionsState } from "@/types/question"
 import { ImportCsvDialog } from "@/components/questions/ImportCsvDialog"
 import { EditQuestionModal } from "@/components/questions/EditQuestionModal"
 import { QuestionCard } from "@/components/questions/QuestionCard"
 import { BulkActionBar } from "@/components/questions/BulkActionBar"
+import { QuestionBankModal } from "@/components/questions/QuestionBankModal"
 
 // Mock data for development
 const mockQuestions: Question[] = [
@@ -98,6 +76,7 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null)
+  const [showQuestionBankModal, setShowQuestionBankModal] = useState(false)
 
   // Load questions from localStorage on mount
   useEffect(() => {
@@ -146,6 +125,17 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
   const handleEditQuestion = (question: Question) => {
     setEditingQuestion(question)
     setShowEditModal(true)
+  }
+
+  const handleSaveEditedQuestion = (updatedQuestion: Question) => {
+    setState(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
+        q.id === updatedQuestion.id ? updatedQuestion : q
+      )
+    }))
+    setShowEditModal(false)
+    setEditingQuestion(null)
   }
 
   const handleDeleteQuestion = (questionId: string) => {
@@ -232,6 +222,33 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
     }))
   }
 
+  const handleAddFromQuestionBank = (questionBankQuestions: any[]) => {
+    // Convert Question Bank questions to Quiz Builder format
+    const convertedQuestions = questionBankQuestions.map(q => ({
+      id: `qb_${q.id}_${Date.now()}`,
+      text: q.text,
+      options: [
+        { id: `${q.id}_a`, text: q.options.A },
+        { id: `${q.id}_b`, text: q.options.B },
+        { id: `${q.id}_c`, text: q.options.C },
+        { id: `${q.id}_d`, text: q.options.D }
+      ],
+      correctOptionId: `${q.id}_${q.correctOption.toLowerCase()}`,
+      type: 'multiple-choice' as const,
+      difficulty: q.difficulty,
+      tags: q.tags,
+      points: q.points,
+      timeLimit: q.timeLimit,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }))
+    
+    setState(prev => ({
+      ...prev,
+      questions: [...prev.questions, ...convertedQuestions]
+    }))
+  }
+
   const handleBulkDelete = () => {
     setState(prev => ({
       ...prev,
@@ -268,6 +285,10 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
           </p>
         </div>
         <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={() => setShowQuestionBankModal(true)}>
+            <Search className="mr-2 h-4 w-4" />
+            Add from Question Bank
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
@@ -373,14 +394,20 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
         onImport={handleImportQuestions}
       />
 
-      {showEditModal && (
+      {showEditModal && editingQuestion && (
         <EditQuestionModal
           question={editingQuestion}
           open={showEditModal}
           onOpenChange={setShowEditModal}
-          onSave={handleSaveQuestion}
+          onSave={handleSaveEditedQuestion}
         />
       )}
+
+      <QuestionBankModal
+        open={showQuestionBankModal}
+        onOpenChange={setShowQuestionBankModal}
+        onAddQuestions={handleAddFromQuestionBank}
+      />
     </div>
   )
 }

@@ -22,9 +22,13 @@ const router = Router();
 router.use(authenticateToken);
 
 // Player routes for quiz attempts
+router.post('/', requirePlayer, validateRequest(startQuizSchema), startQuizAttempt);
 router.post('/start', requirePlayer, validateRequest(startQuizSchema), startQuizAttempt);
 router.post('/:attemptId/answer', requirePlayer, validateRequest(submitAnswerSchema), submitAnswer);
 router.post('/:attemptId/complete', requirePlayer, validateRequest(completeQuizSchema), completeQuizAttempt);
+
+// Get all attempts (for debugging)
+router.get('/', getUserAttempts);
 
 // Get specific attempt
 router.get('/:id', requirePlayer, getAttemptById);

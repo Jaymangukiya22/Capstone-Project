@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout/Layout"
 import { Categories } from "@/pages/Categories"
 import { QuizBuilder } from "@/pages/QuizBuilder"
+import { QuestionBank } from "@/pages/QuestionBank"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { ApiTest } from "@/components/ApiTest"
 
@@ -12,8 +13,8 @@ function App() {
     switch (currentPath) {
       case '/quiz-builder':
         return <QuizBuilder />
-      case '/api-test':
-        return <ApiTest />
+      case '/question-bank':
+        return <QuestionBank />
       case '/categories':
       default:
         return <Categories />

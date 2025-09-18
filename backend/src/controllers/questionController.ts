@@ -128,9 +128,13 @@ export class QuestionController {
         return;
       }
 
-      const { questionText, options } = req.body;
+      const { questionText, options, difficulty } = req.body;
       
-      const updatedQuestion = await questionService.updateQuestion(id, questionText, options);
+      const updatedQuestion = await questionService.updateQuestion(id, {
+        questionText,
+        options,
+        difficulty
+      });
 
       res.status(200).json({
         success: true,

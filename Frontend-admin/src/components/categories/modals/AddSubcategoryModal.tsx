@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,11 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Category } from "@/types"
+import { generateParentOptions } from "@/utils/categoryUtils"
 
 interface AddSubcategoryModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddSubcategory: (name: string, categoryId: string, description?: string) => void
+  onAddSubcategory: (name: string, parentId: string, parentType: 'category' | 'subcategory', description?: string) => void
   categories: Category[]
 }
 
@@ -34,19 +35,25 @@ export function AddSubcategoryModal({
 }: AddSubcategoryModalProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [selectedCategoryId, setSelectedCategoryId] = useState("")
+  const [selectedParentId, setSelectedParentId] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+
+  // Generate parent options (categories and subcategories) for the dropdown
+  const parentOptions = useMemo(() => generateParentOptions(categories), [categories])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !selectedCategoryId) return
+    if (!name.trim() || !selectedParentId) return
+
+    const selectedParent = parentOptions.find(option => option.id === selectedParentId)
+    if (!selectedParent) return
 
     setIsLoading(true)
     try {
-      await onAddSubcategory(name.trim(), selectedCategoryId, description.trim() || undefined)
+      await onAddSubcategory(name.trim(), selectedParentId, selectedParent.type, description.trim() || undefined)
       setName("")
       setDescription("")
-      setSelectedCategoryId("")
+      setSelectedParentId("")
       onOpenChange(false)
     } catch (error) {
       console.error("Failed to add subcategory:", error)
@@ -81,16 +88,16 @@ export function AddSubcategoryModal({
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="parent-category" className="text-right">
-                Category
+                Parent
               </Label>
-              <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+              <Select value={selectedParentId} onValueChange={setSelectedParentId}>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select parent category" />
+                  <SelectValue placeholder="Select parent category or subcategory" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
+                  {parentOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.displayName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -118,7 +125,7 @@ export function AddSubcategoryModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || !name.trim() || !selectedCategoryId}>
+            <Button type="submit" disabled={isLoading || !name.trim() || !selectedParentId}>
               {isLoading ? "Adding..." : "Add Subcategory"}
             </Button>
           </DialogFooter>

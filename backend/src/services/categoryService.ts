@@ -1,9 +1,22 @@
-import { prisma } from '../server';
+import { Category, Quiz, QuestionBankItem } from '../models';
 import { logInfo, logError } from '../utils/logger';
+import { Op } from 'sequelize';
 
 export interface CreateCategoryData {
   name: string;
+  description?: string;
   parentId?: number | null;
+  isActive?: boolean;
+}
+
+export interface CategoryQueryOptions {
+  page?: number;
+  limit?: number;
+  parentId?: number | null;
+  includeChildren?: boolean;
+  depth?: number;
+  isActive?: boolean;
+  search?: string;
 }
 
 export class CategoryService {
@@ -11,23 +24,22 @@ export class CategoryService {
     try {
       // Validate parent exists if provided
       if (data.parentId) {
-        const parent = await prisma.category.findUnique({
-          where: { id: data.parentId }
-        });
+        const parent = await Category.findByPk(data.parentId);
         if (!parent) {
           throw new Error('Parent category not found');
         }
+        
+        // Check if parent is active
+        if (!parent.isActive) {
+          throw new Error('Cannot create subcategory under inactive parent');
+        }
       }
 
-      const category = await prisma.category.create({
-        data: {
-          name: data.name,
-          parentId: data.parentId
-        },
-        include: {
-          parent: true,
-          children: true
-        }
+      const category = await Category.create({
+        name: data.name,
+        description: data.description,
+        parentId: data.parentId,
+        isActive: data.isActive ?? true
       });
 
       logInfo('Category created', { categoryId: category.id });
@@ -38,45 +50,103 @@ export class CategoryService {
     }
   }
 
-  async getAllCategories(): Promise<any[]> {
+  async getAllCategories(options: CategoryQueryOptions = {}): Promise<{ categories: any[], total: number, page: number, totalPages: number }> {
     try {
-      const categories = await prisma.category.findMany({
-        include: {
-          parent: true,
-          children: true,
-          _count: {
-            select: {
-              children: true,
-              quizzes: true
-            }
-          }
-        },
-        orderBy: {
-          name: 'asc'
-        }
+      const {
+        page = 1,
+        limit = 10,
+        parentId,
+        includeChildren = false,
+        depth = 1,
+        isActive,
+        search
+      } = options;
+
+      const offset = (page - 1) * limit;
+      
+      // Build where clause
+      const whereClause: any = {};
+      
+      if (parentId !== undefined) {
+        whereClause.parentId = parentId;
+      }
+      
+      if (isActive !== undefined) {
+        whereClause.isActive = isActive;
+      }
+      
+      if (search) {
+        whereClause[Op.or] = [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { description: { [Op.iLike]: `%${search}%` } }
+        ];
+      }
+
+      // Build include clause for hierarchical data
+      const includeClause = [];
+      
+      if (includeChildren && depth > 0) {
+        includeClause.push(this.buildChildrenInclude(depth));
+      }
+      
+      // Always include parent for context
+      includeClause.push({
+        model: Category,
+        as: 'parent',
+        attributes: ['id', 'name', 'parentId']
       });
 
-      logInfo('Retrieved all categories', { count: categories.length });
-      return categories;
+      const { count, rows: categories } = await Category.findAndCountAll({
+        where: whereClause,
+        include: includeClause,
+        order: [['name', 'ASC']],
+        limit,
+        offset,
+        distinct: true
+      });
+
+      const totalPages = Math.ceil(count / limit);
+
+      logInfo('Retrieved categories with pagination', { 
+        count, 
+        page, 
+        totalPages,
+        includeChildren,
+        depth 
+      });
+
+      return {
+        categories,
+        total: count,
+        page,
+        totalPages
+      };
     } catch (error) {
-      logError('Failed to retrieve categories', error as Error);
+      logError('Failed to retrieve categories', error as Error, { options });
       throw error;
     }
   }
 
-  async getCategoryById(id: number): Promise<any | null> {
+  async getCategoryById(id: number, includeChildren: boolean = false, depth: number = 1): Promise<any | null> {
     try {
-      const category = await prisma.category.findUnique({
-        where: { id },
-        include: {
-          parent: true,
-          children: true
-          // Removed invalid includes
+      const includeClause = [
+        {
+          model: Category,
+          as: 'parent',
+          attributes: ['id', 'name', 'parentId']
         }
+      ];
+
+      if (includeChildren && depth > 0) {
+        includeClause.push(this.buildChildrenInclude(depth));
+      }
+
+      const category = await Category.findByPk(id, {
+        include: includeClause
       });
 
       if (category) {
-        logInfo('Retrieved category by ID', { categoryId: id });
+        logInfo('Retrieved category by ID', { categoryId: id, includeChildren, depth });
       } else {
         logInfo('Category not found', { categoryId: id });
       }
@@ -88,30 +158,22 @@ export class CategoryService {
     }
   }
 
-  async getCategoryHierarchy(): Promise<any[]> {
+  async getCategoryHierarchy(maxDepth: number = 5): Promise<any[]> {
     try {
       // Get root categories (no parent) with full hierarchy
-      const rootCategories = await prisma.category.findMany({
+      const rootCategories = await Category.findAll({
         where: {
-          parentId: null
+          parentId: null,
+          isActive: true
         },
-        include: {
-          children: {
-            include: {
-              children: {
-                include: {
-                  children: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: {
-          name: 'asc'
-        }
+        include: [this.buildChildrenInclude(maxDepth)],
+        order: [['name', 'ASC']]
       });
 
-      logInfo('Retrieved category hierarchy', { rootCount: rootCategories.length });
+      logInfo('Retrieved category hierarchy', { 
+        rootCount: rootCategories.length,
+        maxDepth 
+      });
       return rootCategories;
     } catch (error) {
       logError('Failed to retrieve category hierarchy', error as Error);
@@ -119,39 +181,94 @@ export class CategoryService {
     }
   }
 
+  async getCategoryPath(id: number): Promise<any[]> {
+    try {
+      const path: any[] = [];
+      let currentId: number | null = id;
+
+      while (currentId) {
+        const category: Category | null = await Category.findByPk(currentId, {
+          attributes: ['id', 'name', 'parentId']
+        });
+
+        if (!category) break;
+
+        path.unshift(category);
+        currentId = category.parentId || null;
+      }
+
+      logInfo('Retrieved category path', { categoryId: id, pathLength: path.length });
+      return path;
+    } catch (error) {
+      logError('Failed to retrieve category path', error as Error, { categoryId: id });
+      throw error;
+    }
+  }
+
+  async getSubcategories(parentId: number, depth: number = 1): Promise<any[]> {
+    try {
+      const includeClause = depth > 1 ? [this.buildChildrenInclude(depth - 1)] : [];
+
+      const subcategories = await Category.findAll({
+        where: {
+          parentId,
+          isActive: true
+        },
+        include: includeClause,
+        order: [['name', 'ASC']]
+      });
+
+      logInfo('Retrieved subcategories', { 
+        parentId, 
+        count: subcategories.length,
+        depth 
+      });
+      return subcategories;
+    } catch (error) {
+      logError('Failed to retrieve subcategories', error as Error, { parentId });
+      throw error;
+    }
+  }
+
   async updateCategory(id: number, data: Partial<CreateCategoryData>): Promise<any> {
     try {
       // Check if category exists
-      const existingCategory = await prisma.category.findUnique({
-        where: { id }
-      });
+      const existingCategory = await Category.findByPk(id);
 
       if (!existingCategory) {
         return null;
       }
 
-      // Filter out description field as it doesn't exist in schema
-      const { description, ...validData } = data as any;
-
       // Validate parent relationship if parentId is being updated
-      if (validData.parentId !== undefined) {
-        if (validData.parentId) {
-          const parent = await prisma.category.findUnique({
-            where: { id: validData.parentId }
-          });
+      if (data.parentId !== undefined) {
+        if (data.parentId) {
+          const parent = await Category.findByPk(data.parentId);
           if (!parent) {
             throw new Error('Parent category not found');
+          }
+
+          // Check for circular reference
+          const isCircular = await this.checkCircularReference(id, data.parentId);
+          if (isCircular) {
+            throw new Error('Cannot create circular reference in category hierarchy');
+          }
+
+          // Check if parent is active
+          if (!parent.isActive) {
+            throw new Error('Cannot move category under inactive parent');
           }
         }
       }
 
-      const updatedCategory = await prisma.category.update({
-        where: { id },
-        data: validData,
-        include: {
-          parent: true,
-          children: true
-        }
+      await Category.update(data, { where: { id } });
+      const updatedCategory = await Category.findByPk(id, {
+        include: [
+          {
+            model: Category,
+            as: 'parent',
+            attributes: ['id', 'name', 'parentId']
+          }
+        ]
       });
 
       logInfo('Category updated', { categoryId: id });
@@ -165,26 +282,33 @@ export class CategoryService {
   async deleteCategory(id: number): Promise<boolean> {
     try {
       // Check if category has children
-      const children = await prisma.category.findMany({
+      const children = await Category.findAll({
         where: { parentId: id }
       });
 
       if (children.length > 0) {
-        throw new Error('Cannot delete category with subcategories');
+        throw new Error('Cannot delete category with subcategories. Please delete or move subcategories first.');
       }
 
       // Check if any quizzes reference this category
-      const quizCount = await prisma.quiz.count({
-        where: { 
-          categoryId: id
-        }
+      const quizCount = await Quiz.count({
+        where: { categoryId: id }
       });
 
       if (quizCount > 0) {
-        throw new Error('Cannot delete category with associated quizzes');
+        throw new Error('Cannot delete category with associated quizzes. Please reassign or delete quizzes first.');
       }
 
-      await prisma.category.delete({
+      // Check if any questions reference this category
+      const questionCount = await QuestionBankItem.count({
+        where: { categoryId: id }
+      });
+
+      if (questionCount > 0) {
+        throw new Error('Cannot delete category with associated questions. Please reassign or delete questions first.');
+      }
+
+      await Category.destroy({
         where: { id }
       });
 
@@ -196,6 +320,78 @@ export class CategoryService {
     }
   }
 
+  async searchCategories(query: string, options: CategoryQueryOptions = {}): Promise<{ categories: any[], total: number }> {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        isActive = true,
+        includeChildren = false,
+        depth = 1
+      } = options;
+
+      const offset = (page - 1) * limit;
+
+      const whereClause = {
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { name: { [Op.iLike]: `%${query}%` } },
+              { description: { [Op.iLike]: `%${query}%` } }
+            ]
+          },
+          { isActive }
+        ]
+      };
+
+      const includeClause = [
+        {
+          model: Category,
+          as: 'parent',
+          attributes: ['id', 'name', 'parentId']
+        }
+      ];
+
+      if (includeChildren && depth > 0) {
+        includeClause.push(this.buildChildrenInclude(depth));
+      }
+
+      const { count, rows: categories } = await Category.findAndCountAll({
+        where: whereClause,
+        include: includeClause,
+        order: [['name', 'ASC']],
+        limit,
+        offset,
+        distinct: true
+      });
+
+      logInfo('Searched categories', { query, count, page });
+      return { categories, total: count };
+    } catch (error) {
+      logError('Failed to search categories', error as Error, { query, options });
+      throw error;
+    }
+  }
+
+  // Helper method to build nested children include for hierarchical queries
+  private buildChildrenInclude(depth: number): any {
+    if (depth <= 0) return null;
+
+    const include: any = {
+      model: Category,
+      as: 'children',
+      where: { isActive: true },
+      required: false,
+      order: [['name', 'ASC']]
+    };
+
+    if (depth > 1) {
+      include.include = [this.buildChildrenInclude(depth - 1)];
+    }
+
+    return include;
+  }
+
   private async checkCircularReference(categoryId: number, parentId: number): Promise<boolean> {
     let currentParentId: number | null = parentId;
     
@@ -204,12 +400,11 @@ export class CategoryService {
         return true;
       }
       
-      const parent: { parentId: number | null } | null = await prisma.category.findUnique({
-        where: { id: currentParentId },
-        select: { parentId: true }
+      const parent: Category | null = await Category.findByPk(currentParentId, {
+        attributes: ['parentId']
       });
       
-      currentParentId = parent?.parentId ?? null;
+      currentParentId = parent?.parentId || null;
     }
     
     return false;

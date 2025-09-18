@@ -1,3 +1,3 @@
-declare const sdk: any;
-export default sdk;
+declare const _default: {};
+export default _default;
 //# sourceMappingURL=tracing.d.ts.map

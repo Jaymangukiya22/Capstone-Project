@@ -3,6 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.quizService = exports.QuizService = void 0;
 const client_1 = require("@prisma/client");
 const logger_1 = require("../utils/logger");
+var Difficulty;
+(function (Difficulty) {
+    Difficulty["EASY"] = "EASY";
+    Difficulty["MEDIUM"] = "MEDIUM";
+    Difficulty["HARD"] = "HARD";
+})(Difficulty || (Difficulty = {}));
 const prisma = new client_1.PrismaClient();
 class QuizService {
     async createQuiz(quizData) {
@@ -344,7 +350,7 @@ class QuizService {
             if (!quiz) {
                 return null;
             }
-            const completedAttempts = quiz.attempts.filter(a => a.status === 'COMPLETED');
+            const completedAttempts = quiz.attempts.filter((a) => a.status === 'COMPLETED');
             const averageScore = completedAttempts.length > 0
                 ? completedAttempts.reduce((sum, a) => sum + a.score, 0) / completedAttempts.length
                 : 0;

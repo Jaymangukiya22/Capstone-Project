@@ -1,4 +1,8 @@
-import { Difficulty } from '@prisma/client';
+declare enum Difficulty {
+    EASY = "EASY",
+    MEDIUM = "MEDIUM",
+    HARD = "HARD"
+}
 export interface CreateQuestionBankItemData {
     questionText: string;
     categoryId: number;
@@ -254,4 +258,5 @@ export declare class QuestionBankService {
         questionText: string;
     })[]>;
 }
+export {};
 //# sourceMappingURL=questionBankService.d.ts.map

@@ -6,12 +6,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.matchService = exports.MatchService = void 0;
 const socket_io_1 = require("socket.io");
 const client_1 = require("@prisma/client");
-const redis_1 = __importDefault(require("redis"));
+const redis_1 = require("redis");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const logger_1 = require("../utils/logger");
 const uuid_1 = require("uuid");
 const prisma = new client_1.PrismaClient();
-const redis = redis_1.default.createClient({ url: process.env.REDIS_URL });
+const redis = (0, redis_1.createClient)({ url: process.env.REDIS_URL });
 class MatchService {
     constructor(server) {
         this.matches = new Map();
@@ -22,6 +22,7 @@ class MatchService {
                 methods: ["GET", "POST"]
             }
         });
+        redis.connect().catch(console.error);
         this.setupSocketHandlers();
         this.startMatchCleanup();
     }
@@ -172,7 +173,7 @@ class MatchService {
             throw new Error('Quiz not found or has no questions');
         }
         const matchId = (0, uuid_1.v4)();
-        const questions = quiz.quizQuestions.map(qq => qq.question);
+        const questions = quiz.quizQuestions.map((qq) => qq.question);
         const match = {
             id: matchId,
             quizId,

@@ -41,7 +41,8 @@ router.post('/', requireAdmin, validateRequest(createQuestionBankSchema), create
 router.put('/:id', requireAdmin, validateRequest(createQuestionBankSchema), updateQuestion);
 router.delete('/:id', requireAdmin, deleteQuestion);
 
-// Bulk import routes (Admin only)
+// Bulk operations (Admin only)
+router.post('/bulk', requireAdmin, validateRequest(bulkImportSchema), bulkImport);
 router.post('/bulk-import', requireAdmin, validateRequest(bulkImportSchema), bulkImport);
 router.post('/upload-excel', requireAdmin, uploadMiddleware, uploadExcel);
 

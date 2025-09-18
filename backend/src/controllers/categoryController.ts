@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { categoryService } from '../services/categoryService';
-import { validateCategory } from '../utils/validation';
+import { categoryService, CategoryQueryOptions } from '../services/categoryService';
+import { categorySchema, categoryUpdateSchema, categoryQuerySchema } from '../utils/validation';
 
 export class CategoryController {
   async createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { error, value } = validateCategory(req.body);
+      const { error, value } = categorySchema.validate(req.body);
       if (error) {
         res.status(400).json({
           success: false,
@@ -29,19 +29,40 @@ export class CategoryController {
 
   async getAllCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { hierarchy } = req.query;
+      const { error, value } = categoryQuerySchema.validate(req.query);
+      if (error) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+        return;
+      }
+
+      const { hierarchy, ...options } = value;
       
-      let categories;
+      let result;
       if (hierarchy === 'true') {
-        categories = await categoryService.getCategoryHierarchy();
+        const categories = await categoryService.getCategoryHierarchy(options.depth || 5);
+        result = {
+          categories,
+          total: categories.length,
+          page: 1,
+          totalPages: 1
+        };
       } else {
-        categories = await categoryService.getAllCategories();
+        result = await categoryService.getAllCategories(options as CategoryQueryOptions);
       }
 
       res.status(200).json({
         success: true,
-        data: categories,
-        count: categories.length,
+        data: result.categories,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          totalPages: result.totalPages,
+          limit: options.limit || 10
+        },
         message: 'Categories retrieved successfully'
       });
     } catch (error) {
@@ -91,7 +112,25 @@ export class CategoryController {
         return;
       }
 
-      const category = await categoryService.updateCategory(id, req.body);
+      const { error, value } = categoryUpdateSchema.validate(req.body);
+      if (error) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+        return;
+      }
+
+      const category = await categoryService.updateCategory(id, value);
+      if (!category) {
+        res.status(404).json({
+          success: false,
+          error: 'Category not found',
+          message: `Category with ID ${id} does not exist`
+        });
+        return;
+      }
 
       res.status(200).json({
         success: true,
@@ -129,6 +168,90 @@ export class CategoryController {
       res.status(200).json({
         success: true,
         message: 'Category deleted successfully'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getCategoryPath(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid category ID',
+          message: 'Category ID must be a number'
+        });
+        return;
+      }
+
+      const path = await categoryService.getCategoryPath(id);
+
+      res.status(200).json({
+        success: true,
+        data: path,
+        message: 'Category path retrieved successfully'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getSubcategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parentId = parseInt(req.params.id);
+      if (isNaN(parentId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid parent category ID',
+          message: 'Parent category ID must be a number'
+        });
+        return;
+      }
+
+      const depth = parseInt(req.query.depth as string) || 1;
+      const subcategories = await categoryService.getSubcategories(parentId, depth);
+
+      res.status(200).json({
+        success: true,
+        data: subcategories,
+        count: subcategories.length,
+        message: 'Subcategories retrieved successfully'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async searchCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.trim().length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Search query required',
+          message: 'Please provide a search query parameter "q"'
+        });
+        return;
+      }
+
+      const options: CategoryQueryOptions = {
+        page: parseInt(req.query.page as string) || 1,
+        limit: parseInt(req.query.limit as string) || 10,
+        isActive: req.query.isActive === 'false' ? false : true,
+        includeChildren: req.query.includeChildren === 'true',
+        depth: parseInt(req.query.depth as string) || 1
+      };
+
+      const result = await categoryService.searchCategories(query.trim(), options);
+
+      res.status(200).json({
+        success: true,
+        data: result.categories,
+        total: result.total,
+        query: query.trim(),
+        message: 'Categories search completed successfully'
       });
     } catch (error) {
       next(error);

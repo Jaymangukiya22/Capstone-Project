@@ -1,9 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, UserRole } from '@prisma/client';
+import { User, UserRole } from '../models';
 import { logError } from '../utils/logger';
-
-const prisma = new PrismaClient();
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -45,15 +43,8 @@ export const authenticateToken = async (
     const decoded = jwt.verify(token, jwtSecret) as any;
     
     // Fetch user from database to ensure they still exist and are active
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        isActive: true
-      }
+    const user = await User.findByPk(decoded.userId, {
+      attributes: ['id', 'username', 'email', 'role', 'isActive']
     });
 
     if (!user || !user.isActive) {

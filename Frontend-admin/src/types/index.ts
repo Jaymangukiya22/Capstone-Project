@@ -12,6 +12,8 @@ export interface Subcategory {
   name: string;
   description?: string;
   categoryId: string;
+  parentSubcategoryId?: string; // For nested subcategories
+  subcategories: Subcategory[]; // Child subcategories
   quizzes: Quiz[];
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +25,26 @@ export interface Quiz {
   description?: string;
   mode: QuizMode;
   subcategoryId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  options: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
+  correctOption: 'A' | 'B' | 'C' | 'D';
+  difficulty: 'easy' | 'intermediate' | 'hard';
+  points: number;
+  timeLimit: number; // in seconds
+  tags: string[];
+  categoryId?: string; // null for global questions
+  subcategoryId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

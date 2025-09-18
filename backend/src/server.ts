@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import promBundle from 'express-prom-bundle';
-import { PrismaClient } from '@prisma/client';
+import { connectDatabase } from './models';
 
 // Import routes
 import categoryRoutes from './routes/categoryRoutes';
@@ -16,6 +16,7 @@ import questionRoutes from './routes/questionRoutes';
 import authRoutes from './routes/authRoutes';
 import questionBankRoutes from './routes/questionBankRoutes';
 import quizAttemptRoutes from './routes/quizAttemptRoutes';
+import adminRoutes from './routes/adminRoutes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -29,9 +30,6 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Initialize Prisma Client
-export const prisma = new PrismaClient();
 
 // Prometheus metrics middleware
 const metricsMiddleware = promBundle({
@@ -65,6 +63,35 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug endpoint to check routes
+app.get('/debug/routes', (req, res) => {
+  const routes: any[] = [];
+  
+  app._router.stack.forEach((middleware: any) => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler: any) => {
+        if (handler.route) {
+          routes.push({
+            path: handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
+    }
+  });
+  
+  res.json({
+    success: true,
+    data: routes,
+    message: 'Available routes'
+  });
+});
+
 // Metrics endpoint (exposed by express-prom-bundle)
 // Available at /metrics
 
@@ -75,6 +102,7 @@ app.use('/api/quizzes', quizRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/question-bank', questionBankRoutes);
 app.use('/api/quiz-attempts', quizAttemptRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -91,21 +119,19 @@ app.use(errorHandler);
 // Graceful shutdown
 process.on('SIGINT', async () => {
   logInfo('Received SIGINT, shutting down gracefully...');
-  await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   logInfo('Received SIGTERM, shutting down gracefully...');
-  await prisma.$disconnect();
   process.exit(0);
 });
 
 // Start server
 async function startServer() {
   try {
-    // Test database connection
-    await prisma.$connect();
+    // Connect to database
+    await connectDatabase();
     logInfo('Connected to PostgreSQL database');
 
     app.listen(PORT, () => {

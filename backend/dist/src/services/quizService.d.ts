@@ -1,4 +1,8 @@
-import { Difficulty } from '@prisma/client';
+declare enum Difficulty {
+    EASY = "EASY",
+    MEDIUM = "MEDIUM",
+    HARD = "HARD"
+}
 export interface CreateQuizData {
     title: string;
     description?: string;
@@ -316,4 +320,5 @@ export declare class QuizService {
     })[]>;
 }
 export declare const quizService: QuizService;
+export {};
 //# sourceMappingURL=quizService.d.ts.map

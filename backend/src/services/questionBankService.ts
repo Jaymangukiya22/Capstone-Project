@@ -1,14 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { QuestionBankItem, QuestionBankOption, Category, User, Difficulty } from '../models';
 import { logInfo, logError } from '../utils/logger';
-
-enum Difficulty {
-  EASY = 'EASY',
-  MEDIUM = 'MEDIUM',
-  HARD = 'HARD'
-}
+import { Op } from 'sequelize';
 import * as XLSX from 'xlsx';
-
-const prisma = new PrismaClient();
 
 export interface CreateQuestionBankItemData {
   questionText: string;
@@ -37,26 +30,33 @@ export interface BulkImportData {
 export class QuestionBankService {
   async createQuestion(data: CreateQuestionBankItemData) {
     try {
-      const question = await prisma.questionBankItem.create({
-        data: {
-          questionText: data.questionText,
-          categoryId: data.categoryId,
-          difficulty: data.difficulty,
-          createdById: data.createdById,
-          options: {
-            create: data.options
+      // Create question
+      const question = await QuestionBankItem.create({
+        questionText: data.questionText,
+        categoryId: data.categoryId,
+        difficulty: data.difficulty,
+        createdById: data.createdById
+      });
+
+      // Create options
+      const options = await QuestionBankOption.bulkCreate(
+        data.options.map(option => ({
+          ...option,
+          questionId: question.id
+        }))
+      );
+
+      // Fetch complete question with associations
+      const completeQuestion = await QuestionBankItem.findByPk(question.id, {
+        include: [
+          { model: QuestionBankOption, as: 'options' },
+          { model: Category, as: 'category' },
+          { 
+            model: User, 
+            as: 'createdBy',
+            attributes: ['id', 'username']
           }
-        },
-        include: {
-          options: true,
-          category: true,
-          createdBy: {
-            select: {
-              id: true,
-              username: true
-            }
-          }
-        }
+        ]
       });
 
       logInfo('Question bank item created', { questionId: question.id });
@@ -72,28 +72,25 @@ export class QuestionBankService {
       const skip = (page - 1) * limit;
       
       const [questions, total] = await Promise.all([
-        prisma.questionBankItem.findMany({
+        QuestionBankItem.findAll({
           where: {
             categoryId,
             isActive: true
           },
-          include: {
-            options: true,
-            category: true,
-            createdBy: {
-              select: {
-                id: true,
-                username: true
-              }
+          include: [
+            { model: QuestionBankOption, as: 'options' },
+            { model: Category, as: 'category' },
+            { 
+              model: User, 
+              as: 'createdBy',
+              attributes: ['id', 'username']
             }
-          },
-          skip,
-          take: limit,
-          orderBy: {
-            createdAt: 'desc'
-          }
+          ],
+          offset: skip,
+          limit,
+          order: [['createdAt', 'DESC']]
         }),
-        prisma.questionBankItem.count({
+        QuestionBankItem.count({
           where: {
             categoryId,
             isActive: true
@@ -126,25 +123,22 @@ export class QuestionBankService {
       }
 
       const [questions, total] = await Promise.all([
-        prisma.questionBankItem.findMany({
+        QuestionBankItem.findAll({
           where,
-          include: {
-            options: true,
-            category: true,
-            createdBy: {
-              select: {
-                id: true,
-                username: true
-              }
+          include: [
+            { model: QuestionBankOption, as: 'options' },
+            { model: Category, as: 'category' },
+            { 
+              model: User, 
+              as: 'createdBy',
+              attributes: ['id', 'username']
             }
-          },
-          skip,
-          take: limit,
-          orderBy: {
-            createdAt: 'desc'
-          }
+          ],
+          offset: skip,
+          limit,
+          order: [['createdAt', 'DESC']]
         }),
-        prisma.questionBankItem.count({ where })
+        QuestionBankItem.count({ where })
       ]);
 
       return {
@@ -164,18 +158,16 @@ export class QuestionBankService {
 
   async getQuestionById(id: number) {
     try {
-      const question = await prisma.questionBankItem.findUnique({
-        where: { id },
-        include: {
-          options: true,
-          category: true,
-          createdBy: {
-            select: {
-              id: true,
-              username: true
-            }
+      const question = await QuestionBankItem.findByPk(id, {
+        include: [
+          { model: QuestionBankOption, as: 'options' },
+          { model: Category, as: 'category' },
+          { 
+            model: User, 
+            as: 'createdBy',
+            attributes: ['id', 'username']
           }
-        }
+        ]
       });
 
       return question;
@@ -193,31 +185,37 @@ export class QuestionBankService {
         difficulty: data.difficulty
       };
 
+      // Update the question
+      await QuestionBankItem.update(updateData, {
+        where: { id }
+      });
+
       // If options are provided, update them
       if (data.options) {
         // Delete existing options and create new ones
-        await prisma.questionBankOption.deleteMany({
+        await QuestionBankOption.destroy({
           where: { questionId: id }
         });
 
-        updateData.options = {
-          create: data.options
-        };
+        await QuestionBankOption.bulkCreate(
+          data.options.map(option => ({
+            ...option,
+            questionId: id
+          }))
+        );
       }
 
-      const question = await prisma.questionBankItem.update({
-        where: { id },
-        data: updateData,
-        include: {
-          options: true,
-          category: true,
-          createdBy: {
-            select: {
-              id: true,
-              username: true
-            }
+      // Fetch updated question with associations
+      const question = await QuestionBankItem.findByPk(id, {
+        include: [
+          { model: QuestionBankOption, as: 'options' },
+          { model: Category, as: 'category' },
+          { 
+            model: User, 
+            as: 'createdBy',
+            attributes: ['id', 'username']
           }
-        }
+        ]
       });
 
       logInfo('Question bank item updated', { questionId: id });
@@ -230,10 +228,10 @@ export class QuestionBankService {
 
   async deleteQuestion(id: number) {
     try {
-      await prisma.questionBankItem.update({
-        where: { id },
-        data: { isActive: false }
-      });
+      await QuestionBankItem.update(
+        { isActive: false },
+        { where: { id } }
+      );
 
       logInfo('Question bank item deleted (soft delete)', { questionId: id });
       return true;
@@ -349,21 +347,18 @@ export class QuestionBankService {
         where.difficulty = difficulty;
       }
 
-      const questions = await prisma.questionBankItem.findMany({
+      const questions = await QuestionBankItem.findAll({
         where,
-        include: {
-          options: true,
-          category: true,
-          createdBy: {
-            select: {
-              id: true,
-              username: true
-            }
+        include: [
+          { model: QuestionBankOption, as: 'options' },
+          { model: Category, as: 'category' },
+          { 
+            model: User, 
+            as: 'createdBy',
+            attributes: ['id', 'username']
           }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
+        ],
+        order: [['createdAt', 'DESC']]
       });
 
       return questions;

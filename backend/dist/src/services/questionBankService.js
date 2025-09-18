@@ -36,6 +36,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.QuestionBankService = void 0;
 const client_1 = require("@prisma/client");
 const logger_1 = require("../utils/logger");
+var Difficulty;
+(function (Difficulty) {
+    Difficulty["EASY"] = "EASY";
+    Difficulty["MEDIUM"] = "MEDIUM";
+    Difficulty["HARD"] = "HARD";
+})(Difficulty || (Difficulty = {}));
 const XLSX = __importStar(require("xlsx"));
 const prisma = new client_1.PrismaClient();
 class QuestionBankService {

@@ -1,4 +1,7 @@
-import { UserRole } from '@prisma/client';
+export declare enum UserRole {
+    ADMIN = "ADMIN",
+    PLAYER = "PLAYER"
+}
 export interface TokenPayload {
     userId: number;
     username: string;

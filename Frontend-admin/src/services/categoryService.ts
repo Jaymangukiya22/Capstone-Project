@@ -1,5 +1,4 @@
 import { apiClient } from './api';
-import type { ApiResponse } from './api';
 import type { Category, CreateCategoryDto, UpdateCategoryDto } from '../types/api';
 
 /**
@@ -13,8 +12,8 @@ export class CategoryService {
    */
   async getAllCategories(): Promise<Category[]> {
     try {
-      const response = await apiClient.get<ApiResponse<Category[]>>(this.endpoint);
-      return response.data.data;
+      const response = await apiClient.get<Category[]>(this.endpoint);
+      return response.data;
     } catch (error) {
       console.error('Error fetching categories:', error);
       throw error;
@@ -26,8 +25,8 @@ export class CategoryService {
    */
   async getCategoryById(id: number): Promise<Category> {
     try {
-      const response = await apiClient.get<ApiResponse<Category>>(`${this.endpoint}/${id}`);
-      return response.data.data;
+      const response = await apiClient.get<Category>(`${this.endpoint}/${id}`);
+      return response.data;
     } catch (error) {
       console.error(`Error fetching category ${id}:`, error);
       throw error;
@@ -39,8 +38,8 @@ export class CategoryService {
    */
   async createCategory(categoryData: CreateCategoryDto): Promise<Category> {
     try {
-      const response = await apiClient.post<ApiResponse<Category>>(this.endpoint, categoryData);
-      return response.data.data;
+      const response = await apiClient.post<Category>(this.endpoint, categoryData);
+      return response.data;
     } catch (error) {
       console.error('Error creating category:', error);
       throw error;
@@ -52,8 +51,8 @@ export class CategoryService {
    */
   async updateCategory(id: number, categoryData: UpdateCategoryDto): Promise<Category> {
     try {
-      const response = await apiClient.put<ApiResponse<Category>>(`${this.endpoint}/${id}`, categoryData);
-      return response.data.data;
+      const response = await apiClient.put<Category>(`${this.endpoint}/${id}`, categoryData);
+      return response.data;
     } catch (error) {
       console.error(`Error updating category ${id}:`, error);
       throw error;
@@ -77,8 +76,8 @@ export class CategoryService {
    */
   async getCategoryHierarchy(): Promise<Category[]> {
     try {
-      const response = await apiClient.get<ApiResponse<Category[]>>(`${this.endpoint}?hierarchy=true`);
-      return response.data.data;
+      const response = await apiClient.get<Category[]>(`${this.endpoint}?hierarchy=true`);
+      return response.data;
     } catch (error) {
       console.error('Error fetching category hierarchy:', error);
       throw error;
@@ -90,8 +89,8 @@ export class CategoryService {
    */
   async getSubcategories(parentId: number): Promise<Category[]> {
     try {
-      const response = await apiClient.get<ApiResponse<Category[]>>(`${this.endpoint}?parentId=${parentId}`);
-      return response.data.data;
+      const response = await apiClient.get<Category[]>(`${this.endpoint}?parentId=${parentId}`);
+      return response.data;
     } catch (error) {
       console.error(`Error fetching subcategories for parent ${parentId}:`, error);
       throw error;

@@ -25,6 +25,7 @@ router.use(authenticateToken);
 // Public routes (for all authenticated users)
 router.get('/search', searchQuizzes);
 router.get('/popular', getPopularQuizzes);
+router.get('/', searchQuizzes); // Use searchQuizzes for getting all quizzes with filtering
 router.get('/:id', getQuizById);
 router.get('/:id/play', requirePlayer, getQuizForPlay);
 router.get('/:id/stats', getQuizStats);

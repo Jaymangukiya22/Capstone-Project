@@ -3,6 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.quizAttemptService = exports.QuizAttemptService = void 0;
 const client_1 = require("@prisma/client");
 const logger_1 = require("../utils/logger");
+var QuizAttemptStatus;
+(function (QuizAttemptStatus) {
+    QuizAttemptStatus["IN_PROGRESS"] = "IN_PROGRESS";
+    QuizAttemptStatus["COMPLETED"] = "COMPLETED";
+    QuizAttemptStatus["ABANDONED"] = "ABANDONED";
+})(QuizAttemptStatus || (QuizAttemptStatus = {}));
 const prisma = new client_1.PrismaClient();
 class QuizAttemptService {
     async startQuizAttempt(data) {
@@ -103,8 +109,8 @@ class QuizAttemptService {
                 throw new Error('Answer already submitted for this question');
             }
             const correctOptionIds = quizQuestion.question.options
-                .filter(opt => opt.isCorrect)
-                .map(opt => opt.id);
+                .filter((opt) => opt.isCorrect)
+                .map((opt) => opt.id);
             const isCorrect = data.selectedOptions.length === correctOptionIds.length &&
                 data.selectedOptions.every(id => correctOptionIds.includes(id));
             const answer = await prisma.quizAnswer.create({
@@ -270,7 +276,7 @@ class QuizAttemptService {
                         }
                     },
                     orderBy: {
-                        createdAt: 'desc'
+                        startedAt: 'desc'
                     },
                     skip,
                     take: limit
@@ -382,7 +388,7 @@ class QuizAttemptService {
                         }
                     },
                     orderBy: {
-                        createdAt: 'desc'
+                        startedAt: 'desc'
                     },
                     take: 5
                 })
@@ -395,9 +401,9 @@ class QuizAttemptService {
                 ? attempts.reduce((sum, a) => sum + a.score, 0) / completedAttempts
                 : 0;
             const difficultyStats = {
-                EASY: attempts.filter(a => a.quiz.difficulty === 'EASY').length,
-                MEDIUM: attempts.filter(a => a.quiz.difficulty === 'MEDIUM').length,
-                HARD: attempts.filter(a => a.quiz.difficulty === 'HARD').length
+                EASY: attempts.filter((a) => a.quiz.difficulty === 'EASY').length,
+                MEDIUM: attempts.filter((a) => a.quiz.difficulty === 'MEDIUM').length,
+                HARD: attempts.filter((a) => a.quiz.difficulty === 'HARD').length
             };
             return {
                 user,

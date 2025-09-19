@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout/Layout"
 import { Categories } from "@/pages/Categories"
 import { QuizBuilder } from "@/pages/QuizBuilder"
 import { QuestionBank } from "@/pages/QuestionBank"
+import { Students } from "@/pages/Students"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { ApiTest } from "@/components/ApiTest"
 
@@ -11,6 +12,8 @@ function App() {
   
   const renderPage = () => {
     switch (currentPath) {
+      case '/student':
+        return <Students />
       case '/quiz-builder':
         return <QuizBuilder />
       case '/question-bank':

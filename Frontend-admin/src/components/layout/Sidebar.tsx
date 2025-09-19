@@ -31,7 +31,7 @@ const navigation = [
   },
   {
     name: "Students",
-    href: "/students",
+    href: "/student",
     icon: GraduationCap,
     current: false,
   },

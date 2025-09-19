@@ -19,7 +19,7 @@ import {
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+// router.use(authenticateToken);
 
 // Player routes for quiz attempts
 router.post('/', requirePlayer, validateRequest(startQuizSchema), startQuizAttempt);

@@ -8,6 +8,7 @@ import {
   deleteQuestion,
   bulkImport,
   uploadExcel,
+  downloadTemplate,
   searchQuestions,
   uploadMiddleware
 } from '../controllers/questionBankController';
@@ -40,6 +41,9 @@ router.get('/:id', getQuestionById);
 router.post('/', requireAdmin, validateRequest(createQuestionBankSchema), createQuestion);
 router.put('/:id', requireAdmin, validateRequest(createQuestionBankSchema), updateQuestion);
 router.delete('/:id', requireAdmin, deleteQuestion);
+
+// Template download (Admin only)
+router.get('/template', requireAdmin, downloadTemplate);
 
 // Bulk operations (Admin only)
 router.post('/bulk', requireAdmin, validateRequest(bulkImportSchema), bulkImport);

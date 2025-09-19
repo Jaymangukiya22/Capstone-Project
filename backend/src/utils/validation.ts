@@ -42,7 +42,7 @@ export const categoryUpdateSchema = Joi.object({
 
 export const categoryQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).optional().default(1),
-  limit: Joi.number().integer().min(1).max(100).optional().default(10),
+  limit: Joi.number().integer().min(1).max(10000).optional().default(10),
   parentId: Joi.alternatives().try(
     Joi.number().integer().positive(),
     Joi.string().valid('null'),
@@ -104,6 +104,13 @@ export const bulkImportSchema = Joi.object({
   ).min(1).required()
 });
 
+// Excel upload validation schema
+export const excelUploadSchema = Joi.object({
+  categoryId: Joi.number().integer().positive().required(),
+  includeSubcategories: Joi.boolean().optional().default(false),
+  subcategoryDepth: Joi.number().integer().min(1).max(10).optional().default(10)
+});
+
 // Quiz Question Assignment
 export const assignQuestionsSchema = Joi.object({
   questionIds: Joi.array().items(Joi.number().integer().positive()).min(1).required()
@@ -125,7 +132,7 @@ export const searchQuestionsSchema = Joi.object({
   categoryId: Joi.number().integer().positive().optional(),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').optional(),
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20)
+  limit: Joi.number().integer().min(1).max(10000).default(20)
 });
 
 export const searchQuizzesSchema = Joi.object({
@@ -133,7 +140,7 @@ export const searchQuizzesSchema = Joi.object({
   categoryId: Joi.number().integer().positive().optional(),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').optional(),
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20)
+  limit: Joi.number().integer().min(1).max(10000).default(20)
 });
 
 // Question validation schemas (legacy)

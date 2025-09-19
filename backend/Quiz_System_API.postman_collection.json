@@ -613,6 +613,200 @@
       "name": "Question Bank",
       "item": [
         {
+          "name": "Download Excel Template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/template",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "template"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Download Template - Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Template is Excel file', function () {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('spreadsheetml');",
+                  "});",
+                  "",
+                  "console.log('✅ Excel template downloaded successfully');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Excel - Single Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "includeSubcategories",
+                  "value": "false",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/upload-excel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "upload-excel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Excel Upload - Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.test('Excel upload successful', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.summary).to.be.an('object');",
+                  "            pm.expect(response.data.summary.successfulImports).to.be.a('number');",
+                  "        });",
+                  "        console.log('✅ Excel uploaded successfully');",
+                  "        console.log('   - Total rows: ' + response.data.summary.totalRows);",
+                  "        console.log('   - Successful: ' + response.data.summary.successfulImports);",
+                  "        console.log('   - Failed: ' + response.data.summary.failedImports);",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Excel upload failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Excel - Include Subcategories",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "includeSubcategories",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "subcategoryDepth",
+                  "value": "3",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/upload-excel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "upload-excel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Excel Upload with Subcategories - Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data) {",
+                  "        pm.test('Excel upload with subcategories successful', function () {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.data.summary.categoryDistribution).to.be.an('object');",
+                  "        });",
+                  "        console.log('✅ Excel uploaded to multiple categories successfully');",
+                  "        console.log('   - Category distribution:', JSON.stringify(response.data.summary.categoryDistribution));",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Excel upload with subcategories failed - Status: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bulk Create Questions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": 1,\n  \"questions\": [\n    {\n      \"questionText\": \"What is the capital of France?\",\n      \"difficulty\": \"EASY\",\n      \"options\": [\n        {\n          \"optionText\": \"London\",\n          \"isCorrect\": false\n        },\n        {\n          \"optionText\": \"Paris\",\n          \"isCorrect\": true\n        },\n        {\n          \"optionText\": \"Berlin\",\n          \"isCorrect\": false\n        },\n        {\n          \"optionText\": \"Madrid\",\n          \"isCorrect\": false\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/question-bank/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "question-bank", "bulk"]
+            }
+          }
+        },
+        {
           "name": "Create Question (Admin)",
           "request": {
             "method": "POST",

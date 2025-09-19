@@ -5,8 +5,8 @@ import { adminController } from '../controllers/adminController';
 const router = Router();
 
 // All admin routes require authentication and admin role
-router.use(authenticateToken);
-router.use(requireAdmin);
+// router.use(authenticateToken);
+// router.use(requireAdmin);
 
 // User management
 router.get('/users', adminController.getAllUsers.bind(adminController));

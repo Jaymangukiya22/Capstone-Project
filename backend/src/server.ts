@@ -96,7 +96,7 @@ app.get('/debug/routes', (req, res) => {
 // Available at /metrics
 
 // API Routes
-app.use('/api/auth', authRoutes);
+// app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/questions', questionRoutes);

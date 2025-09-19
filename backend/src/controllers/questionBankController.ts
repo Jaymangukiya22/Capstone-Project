@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { QuestionBankService } from '../services/questionBankService';
+import { excelUploadService } from '../services/excelUploadService';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { logError } from '../utils/logger';
+import { logError, logInfo } from '../utils/logger';
 import multer from 'multer';
 
 const questionBankService = new QuestionBankService();
@@ -208,6 +209,9 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
     }
 
     const categoryId = parseInt(req.body.categoryId);
+    const includeSubcategories = req.body.includeSubcategories === 'true';
+    const subcategoryDepth = req.body.subcategoryDepth ? parseInt(req.body.subcategoryDepth) : 10;
+
     if (!categoryId) {
       res.status(400).json({
         success: false,
@@ -219,29 +223,40 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
 
     const createdById = req.user!.id;
 
-    // Parse Excel file
-    const questions = await questionBankService.parseExcelFile(req.file.buffer);
-
-    if (questions.length === 0) {
-      res.status(400).json({
-        success: false,
-        error: 'No valid questions found',
-        message: 'The Excel file does not contain any valid questions'
-      });
-      return;
-    }
-
-    // Import questions
-    const result = await questionBankService.bulkImport({
+    logInfo('Starting Excel upload', {
       categoryId,
-      createdById,
-      questions
+      includeSubcategories,
+      subcategoryDepth,
+      fileSize: req.file.size,
+      fileName: req.file.originalname
+    });
+
+    // Import questions using enhanced Excel service
+    const result = await excelUploadService.importQuestionsFromExcel(req.file.buffer, {
+      categoryId,
+      includeSubcategories,
+      subcategoryDepth,
+      createdById
     });
 
     res.status(201).json({
       success: true,
-      message: `Successfully imported ${result.imported} questions from Excel file`,
-      data: result
+      message: `Successfully imported ${result.successfulImports} out of ${result.totalRows} questions`,
+      data: {
+        summary: {
+          totalRows: result.totalRows,
+          successfulImports: result.successfulImports,
+          failedImports: result.failedImports,
+          categoryDistribution: result.categoryDistribution
+        },
+        errors: result.errors,
+        importedQuestions: result.importedQuestions.map(q => ({
+          id: q.id,
+          questionText: q.questionText,
+          difficulty: q.difficulty,
+          categoryId: q.categoryId
+        }))
+      }
     });
   } catch (error) {
     logError('Error uploading Excel file', error as Error);
@@ -249,6 +264,23 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
       success: false,
       error: 'Failed to process Excel file',
       message: error instanceof Error ? error.message : 'An error occurred while processing the file'
+    });
+  }
+};
+
+export const downloadTemplate = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const templateBuffer = excelUploadService.generateTemplate();
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=question-import-template.xlsx');
+    res.send(templateBuffer);
+  } catch (error) {
+    logError('Error generating template', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate template',
+      message: 'An error occurred while generating the template'
     });
   }
 };

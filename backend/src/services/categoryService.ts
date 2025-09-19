@@ -174,6 +174,17 @@ export class CategoryService {
         rootCount: rootCategories.length,
         maxDepth 
       });
+      
+      // Debug: Log the structure of each root category
+      rootCategories.forEach((cat, index) => {
+        console.log(`🔍 Root Category ${index + 1}:`, {
+          id: cat.id,
+          name: cat.name,
+          children: cat.children?.length || 0,
+          hasChildren: !!cat.children
+        });
+      });
+      
       return rootCategories;
     } catch (error) {
       logError('Failed to retrieve category hierarchy', error as Error);

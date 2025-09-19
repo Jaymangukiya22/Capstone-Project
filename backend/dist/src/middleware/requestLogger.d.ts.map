@@ -1,1 +1,0 @@
-{"version":3,"file":"requestLogger.d.ts","sourceRoot":"","sources":["../../../src/middleware/requestLogger.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AA8B5C,eAAO,MAAM,aAAa,oLA1BL,CAAC,yBAmCrB,CAAC;AAGF,eAAO,MAAM,qBAAqB,GAAI,KAAK,OAAO,EAAE,KAAK,QAAQ,EAAE,MAAM,QAAQ,SA2ChF,CAAC;AAEF,eAAe,aAAa,CAAC"}

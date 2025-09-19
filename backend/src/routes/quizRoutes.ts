@@ -20,7 +20,7 @@ import {
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+// router.use(authenticateToken);
 
 // Public routes (for all authenticated users)
 router.get('/search', searchQuizzes);

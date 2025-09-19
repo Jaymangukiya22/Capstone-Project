@@ -9,16 +9,24 @@ import {
   FolderTree,
   BookOpen,
   Clock,
-  Users
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react'
 import { mockStudentCategories, type StudentQuiz } from '@/data/mockStudentData'
 
 interface CategoryTreePanelProps {
   selectedQuizId?: string
   onQuizSelect: (quiz: StudentQuiz) => void
+  isCollapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
-export function CategoryTreePanel({ selectedQuizId, onQuizSelect }: CategoryTreePanelProps) {
+export function CategoryTreePanel({ 
+  selectedQuizId,
+  onQuizSelect, 
+  isCollapsed = false,
+  onToggleCollapse
+}: CategoryTreePanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['1'])) // Expand first category by default
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<string>>(new Set(['1-1'])) // Expand first subcategory by default
@@ -66,26 +74,60 @@ export function CategoryTreePanel({ selectedQuizId, onQuizSelect }: CategoryTree
   }
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+    <div className={cn(
+      "h-full flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300",
+      isCollapsed ? "w-12" : "w-80"
+    )}>
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Available Quizzes</h2>
+        <div className="flex items-center justify-between mb-3">
+          {!isCollapsed && (
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Available Quizzes</h2>
+          )}
+          <button
+            onClick={onToggleCollapse}
+            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4 text-gray-500" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4 text-gray-500" />
+            )}
+          </button>
+        </div>
         
         {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search quizzes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+        {!isCollapsed && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search quizzes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        )}
       </div>
 
       {/* Tree Content */}
       <div className="flex-1 overflow-y-auto p-2">
-        {filteredCategories.length === 0 ? (
+        {isCollapsed ? (
+          /* Collapsed view - show minimal icons */
+          <div className="space-y-2">
+            {mockStudentCategories.map((category) => (
+              <div
+                key={category.id}
+                className="flex items-center justify-center p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                title={category.name}
+                onClick={() => onToggleCollapse?.()}
+              >
+                <FolderTree className="h-5 w-5 text-blue-500" />
+              </div>
+            ))}
+          </div>
+        ) : filteredCategories.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No quizzes found</p>
@@ -172,8 +214,8 @@ export function CategoryTreePanel({ selectedQuizId, onQuizSelect }: CategoryTree
                                       <span>{quiz.estimatedDuration}m</span>
                                     </div>
                                     <div className="flex items-center">
-                                      <Users className="h-3 w-3 mr-1" />
-                                      <span>{quiz.maxPlayers}</span>
+                                      {/* <Users className="h-3 w-3 mr-1" /> */}
+                                      {/* <span>{quiz.maxPlayers}</span> */}
                                     </div>
                                   </div>
                                 </div>

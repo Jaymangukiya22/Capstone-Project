@@ -12,7 +12,7 @@ export interface StudentQuiz {
     total: number
   }
   estimatedDuration: number // in minutes
-  maxPlayers: number
+  passingScore: number // percentage required to pass
   timePerQuestion: number // in seconds
   lastUpdated: Date
   isActive: boolean
@@ -59,7 +59,7 @@ export const mockStudentCategories: StudentCategory[] = [
               total: 15
             },
             estimatedDuration: 8,
-            maxPlayers: 10,
+            passingScore: 75,
             timePerQuestion: 30,
             lastUpdated: new Date('2024-01-15'),
             isActive: true
@@ -78,7 +78,7 @@ export const mockStudentCategories: StudentCategory[] = [
               total: 20
             },
             estimatedDuration: 12,
-            maxPlayers: 8,
+            passingScore: 70,
             timePerQuestion: 35,
             lastUpdated: new Date('2024-01-20'),
             isActive: true
@@ -104,7 +104,7 @@ export const mockStudentCategories: StudentCategory[] = [
               total: 20
             },
             estimatedDuration: 10,
-            maxPlayers: 12,
+            passingScore: 80,
             timePerQuestion: 30,
             lastUpdated: new Date('2024-01-18'),
             isActive: true
@@ -137,7 +137,7 @@ export const mockStudentCategories: StudentCategory[] = [
               total: 15
             },
             estimatedDuration: 9,
-            maxPlayers: 15,
+            passingScore: 65,
             timePerQuestion: 35,
             lastUpdated: new Date('2024-01-22'),
             isActive: true
@@ -163,7 +163,7 @@ export const mockStudentCategories: StudentCategory[] = [
               total: 20
             },
             estimatedDuration: 15,
-            maxPlayers: 10,
+            passingScore: 85,
             timePerQuestion: 45,
             lastUpdated: new Date('2024-01-25'),
             isActive: true
@@ -196,7 +196,7 @@ export const mockStudentCategories: StudentCategory[] = [
               total: 20
             },
             estimatedDuration: 7,
-            maxPlayers: 20,
+            passingScore: 60,
             timePerQuestion: 20,
             lastUpdated: new Date('2024-01-12'),
             isActive: true

@@ -1,5 +1,4 @@
 import { 
-  LayoutDashboard, 
   FolderTree, 
   FileQuestion, 
   Users, 
@@ -10,30 +9,25 @@ import {
 import { cn } from "@/lib/utils"
 
 const navigation = [
-  
   {
     name: "Categories",
     href: "/categories",
     icon: FolderTree,
-    current: true,
   },
   {
     name: "Quiz Builder",
     href: "/quiz-builder",
     icon: FileQuestion,
-    current: false,
   },
   {
     name: "Faculties",
     href: "/faculties",
     icon: Users,
-    current: false,
   },
   {
     name: "Students",
     href: "/student",
     icon: GraduationCap,
-    current: false,
   },
 ]
 
@@ -42,17 +36,17 @@ const bottomNavigation = [
     name: "Settings",
     href: "/settings",
     icon: Settings,
-    current: false,
   },
   {
     name: "Help",
     href: "/help",
     icon: HelpCircle,
-    current: false,
   },
 ]
 
 export function Sidebar() {
+  // Get current path to determine active navigation item
+  const currentPath = window.location.pathname
   return (
     <div className="flex h-screen w-64 flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
       {/* Header */}
@@ -75,20 +69,21 @@ export function Sidebar() {
         </div>
         {navigation.map((item) => {
           const Icon = item.icon
+          const isActive = currentPath === item.href || (item.href === '/categories' && currentPath === '/')
           return (
             <a
               key={item.name}
               href={item.href}
               className={cn(
                 "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150",
-                item.current
+                isActive
                   ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-r-2 border-blue-600"
                   : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
               )}
             >
               <Icon className={cn(
                 "mr-3 h-5 w-5",
-                item.current 
+                isActive 
                   ? "text-blue-600 dark:text-blue-400" 
                   : "text-gray-400 dark:text-gray-500"
               )} />
@@ -103,9 +98,19 @@ export function Sidebar() {
           </div>
           <a
             href="/question-bank"
-            className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
+            className={cn(
+              "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150",
+              currentPath === '/question-bank'
+                ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-r-2 border-blue-600"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
+            )}
           >
-            <FileQuestion className="mr-3 h-5 w-5 text-gray-400 dark:text-gray-500" />
+            <FileQuestion className={cn(
+              "mr-3 h-5 w-5",
+              currentPath === '/question-bank'
+                ? "text-blue-600 dark:text-blue-400" 
+                : "text-gray-400 dark:text-gray-500"
+            )} />
             Question Bank
           </a>
         </div>

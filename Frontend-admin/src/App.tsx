@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout/Layout"
 import { Categories } from "@/pages/Categories"
 import { QuizBuilder } from "@/pages/QuizBuilder"
+import { QuizManagement } from "@/pages/QuizManagement"
 import { QuestionBank } from "@/pages/QuestionBank"
 import { Students } from "@/pages/Students"
 import { ThemeProvider } from "@/hooks/useTheme"
@@ -16,6 +17,8 @@ function App() {
         return <Students />
       case '/quiz-builder':
         return <QuizBuilder />
+      case '/quiz-management':
+        return <QuizManagement />
       case '/question-bank':
         return <QuestionBank />
       case '/categories':

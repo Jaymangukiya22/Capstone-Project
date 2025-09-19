@@ -187,6 +187,13 @@ export function QuestionBank() {
     setQuestions(prev => [...prev, ...newQuestions])
   }
 
+  const handleBackendImport = (result: any) => {
+    console.log('Backend import result:', result)
+    // Optionally refresh the questions list from backend
+    // For now, just show success message
+    alert(`Successfully imported ${result.summary?.successfulImports || 0} questions!`)
+  }
+
   const handleExportQuestions = () => {
     // TODO: Implement export functionality
     const questionsToExport = selectedQuestions.size > 0 
@@ -245,6 +252,7 @@ export function QuestionBank() {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         onImport={handleImportQuestions}
+        onBackendImport={handleBackendImport}
       />
     </div>
   )

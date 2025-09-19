@@ -5,7 +5,8 @@ import {
   Users, 
   GraduationCap,
   Settings,
-  HelpCircle
+  HelpCircle,
+  ClipboardList
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +22,12 @@ const navigation = [
     name: "Quiz Builder",
     href: "/quiz-builder",
     icon: FileQuestion,
+    current: false,
+  },
+  {
+    name: "Quiz Management",
+    href: "/quiz-management",
+    icon: ClipboardList,
     current: false,
   },
   {

@@ -25,7 +25,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { FileQuestion, RotateCcw, Save, BookOpen, Settings, Rocket } from "lucide-react"
-import { categoryService, quizService } from "@/services"
+import { categoryService } from "@/services"
+import { useQuizzes } from "@/hooks/useQuizzes"
 import { QuestionsTab } from "@/components/questions/QuestionsTab"
 import { QuizSettingsTab } from "@/components/quiz-settings/QuizSettingsTab"
 import { PublishReviewTab } from "@/components/publish/PublishReviewTab"
@@ -57,6 +58,9 @@ export function QuizBuilder() {
   })
   const [questions, setQuestions] = useState<Question[]>([])
   const [quizSettings, setQuizSettings] = useState<QuizSettings>(defaultQuizSettings)
+  
+  // Use quiz management hook
+  const { createQuiz } = useQuizzes({ autoFetch: false })
 
   // Load categories from API
   useEffect(() => {
@@ -68,22 +72,14 @@ export function QuizBuilder() {
       setLoading(true)
       setError(null)
       
-      const apiCategories = await categoryService.getAllCategories()
+      const result = await categoryService.getAllCategories({ includeChildren: true, depth: 3 })
       
       // Transform API categories to match frontend format
-      const transformedCategories: Category[] = apiCategories.map((apiCategory: any) => ({
+      const transformedCategories: Category[] = result.categories.map((apiCategory: any) => ({
         id: apiCategory.id.toString(),
         name: apiCategory.name,
-        description: undefined,
-        subcategories: apiCategory.children?.map((child: any) => ({
-          id: child.id.toString(),
-          name: child.name,
-          description: undefined,
-          categoryId: apiCategory.id.toString(),
-          quizzes: [],
-          createdAt: new Date(child.createdAt),
-          updatedAt: new Date(child.updatedAt)
-        })) || [],
+        description: apiCategory.description,
+        subcategories: transformSubcategories(apiCategory.children || []),
         createdAt: new Date(apiCategory.createdAt),
         updatedAt: new Date(apiCategory.updatedAt)
       }))
@@ -96,6 +92,20 @@ export function QuizBuilder() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const transformSubcategories = (apiSubcategories: any[]): any[] => {
+    return apiSubcategories.map((apiSub: any) => ({
+      id: apiSub.id.toString(),
+      name: apiSub.name,
+      description: apiSub.description,
+      categoryId: apiSub.parentId?.toString() || '',
+      parentSubcategoryId: apiSub.parentId?.toString(),
+      subcategories: transformSubcategories(apiSub.children || []),
+      quizzes: [], // TODO: Add quizzes from API
+      createdAt: new Date(apiSub.createdAt),
+      updatedAt: new Date(apiSub.updatedAt),
+    }))
   }
 
   const selectedCategory = categories.find(cat => cat.id === formData.categoryId)
@@ -135,9 +145,10 @@ export function QuizBuilder() {
         timeLimit: 30 // Default time limit
       }
       
-      const newQuiz = await quizService.createQuiz(quizData)
+      const newQuiz = await createQuiz(quizData)
       
       console.log('Quiz created successfully:', newQuiz)
+      alert(`Quiz "${newQuiz.title}" created successfully!`)
       
       // Reset form after successful save
       setFormData({

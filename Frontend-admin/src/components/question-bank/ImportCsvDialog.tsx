@@ -9,12 +9,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Upload, Download, AlertCircle, CheckCircle, X } from "lucide-react"
 import Papa from "papaparse"
 import * as XLSX from "xlsx"
 import type { Question } from "@/types"
+import { questionBankService } from "@/services/questionBankService"
+import { useCategories } from "@/hooks/useCategories"
 
 interface ImportRow {
   question: string
@@ -40,16 +49,43 @@ interface ImportCsvDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onImport: (questions: Omit<Question, 'id' | 'createdAt' | 'updatedAt'>[]) => void
+  onBackendImport?: (result: any) => void
 }
 
-export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialogProps) {
+export function ImportCsvDialog({ open, onOpenChange, onImport, onBackendImport }: ImportCsvDialogProps) {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [uploadMode, setUploadMode] = useState<'frontend' | 'backend'>('frontend')
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  const [includeSubcategories, setIncludeSubcategories] = useState(false)
+  const [uploadResult, setUploadResult] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Get categories for backend upload
+  const { categories } = useCategories({ includeChildren: true, depth: 3 })
 
-  const downloadTemplate = (format: 'csv' | 'xlsx') => {
+  const downloadTemplate = async (format: 'csv' | 'xlsx') => {
+    if (uploadMode === 'backend') {
+      // Download template from backend
+      try {
+        const blob = await questionBankService.downloadTemplate()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'question-import-template.xlsx'
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } catch (err) {
+        setError('Failed to download template from server')
+      }
+      return
+    }
+
+    // Frontend template generation (existing logic)
     const templateData = [
       {
         question: "What is the capital of France?",
@@ -77,7 +113,7 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
       }
     ]
 
-    if (format === 'csv' || format === 'xlsx') {
+    if (format === 'csv') {
       const csv = Papa.unparse(templateData)
       const blob = new Blob([csv], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
@@ -213,7 +249,45 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
     ))
   }
 
+  const handleBackendUpload = async (file: File) => {
+    if (!selectedCategoryId) {
+      setError('Please select a category for backend upload')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      setError(null)
+      
+      const result = await questionBankService.uploadExcel(
+        file,
+        selectedCategoryId,
+        includeSubcategories,
+        3 // subcategory depth
+      )
+      
+      setUploadResult(result)
+      if (onBackendImport) {
+        onBackendImport(result)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleImport = () => {
+    if (uploadMode === 'backend') {
+      // For backend mode, we need the original file
+      const fileInput = fileInputRef.current
+      if (fileInput?.files?.[0]) {
+        handleBackendUpload(fileInput.files[0])
+      }
+      return
+    }
+
+    // Frontend import (existing logic)
     const selectedValidRows = parsedRows.filter(row => row.isSelected && row.isValid)
     
     const questions: Omit<Question, 'id' | 'createdAt' | 'updatedAt'>[] = selectedValidRows.map(row => {
@@ -276,6 +350,59 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
           {parsedRows.length === 0 ? (
             // File Upload Step
             <div className="space-y-6">
+              {/* Upload Mode Selection */}
+              <div className="space-y-3">
+                <Label>Upload Mode</Label>
+                <Select value={uploadMode} onValueChange={(value: 'frontend' | 'backend') => setUploadMode(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="frontend">Frontend Processing (Preview & Validate)</SelectItem>
+                    <SelectItem value="backend">Backend Processing (Direct Upload)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  {uploadMode === 'frontend' 
+                    ? 'Parse and validate questions in browser before importing'
+                    : 'Upload directly to server with category assignment'
+                  }
+                </p>
+              </div>
+
+              {/* Backend Category Selection */}
+              {uploadMode === 'backend' && (
+                <div className="space-y-3">
+                  <Label>Target Category</Label>
+                  <Select 
+                    value={selectedCategoryId?.toString() || ''} 
+                    onValueChange={(value) => setSelectedCategoryId(parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(category => (
+                        <SelectItem key={category.id} value={category.id.toString()}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="include-subcategories"
+                      checked={includeSubcategories}
+                      onCheckedChange={(checked) => setIncludeSubcategories(checked as boolean)}
+                    />
+                    <Label htmlFor="include-subcategories" className="text-sm">
+                      Include subcategories (distribute questions across subcategories)
+                    </Label>
+                  </div>
+                </div>
+              )}
+
               <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <div className="space-y-2">
@@ -299,14 +426,23 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
 
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => downloadTemplate('csv')}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download CSV Template
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => downloadTemplate('xlsx')}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download XLSX Template
-                  </Button>
+                  {uploadMode === 'backend' ? (
+                    <Button variant="outline" size="sm" onClick={() => downloadTemplate('xlsx')}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Backend Template
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => downloadTemplate('csv')}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download CSV Template
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => downloadTemplate('xlsx')}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download XLSX Template
+                      </Button>
+                    </>
+                  )}
                 </div>
 
                 <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
@@ -326,11 +462,63 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
                 </div>
               </div>
 
+              {isLoading && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm text-blue-700 dark:text-blue-400">
+                      {uploadMode === 'backend' ? 'Uploading to server...' : 'Processing file...'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <AlertCircle className="h-4 w-4 text-red-500" />
                     <span className="text-sm text-red-700 dark:text-red-400">{error}</span>
+                  </div>
+                </div>
+              )}
+
+              {uploadResult && (
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                        Upload completed successfully!
+                      </span>
+                    </div>
+                    <div className="text-sm text-green-600 dark:text-green-400 space-y-1">
+                      <p>• Total rows: {uploadResult.summary?.totalRows}</p>
+                      <p>• Successfully imported: {uploadResult.summary?.successfulImports}</p>
+                      <p>• Failed: {uploadResult.summary?.failedImports}</p>
+                      {uploadResult.summary?.categoryDistribution && Object.keys(uploadResult.summary.categoryDistribution).length > 0 && (
+                        <div>
+                          <p>• Category distribution:</p>
+                          <ul className="ml-4 space-y-1">
+                            {Object.entries(uploadResult.summary.categoryDistribution).map(([category, count]) => (
+                              <li key={category}>- {category}: {count as number} questions</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    {uploadResult.errors && uploadResult.errors.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</p>
+                        <ul className="text-sm text-red-600 dark:text-red-400 ml-4">
+                          {uploadResult.errors.slice(0, 3).map((error: string, index: number) => (
+                            <li key={index}>• {error}</li>
+                          ))}
+                          {uploadResult.errors.length > 3 && (
+                            <li>• ... and {uploadResult.errors.length - 3} more errors</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

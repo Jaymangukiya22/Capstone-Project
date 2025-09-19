@@ -3,9 +3,11 @@
 export interface Category {
   id: number;
   name: string;
+  description?: string;
   parentId?: number | null;
   parent?: Category | null;
   children?: Category[];
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
   quizzes?: Quiz[];
@@ -47,12 +49,16 @@ export interface Option {
 // Create/Update DTOs
 export interface CreateCategoryDto {
   name: string;
+  description?: string;
   parentId?: number | null;
+  isActive?: boolean;
 }
 
 export interface UpdateCategoryDto {
   name?: string;
+  description?: string;
   parentId?: number | null;
+  isActive?: boolean;
 }
 
 export interface CreateQuizDto {

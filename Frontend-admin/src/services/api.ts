@@ -47,17 +47,26 @@ apiClient.interceptors.response.use(
   }
 );
 
-// API Response types
+// API Response types - Updated to match backend format
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
   message: string;
-  total?: number;
-  count?: number;
+  pagination?: {
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  };
 }
 
 export interface ApiError {
   success: false;
   error: string;
   message: string;
+  details?: Array<{
+    field: string;
+    message: string;
+    type: string;
+  }>;
 }

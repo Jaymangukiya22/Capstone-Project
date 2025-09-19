@@ -24,13 +24,13 @@ export class QuizService {
       if (filters?.limit) params.append('limit', filters.limit.toString());
       if (filters?.offset) params.append('offset', filters.offset.toString());
 
-      const response = await apiClient.get<ApiResponse<Quiz[]>>(
+      const response = await apiClient.get<ApiResponse<any>>(
         `${this.endpoint}${params.toString() ? '?' + params.toString() : ''}`
       );
       
       return {
-        quizzes: response.data.data,
-        total: response.data.total || response.data.data.length
+        quizzes: response.data.data.quizzes || [],
+        total: response.data.data.pagination?.total || 0
       };
     } catch (error) {
       console.error('Error fetching quizzes:', error);

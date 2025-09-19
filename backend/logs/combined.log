@@ -2113,3 +2113,7 @@
 {"level":"info","message":"✅ Created 3500 quiz attempts with 19776 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-18 17:25:55"}
 {"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":19776,"categories":50,"options":9996,"questionAssignments":6000,"questions":2500,"quizAttempts":3500,"quizzes":750,"service":"quiz-app-backend","totalRecords":43072,"users":500,"version":"1.0.0"},"timestamp":"2025-09-18 17:25:55"}
 {"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-18 17:25:55"}
+{"level":"info","message":"User registered successfully","metadata":{"service":"quiz-app-backend","userId":501,"username":"admin","version":"1.0.0"},"timestamp":"2025-09-18 17:26:09"}
+{"level":"info","message":"POST /api/auth/register 201 798.888 ms - 642","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-18 17:26:09"}
+{"level":"info","message":"Quiz created","metadata":{"quizId":751,"service":"quiz-app-backend","title":"Science Quiz2","version":"1.0.0"},"timestamp":"2025-09-18 17:26:40"}
+{"level":"info","message":"POST /api/quizzes 201 62.995 ms - 584","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-18 17:26:40"}

@@ -238,7 +238,7 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
             className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
           >
             <Rocket className="h-5 w-5 mr-2" />
-            PLAY 🚀
+            PLAY 
           </Button>
 
           {!selectedQuiz.isActive && (

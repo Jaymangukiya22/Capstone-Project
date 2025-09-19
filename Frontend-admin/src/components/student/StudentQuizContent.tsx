@@ -22,19 +22,23 @@ export function StudentQuizContent() {
   }
 
   const handlePlayQuiz = (quizId: string, mode: string, gameCode?: string) => {
-    // This would normally route to the quiz waiting room or game page
-    let message = `Starting quiz "${selectedQuiz?.name}" in ${mode} mode`
-    if (gameCode) {
-      message += ` with code: ${gameCode}`
+    // Store quiz info in sessionStorage for the quiz flow
+    const quizInfo = {
+      quizId,
+      mode,
+      gameCode,
+      quizName: selectedQuiz?.name,
+      startTime: Date.now()
     }
+    sessionStorage.setItem('currentQuiz', JSON.stringify(quizInfo))
     
     toast({
       title: "Starting Quiz!",
-      description: message,
+      description: `Starting quiz "${selectedQuiz?.name}" in ${mode} mode`,
     })
     
-    // Placeholder for routing to quiz waiting room
-    console.log('Starting quiz:', { quizId, mode, gameCode })
+    // Navigate to quiz countdown page
+    window.location.pathname = '/quiz-countdown'
   }
 
   return (

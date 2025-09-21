@@ -8,13 +8,14 @@ import QuizCountdown from "@/components/student/QuizCountdown"
 import QuizInterface from "@/components/student/QuizInterface"
 import QuizResults from "@/components/student/QuizResults"
 import { LoginForm } from "@/pages/login/login"
+import { SignUpForm } from "@/pages/login/signup"
 
 function App() {
   // Simple routing based on current path
   const currentPath = window.location.pathname
   
   // Check if current page should be full-screen (without layout)
-  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/quiz-results', '/login'].includes(currentPath)
+  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/quiz-results', '/login', '/signup'].includes(currentPath)
 
   const renderPage = () => {
     switch (currentPath) {
@@ -32,6 +33,8 @@ function App() {
         return <QuestionBank />
       case '/login':
         return <LoginForm />
+      case '/signup':
+        return <SignUpForm />
       case '/categories':
       default:
         return <Categories />

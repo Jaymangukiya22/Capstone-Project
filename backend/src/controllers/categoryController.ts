@@ -39,12 +39,15 @@ export class CategoryController {
         return;
       }
 
-      const { hierarchy, ...options } = value;
+      const { hierarchy, includeQuizzes, ...options } = value;
       
       let result;
       if (hierarchy === 'true') {
         try {
-          const categories = await categoryService.getCategoryHierarchy(options.depth || 5);
+          const categories = await categoryService.getCategoryHierarchy(
+            options.depth || 5, 
+            includeQuizzes === 'true' || includeQuizzes === true
+          );
           console.log('🔍 Backend Hierarchy Response:', categories.length, 'root categories found');
           
           // If no root categories found, fall back to getting all categories

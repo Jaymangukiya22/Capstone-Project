@@ -9,7 +9,6 @@ import { ImportCsvDialog } from '../components/question-bank/ImportCsvDialog'
 import { useCategories } from '../hooks/useCategories'
 import { useQuizzes } from '../hooks/useQuizzes'
 import { questionBankService, type QuestionBankItem, type CreateQuestionBankDto } from '../services/questionBankService'
-import type { Category as ApiCategory } from '../types/api'
 
 export function QuestionBank() {
   const [questions, setQuestions] = useState<QuestionBankItem[]>([])

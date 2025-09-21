@@ -5,7 +5,7 @@ import { QuizManagement } from "@/pages/QuizManagement"
 import { QuestionBank } from "@/pages/QuestionBank"
 import { Students } from "@/pages/Students"
 import { ThemeProvider } from "@/hooks/useTheme"
-import { ApiTest } from "@/components/ApiTest"
+// import { ApiTest } from '@/components/ApiTest' // Unused for now
 import QuizCountdown from "@/components/student/QuizCountdown"
 import QuizInterface from "@/components/student/QuizInterface"
 import QuizResults from "@/components/student/QuizResults"

@@ -20,7 +20,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react'
-import { generateJoinCode, type StudentQuiz } from '@/data/mockStudentData'
+import { generateJoinCode, type StudentQuiz } from '@/services/studentQuizService'
 
 interface PlayWithFriendModalProps {
   open: boolean

@@ -49,6 +49,10 @@ export const categoryQuerySchema = Joi.object({
     Joi.allow(null)
   ).optional(),
   includeChildren: Joi.boolean().optional().default(false),
+  includeQuizzes: Joi.alternatives().try(
+    Joi.boolean(),
+    Joi.string().valid('true', 'false')
+  ).optional(),
   depth: Joi.number().integer().min(1).max(5).optional().default(1),
   isActive: Joi.boolean().optional(),
   search: Joi.string().min(1).max(100).optional(),

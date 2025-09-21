@@ -4585,3 +4585,648 @@
 {"level":"info","message":"GET /api/quizzes?limit=1000 304 212.486 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:12:18"}
 {"level":"info","message":"GET /api/quizzes?limit=1000 304 142.429 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:12:19"}
 {"level":"info","message":"GET /api/quizzes?limit=1000 304 139.124 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:12:19"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 35.526 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:16:23"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 36.893 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:16:23"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 8.355 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 20.395 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.333 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 17.105 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.077 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 14.204 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 14.016 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 16.344 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 15.085 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.841 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:26"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 39.398 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:28"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:16:28"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 50.204 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:28"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 37.764 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:28"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:16:28"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 43.668 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:28"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 36.549 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:29"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 35.850 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:16:29"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 6.910 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:43:29"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 1.751 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:43:29"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.265 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:10"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.646 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:10"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.459 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:23"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.852 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:23"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 1.406 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:51"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 4.568 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 219.702 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 402.946 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 45.628 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 128.018 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 97.046 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 77.939 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:44:55"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.276 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:49:16"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.325 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:49:16"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.243 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:49:25"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.313 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:49:25"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:52"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:53"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:54"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:54"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:54"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:54"}
+{"level":"info","message":"✅ Created 1000 questions with 4010 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:55"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:55"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:55"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:55"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 50 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":50,"categories":50,"options":4010,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6034,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:53:56"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:43"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:45"}
+{"level":"info","message":"✅ Created 1000 questions with 4025 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 45 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:47"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":45,"categories":50,"options":4025,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6044,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 19:56:48"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:48"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:48"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:48"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:56:48"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 4.553 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 19:59:06"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.689 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:03"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.391 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:03"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.417 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:03"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.355 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:03"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.314 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:18"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.663 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:18"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.224 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:29"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.394 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:29"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.282 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:29"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.288 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:29"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 65.879 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 66.259 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 94.725 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 117.525 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 28.344 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 43.078 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:07:59"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.630 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:05"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 7.346 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:05"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.497 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:05"}
+{"level":"info","message":"GET /api/api/matches/ai-opponents 404 0.540 ms - 96","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:05"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.782 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:27"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.747 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:27"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.599 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:28"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.441 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:28"}
+{"level":"info","message":"GET /api/matches/ai-opponents 200 0.931 ms - 471","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:28"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.659 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:28"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.277 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:33"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.283 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:33"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.396 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:33"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.381 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:08:33"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.209 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:11"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.272 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:11"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.350 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:11"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.345 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:11"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.229 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:29"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.378 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:29"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.306 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:29"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.356 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:09:29"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.222 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:10:56"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.235 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:10:56"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.362 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:10:56"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.377 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:10:56"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.735 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:14"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.579 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:14"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.345 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:14"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.043 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:14"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.282 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:23"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.306 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.398 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.461 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:11:23"}
+{"level":"info","message":"Received SIGINT, shutting down gracefully...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:09"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:43"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:44"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:14:44"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:44"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:44"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:44"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:45"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:45"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:45"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:45"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:45"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:45"}
+{"level":"info","message":"✅ Created 1000 questions with 4002 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 55 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":55,"categories":50,"options":4002,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6031,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:14:48"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 550.818 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 661.980 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 66.794 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 156.549 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 60.695 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 61.117 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:33"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 2.942 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:36"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 2.236 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:36"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.720 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:36"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.004 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:36"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 1.615 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:42"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.991 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:42"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.055 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:42"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.051 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:15:42"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 7.898 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:19:18"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 6.075 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:19:18"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.505 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:19:18"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.380 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:19:18"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.716 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:19"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.623 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:19"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.224 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:19"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.771 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:19"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 2.611 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:51"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 1.916 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:51"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.051 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:51"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.109 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:51"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.662 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:57"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.578 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:57"}
+{"level":"info","message":"GET /api/matches/ai-opponents 200 1.000 ms - 471","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:57"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.557 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:20:57"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 0.917 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:21:05"}
+{"level":"info","message":"GET /api/api/categories?hierarchy=true&includeQuizzes=true&depth=2 404 4.392 ms - 129","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:21:05"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.937 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:21:06"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 8.300 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:21:06"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 400 8.444 ms - 90","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:23:06"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 400 7.476 ms - 90","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:23:06"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.982 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:23:07"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.896 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:23:07"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:26"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:27"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:24:27"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:27"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:27"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:27"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:28"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:28"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:28"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:28"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:28"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:28"}
+{"level":"info","message":"✅ Created 1000 questions with 3989 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:30"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:30"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:30"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:30"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:30"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:30"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 40 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:31"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":40,"categories":50,"options":3989,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6003,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:24:31"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:31"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:31"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:31"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:24:31"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:20"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:32"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:35"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:25:35"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:35"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:35"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:35"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:36"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:36"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:37"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:37"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:37"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:37"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:46"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:49"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:50"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:50"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:50"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:25:50"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:00"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:01"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:26:01"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:01"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:01"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:01"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:02"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:02"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:02"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:02"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:02"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:02"}
+{"level":"info","message":"✅ Created 1000 questions with 3995 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:04"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:04"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:04"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:04"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:04"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:04"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 50 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:05"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":50,"categories":50,"options":3995,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6019,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:26:05"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:05"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:05"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:05"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:05"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:38"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:41"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:42"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:42"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:42"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:42"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:26:54"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:01"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:02"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:27:02"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:02"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:02"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:02"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:03"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:03"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:03"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:03"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:03"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:03"}
+{"level":"info","message":"✅ Created 1000 questions with 4009 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:04"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:04"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:04"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:04"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 45 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":45,"categories":50,"options":4009,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6028,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:27:05"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:36"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:37"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:29:37"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:37"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:37"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:37"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:38"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:38"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:38"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:38"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:38"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:38"}
+{"level":"info","message":"✅ Created 1000 questions with 3957 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:41"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:41"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:44"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:44"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:44"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:44"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 40 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:45"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":40,"categories":50,"options":3957,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":5971,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 20:29:45"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:45"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:45"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:45"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:29:45"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:30:02"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 200 416.827 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:30:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:30:02"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 105.716 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:30:03"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 6.024 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:30:03"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.453 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:30:03"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:44:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 255.865 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:44:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:44:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 35.702 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:44:55"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.258 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:44:55"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.792 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:44:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:45:07"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 237.957 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:07"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:45:07"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 70.335 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:07"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.134 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:07"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.328 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 450.058 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:41"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 148.511 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:42"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":3,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:45:42"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=3 200 23.184 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:42"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":3,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:45:42"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=3 304 25.965 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:42"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 111.976 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:43"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 160.838 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:45:43"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:46:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 186.458 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:11"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 105.676 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 97.413 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:12"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 119.549 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:12"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 67.625 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 128.028 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:17"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:46:17"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 151.765 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:17"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 121.643 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:17"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:46:17"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 184.833 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:17"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 406.541 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 146.918 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:46:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 99.720 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:49:21"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:49:21"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 86.210 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:49:21"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 51.676 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:49:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 118.733 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:49:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:50:21"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 476.495 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:21"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000&includeQuizzes=true 200 309.176 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:21"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 196.749 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:24"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:50:24"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000&includeQuizzes=true 200 102.120 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 185.806 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:24"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:50:25"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000&includeQuizzes=true 304 79.776 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 88.661 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 152.210 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:25"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:50:30"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 23.250 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:30"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:50:31"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 64.638 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:31"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 3.339 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:31"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 5.593 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:50:31"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:51:30"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 77.989 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:30"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":2,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 20:51:30"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&includeQuizzes=true&depth=2 304 19.508 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:30"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.490 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:30"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.732 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:30"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 69.898 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:35"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:51:35"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000&includeQuizzes=true 304 75.141 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:35"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 72.508 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:35"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:51:35"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000&includeQuizzes=true 304 85.467 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:35"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 90.205 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:36"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 73.756 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:51:36"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:53:05"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 179.021 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 227.934 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 69.346 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 55.699 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:07"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-21 20:53:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 71.356 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 96.998 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 30.078 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 21.358 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:56"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 29.354 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 20:53:56"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.146 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 108.107 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:18"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.467 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:18"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:01:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 75.791 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:19"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 200 43.347 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:19"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:01:19"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 17.281 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:19"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.202 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:21"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.746 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:01:21"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.375 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.986 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 77.836 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 119.577 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 39.266 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 70.743 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.753 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.984 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:05:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.660 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.645 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 64.548 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 119.967 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 30.595 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 65.091 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:13"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.753 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:15"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.655 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:15"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.038 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.703 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 241.735 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 240.609 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 82.167 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 80.102 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:55"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.812 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:57"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.824 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:57"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.810 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:57"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.519 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:06:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.471 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.924 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 97.909 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 95.304 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 63.108 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 65.309 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:24"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.788 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:26"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.774 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:26"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.844 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:26"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.682 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:08:27"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.336 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:17"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 6.101 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:17"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.822 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:21"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.659 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:21"}
+{"level":"error","message":"Error creating solo match","metadata":{"error":"TypeError: Cannot read properties of undefined (reading 'createSoloMatch')\n    at createSoloMatch (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\matchController.ts:46:40)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at D:\\Projects\\Capstone-Project\\backend\\src\\middleware\\validation.ts:32:5\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:30"}
+{"level":"info","message":"POST /api/matches/solo 500 60.203 ms - 131","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:30"}
+{"level":"error","message":"Error creating solo match","metadata":{"error":"TypeError: Cannot read properties of undefined (reading 'createSoloMatch')\n    at createSoloMatch (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\matchController.ts:46:40)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at D:\\Projects\\Capstone-Project\\backend\\src\\middleware\\validation.ts:32:5\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:32"}
+{"level":"info","message":"POST /api/matches/solo 500 6.148 ms - 131","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:32"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.509 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:14:36"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.370 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.349 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 58.268 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 54.420 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 18.702 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 23.817 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.341 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.427 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.344 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:05"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.068 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:06"}
+{"level":"error","message":"Error creating solo match","metadata":{"error":"TypeError: Cannot read properties of undefined (reading 'createSoloMatch')\n    at createSoloMatch (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\matchController.ts:46:40)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at D:\\Projects\\Capstone-Project\\backend\\src\\middleware\\validation.ts:32:5\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:15"}
+{"level":"info","message":"POST /api/matches/solo 500 3.587 ms - 131","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:26:15"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.485 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:28:10"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:28:10"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 60.349 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:28:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 99.969 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:28:10"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.380 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:28:12"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.647 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:28:12"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.011 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.375 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 143.307 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 25.576 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 225.974 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 78.694 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:54"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.909 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:55"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.913 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:55"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.747 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:29:55"}
+{"level":"error","message":"Error creating solo match","metadata":{"error":"TypeError: Cannot read properties of undefined (reading 'createSoloMatch')\n    at createSoloMatch (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\matchController.ts:46:40)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at D:\\Projects\\Capstone-Project\\backend\\src\\middleware\\validation.ts:32:5\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (D:\\Projects\\Capstone-Project\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:30:12"}
+{"level":"info","message":"POST /api/matches/solo 500 5.703 ms - 131","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:30:12"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:32"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:38"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 21:33:38"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:38"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:39"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:39"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:40"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:40"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:41"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:41"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:41"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:33:41"}
+{"level":"info","message":"✅ Created 1000 questions with 3952 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:01"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:01"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:05"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:05"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:06"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:06"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 55 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:07"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":55,"categories":50,"options":3952,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":5981,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 21:34:07"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:07"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:07"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:07"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:34:07"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 277.783 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:56"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 7.806 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:56"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:39:57"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 200 762.644 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:57"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:39:57"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 58.860 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:57"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 1134.739 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:57"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 321.558 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 4.513 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:59"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 4.578 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:59"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 20.824 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:39:59"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.020 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:00"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:36"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:38"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:39"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:39"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:39"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:39"}
+{"level":"info","message":"✅ Created 1000 questions with 3979 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:44"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:44"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:44"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:44"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:45"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:45"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 60 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:46"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":60,"categories":50,"options":3979,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6013,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 21:40:46"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:46"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:46"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:46"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:40:46"}
+{"level":"info","message":"GET /api/matches/ai-opponents 200 2.929 ms - 471","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:41:53"}
+{"level":"info","message":"Solo match created: a2b10786-8697-4d5a-8f51-19835fb956c9 with AI opponent: Rookie Bot","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:42:33"}
+{"level":"info","message":"POST /api/matches/solo 201 62.186 ms - 118","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:42:33"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.804 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:43:10"}
+{"level":"info","message":"Solo match created: e71d0a1a-cd18-4727-8869-794f099876fb with AI opponent: Rookie Bot","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:45:50"}
+{"level":"info","message":"POST /api/matches/solo 201 68.638 ms - 118","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:45:50"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 9.590 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:33"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 3.521 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:33"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:47:33"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 200 319.703 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:33"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 546.715 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:33"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 21:47:34"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 82.331 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:34"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 167.228 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:34"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 7.231 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:35"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.928 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:35"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.804 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:35"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.548 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 21:47:35"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:36"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"🚀 Starting MASSIVE database seeding...","metadata":{"attemptsPerUser":2,"categories":5,"questionsPerCategory":20,"questionsPerQuiz":5,"quizzesPerCategory":3,"service":"quiz-app-backend","users":10,"version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"🧹 Clearing existing data...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"✅ Database cleared","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"👥 Creating 10 users...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"✅ Created 10 users","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"📚 Creating hierarchical category structure...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:40"}
+{"level":"info","message":"✅ Created 50 hierarchical categories","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:41"}
+{"level":"info","message":"   - Root categories: 4","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:41"}
+{"level":"info","message":"   - Total depth: 3 levels","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:41"}
+{"level":"info","message":"❓ Creating 100 questions...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:41"}
+{"level":"info","message":"✅ Created 1000 questions with 3986 options","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:44"}
+{"level":"info","message":"📝 Creating 15 quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:44"}
+{"level":"info","message":"✅ Created 150 quizzes","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:44"}
+{"level":"info","message":"🔗 Assigning questions to quizzes...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:44"}
+{"level":"info","message":"✅ Created 750 question-quiz assignments","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"🎯 Creating 20 quiz attempts...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"✅ Created 14 quiz attempts with 50 answers","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"📊 SEEDING SUMMARY:","metadata":{"answers":50,"categories":50,"options":3986,"questionAssignments":750,"questions":1000,"quizAttempts":14,"quizzes":150,"service":"quiz-app-backend","totalRecords":6010,"users":10,"version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"🎉 MASSIVE seeding completed successfully!","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"Database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:39:45"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 6.504 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:00"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.946 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:00"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 22:41:01"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 200 252.626 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 554.545 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 98.972 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:01"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":50,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":5,"version":"1.0.0"},"timestamp":"2025-09-21 22:41:06"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 27.950 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:06"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 2.946 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:25"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 6.215 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:25"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.569 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:25"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.613 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:30"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.095 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:31"}
+{"level":"info","message":"Solo match created: 110f3901-cfdc-44ab-b2cb-729841abb153 with AI opponent: Smart Bot","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:40"}
+{"level":"info","message":"POST /api/matches/solo 201 495.506 ms - 118","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:41:40"}
+{"level":"info","message":"Received SIGINT, shutting down gracefully...","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-21 22:42:08"}

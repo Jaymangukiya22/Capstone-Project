@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { logInfo, logError } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { Sequelize } from 'sequelize';
-import { options } from 'joi';
+import { aiOpponentService, AIOpponent, AIResponse } from './aiOpponentService';
 
 // Removed Prisma client - using Sequelize models instead
 const redis = createClient({ url: process.env.REDIS_URL });
@@ -18,6 +18,8 @@ export interface MatchPlayer {
   score: number;
   currentQuestionIndex: number;
   isReady: boolean;
+  isAI: boolean; // Flag to identify AI players
+  aiOpponent?: AIOpponent; // AI opponent data if isAI is true
   answers: Array<{
     questionId: number;
     selectedOptions: number[];
@@ -96,11 +98,11 @@ export class MatchService {
             return;
           }
 
-          const match = await this.createMatch(data.quizId, socket.data.userId, data.maxPlayers);
-          socket.join(match.id);
-          socket.emit('match_created', { matchId: match.id, matchCode: match.id.slice(-6).toUpperCase() });
+          const matchId = await this.createMatch(data.quizId, socket.data.userId, data.maxPlayers);
+          socket.join(matchId);
+          socket.emit('match_created', { matchId: matchId, matchCode: matchId.slice(-6).toUpperCase() });
 
-          logInfo('Match created', { matchId: match.id, userId: socket.data.userId });
+          logInfo('Match created', { matchId: matchId, userId: socket.data.userId });
         } catch (error) {
           socket.emit('error', { message: 'Failed to create match' });
           logError('Create match error', error as Error);
@@ -214,7 +216,7 @@ export class MatchService {
     });
   }
 
-  private async createMatch(quizId: number, userId: number, maxPlayers = 10): Promise<MatchRoom> {
+  public async createMatch(quizId: number, userId: number, maxPlayers = 10): Promise<string> {
     // Get quiz (simplified for now - will need to add question loading later)
     const quiz = await Quiz.findOne({
       where: { id: quizId, isActive: true }
@@ -254,6 +256,7 @@ export class MatchService {
       score: 0,
       currentQuestionIndex: 0,
       isReady: false,
+      isAI: false,
       answers: []
     };
 
@@ -269,7 +272,7 @@ export class MatchService {
       createdAt: match.createdAt
     }));
 
-    return match;
+    return matchId;
   }
 
   private async findMatchByCode(code: string): Promise<string | null> {
@@ -282,7 +285,7 @@ export class MatchService {
     return null;
   }
 
-  private async joinMatch(matchId: string, userId: number, socketId: string): Promise<boolean> {
+  public async joinMatch(matchId: string, userId: number, socketId: string): Promise<boolean> {
     const match = this.matches.get(matchId);
     if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
       return false;
@@ -304,6 +307,7 @@ export class MatchService {
       score: 0,
       currentQuestionIndex: 0,
       isReady: false,
+      isAI: false,
       answers: []
     };
 
@@ -339,6 +343,9 @@ export class MatchService {
       questionIndex: 0,
       totalQuestions: match.questions.length
     });
+
+    // Start AI response timer if there are AI players
+    this.startAIResponseTimer(match, 0);
 
     // Set timer for question
     setTimeout(() => {
@@ -432,6 +439,9 @@ export class MatchService {
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
     });
+
+    // Start AI response timer if there are AI players
+    this.startAIResponseTimer(match, match.currentQuestionIndex);
 
     // Set timer for next question
     setTimeout(() => {
@@ -572,6 +582,428 @@ export class MatchService {
   public getMatchById(matchId: string): MatchRoom | undefined {
     return this.matches.get(matchId);
   }
+
+  /**
+   * Create a solo match with AI opponent
+   */
+  public async createSoloMatch(userId: number, quizId: number, aiOpponentId?: string): Promise<string> {
+    const quiz = await Quiz.findByPk(quizId, {
+      include: ['category']
+    });
+
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    // Select AI opponent based on quiz difficulty or specific ID
+    let aiOpponent: AIOpponent;
+    if (aiOpponentId) {
+      aiOpponent = aiOpponentService.getAIOpponent(aiOpponentId) || 
+                   aiOpponentService.selectAIOpponentByDifficulty(quiz.difficulty);
+    } else {
+      aiOpponent = aiOpponentService.selectAIOpponentByDifficulty(quiz.difficulty);
+    }
+
+    const matchId = uuidv4();
+    
+    // Create match room
+    const match: MatchRoom = {
+      id: matchId,
+      quizId,
+      quiz,
+      players: new Map(),
+      status: 'WAITING',
+      currentQuestionIndex: 0,
+      questionStartTime: 0,
+      maxPlayers: 2, // Human + AI
+      timeLimit: quiz.timeLimit || 30,
+      questions: [], // Will be loaded when match starts
+      createdAt: new Date()
+    };
+
+    // Add human player
+    const humanPlayer: MatchPlayer = {
+      userId,
+      username: '', // Will be set when socket connects
+      socketId: '',
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: false,
+      isAI: false,
+      answers: []
+    };
+
+    // Add AI player
+    const aiPlayer: MatchPlayer = {
+      userId: -1, // Negative ID for AI players
+      username: aiOpponent.name,
+      socketId: 'ai-socket',
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: true, // AI is always ready
+      isAI: true,
+      aiOpponent,
+      answers: []
+    };
+
+    match.players.set(userId, humanPlayer);
+    match.players.set(-1, aiPlayer);
+    
+    this.matches.set(matchId, match);
+    this.userToMatch.set(userId, matchId);
+
+    logInfo(`Solo match created: ${matchId} with AI opponent: ${aiOpponent.name}`);
+    
+    return matchId;
+  }
+
+  /**
+   * Handle AI opponent responses during gameplay
+   */
+  private async handleAIResponse(match: MatchRoom, questionIndex: number): Promise<void> {
+    const aiPlayer = Array.from(match.players.values()).find(p => p.isAI);
+    if (!aiPlayer || !aiPlayer.aiOpponent) return;
+
+    const question = match.questions[questionIndex];
+    if (!question) return;
+
+    try {
+      // Generate AI response
+      const aiResponse = await aiOpponentService.generateAIResponse(
+        question,
+        aiPlayer.aiOpponent,
+        match.timeLimit
+      );
+
+      // Record AI answer
+      aiPlayer.answers.push({
+        questionId: question.id,
+        selectedOptions: [aiResponse.selectedOptionId],
+        timeSpent: aiResponse.responseTime,
+        isCorrect: aiResponse.isCorrect
+      });
+
+      // Update AI score
+      if (aiResponse.isCorrect) {
+        const basePoints = 100;
+        const timeBonus = Math.max(0, Math.floor((match.timeLimit - aiResponse.responseTime) * 2));
+        aiPlayer.score += basePoints + timeBonus;
+      }
+
+      // Broadcast AI response to human players
+      this.io.to(match.id).emit('ai-answered', {
+        aiName: aiPlayer.username,
+        responseTime: aiResponse.responseTime,
+        isCorrect: aiResponse.isCorrect
+      });
+
+      logInfo(`AI ${aiPlayer.username} answered question ${questionIndex}`, {
+        isCorrect: aiResponse.isCorrect,
+        responseTime: aiResponse.responseTime,
+        score: aiPlayer.score
+      });
+
+    } catch (error) {
+      logError('Error handling AI response', error as Error);
+    }
+  }
+
+  /**
+   * Start AI responses when a question begins
+   */
+  private startAIResponseTimer(match: MatchRoom, questionIndex: number): void {
+    // Start AI response after a short delay to make it feel more natural
+    setTimeout(() => {
+      this.handleAIResponse(match, questionIndex);
+    }, 1000); // 1 second delay before AI starts "thinking"
+  }
+
+  /**
+   * Get available AI opponents
+   */
+  public getAvailableAIOpponents(): AIOpponent[] {
+    return aiOpponentService.getAIOpponents();
+  }
+
+  /**
+   * Get available matches for joining
+   */
+  public getAvailableMatches(): Array<{
+    id: string;
+    quizId: number;
+    quiz: any;
+    playerCount: number;
+    maxPlayers: number;
+    status: string;
+    createdAt: Date;
+  }> {
+    const availableMatches: Array<{
+      id: string;
+      quizId: number;
+      quiz: any;
+      playerCount: number;
+      maxPlayers: number;
+      status: string;
+      createdAt: Date;
+    }> = [];
+
+    for (const [matchId, match] of this.matches) {
+      if (match.status === 'WAITING' && match.players.size < match.maxPlayers) {
+        availableMatches.push({
+          id: match.id,
+          quizId: match.quizId,
+          quiz: {
+            id: match.quiz.id,
+            title: match.quiz.title,
+            description: match.quiz.description,
+            difficulty: match.quiz.difficulty
+          },
+          playerCount: match.players.size,
+          maxPlayers: match.maxPlayers,
+          status: match.status,
+          createdAt: match.createdAt
+        });
+      }
+    }
+
+    return availableMatches;
+  }
 }
 
-export let matchService: MatchService;
+// Simple match service for HTTP API usage (without WebSocket functionality)
+class SimpleMatchService {
+  private matches: Map<string, MatchRoom> = new Map();
+  private userToMatch: Map<number, string> = new Map();
+
+  /**
+   * Create a solo match with AI opponent
+   */
+  public async createSoloMatch(userId: number, quizId: number, aiOpponentId?: string): Promise<string> {
+    const quiz = await Quiz.findByPk(quizId, {
+      include: ['category']
+    });
+
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    // Select AI opponent based on quiz difficulty or specific ID
+    let aiOpponent: AIOpponent;
+    if (aiOpponentId) {
+      aiOpponent = aiOpponentService.getAIOpponent(aiOpponentId) || 
+                   aiOpponentService.selectAIOpponentByDifficulty(quiz.difficulty);
+    } else {
+      aiOpponent = aiOpponentService.selectAIOpponentByDifficulty(quiz.difficulty);
+    }
+
+    const matchId = uuidv4();
+    
+    // Create match room
+    const match: MatchRoom = {
+      id: matchId,
+      quizId,
+      quiz,
+      players: new Map(),
+      status: 'WAITING',
+      currentQuestionIndex: 0,
+      questionStartTime: 0,
+      maxPlayers: 2, // Human + AI
+      timeLimit: quiz.timeLimit || 30,
+      questions: [], // Will be loaded when match starts
+      createdAt: new Date()
+    };
+
+    // Add human player
+    const humanPlayer: MatchPlayer = {
+      userId,
+      username: '', // Will be set when socket connects
+      socketId: '',
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: false,
+      isAI: false,
+      answers: []
+    };
+
+    // Add AI player
+    const aiPlayer: MatchPlayer = {
+      userId: -1, // Negative ID for AI players
+      username: aiOpponent.name,
+      socketId: 'ai-socket',
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: true, // AI is always ready
+      isAI: true,
+      aiOpponent,
+      answers: []
+    };
+
+    match.players.set(userId, humanPlayer);
+    match.players.set(-1, aiPlayer);
+    
+    this.matches.set(matchId, match);
+    this.userToMatch.set(userId, matchId);
+
+    logInfo(`Solo match created: ${matchId} with AI opponent: ${aiOpponent.name}`);
+    
+    return matchId;
+  }
+
+  /**
+   * Get available AI opponents
+   */
+  public getAvailableAIOpponents(): AIOpponent[] {
+    return aiOpponentService.getAIOpponents();
+  }
+
+  /**
+   * Get match by ID
+   */
+  public getMatchById(matchId: string): MatchRoom | undefined {
+    return this.matches.get(matchId);
+  }
+
+  /**
+   * Get available matches for joining
+   */
+  public getAvailableMatches(): Array<{
+    id: string;
+    quizId: number;
+    quiz: any;
+    playerCount: number;
+    maxPlayers: number;
+    status: string;
+    createdAt: Date;
+  }> {
+    const availableMatches: Array<{
+      id: string;
+      quizId: number;
+      quiz: any;
+      playerCount: number;
+      maxPlayers: number;
+      status: string;
+      createdAt: Date;
+    }> = [];
+
+    for (const [matchId, match] of this.matches) {
+      if (match.status === 'WAITING' && match.players.size < match.maxPlayers) {
+        availableMatches.push({
+          id: match.id,
+          quizId: match.quizId,
+          quiz: {
+            id: match.quiz.id,
+            title: match.quiz.title,
+            description: match.quiz.description,
+            difficulty: match.quiz.difficulty
+          },
+          playerCount: match.players.size,
+          maxPlayers: match.maxPlayers,
+          status: match.status,
+          createdAt: match.createdAt
+        });
+      }
+    }
+
+    return availableMatches;
+  }
+
+  /**
+   * Create a regular multiplayer match
+   */
+  public async createMatch(userId: number, quizId: number, maxPlayers = 10): Promise<string> {
+    // Get quiz (simplified for now - will need to add question loading later)
+    const quiz = await Quiz.findOne({
+      where: { id: quizId, isActive: true }
+    });
+
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    const matchId = uuidv4();
+    // TODO: Load questions from QuizQuestion model
+    const questions: any[] = []; // Simplified for now
+
+    const match: MatchRoom = {
+      id: matchId,
+      quizId,
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        timeLimit: quiz.timeLimit
+      },
+      players: new Map(),
+      status: 'WAITING',
+      currentQuestionIndex: 0,
+      questionStartTime: 0,
+      maxPlayers,
+      timeLimit: quiz.timeLimit || 30, // seconds per question
+      questions,
+      createdAt: new Date()
+    };
+
+    // Add creator as first player
+    const creator: MatchPlayer = {
+      userId,
+      username: '', // Will be set when socket connects
+      socketId: '',
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: false,
+      isAI: false,
+      answers: []
+    };
+
+    match.players.set(userId, creator);
+    this.matches.set(matchId, match);
+    this.userToMatch.set(userId, matchId);
+
+    // Store match in Redis for persistence
+    await redis.setEx(`match:${matchId}`, 3600, JSON.stringify({
+      id: matchId,
+      quizId,
+      status: match.status,
+      createdAt: match.createdAt
+    }));
+
+    return matchId;
+  }
+
+  /**
+   * Join an existing match
+   */
+  public async joinMatch(matchId: string, userId: number, socketId: string): Promise<boolean> {
+    const match = this.matches.get(matchId);
+    if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
+      return false;
+    }
+
+    // Get user info
+    const user = await User.findByPk(userId, {
+      attributes: ['username']
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    const player: MatchPlayer = {
+      userId,
+      username: user.username,
+      socketId,
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: false,
+      isAI: false,
+      answers: []
+    };
+
+    match.players.set(userId, player);
+    this.userToMatch.set(userId, matchId);
+
+    return true;
+  }
+}
+
+// Export singleton instance for HTTP API usage
+export const matchService = new SimpleMatchService();

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -6,12 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   BookOpen,
   Clock,
-  Users,
   Calendar,
   Target,
-  Rocket
+  Rocket,
+  Bot
 } from 'lucide-react'
-import { mockQuizModes, type StudentQuiz } from '@/data/mockStudentData'
+// import { Users } from 'lucide-react' // Unused for now
+import { mockQuizModes, type StudentQuiz } from '@/services/studentQuizService'
+import { matchService, type AIOpponent } from '@/services/matchService'
 import { PlayWithFriendModal } from './PlayWithFriendModal'
 
 interface QuizOverviewPanelProps {
@@ -22,6 +24,37 @@ interface QuizOverviewPanelProps {
 export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPanelProps) {
   const [selectedMode, setSelectedMode] = useState<string>('')
   const [showFriendModal, setShowFriendModal] = useState(false)
+  const [aiOpponents, setAIOpponents] = useState<AIOpponent[]>([])
+  const [selectedAIOpponent, setSelectedAIOpponent] = useState<string>('')
+  const [isLoadingAI, setIsLoadingAI] = useState(false)
+
+  // Load AI opponents when component mounts
+  useEffect(() => {
+    const loadAIOpponents = async () => {
+      setIsLoadingAI(true)
+      try {
+        const opponents = await matchService.getAIOpponents()
+        setAIOpponents(opponents)
+        // Auto-select appropriate AI based on quiz difficulty
+        if (opponents.length > 0 && selectedQuiz) {
+          const difficultyMap = {
+            'easy': 'rookie-bot',
+            'intermediate': 'smart-bot', 
+            'hard': 'genius-bot'
+          }
+          const recommendedAI = difficultyMap[selectedQuiz.difficulty] || 'smart-bot'
+          const aiExists = opponents.find(ai => ai.id === recommendedAI)
+          setSelectedAIOpponent(aiExists ? recommendedAI : opponents[0].id)
+        }
+      } catch (error) {
+        console.error('Error loading AI opponents:', error)
+      } finally {
+        setIsLoadingAI(false)
+      }
+    }
+
+    loadAIOpponents()
+  }, [selectedQuiz])
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -32,11 +65,35 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
     }
   }
 
-  const handlePlayClick = () => {
+  const handlePlayClick = async () => {
     if (!selectedQuiz || !selectedMode) return
 
     if (selectedMode === 'play-with-friend') {
       setShowFriendModal(true)
+    } else if (selectedMode === 'solo') {
+      // Create solo match with AI opponent
+      try {
+        console.log('🔍 Debug: matchService =', matchService)
+        console.log('🔍 Debug: matchService.createSoloMatch =', matchService?.createSoloMatch)
+        
+        if (!matchService) {
+          throw new Error('matchService is undefined')
+        }
+        
+        if (!matchService.createSoloMatch) {
+          throw new Error('createSoloMatch method is undefined')
+        }
+        
+        const matchId = await matchService.createSoloMatch(
+          parseInt(selectedQuiz.id), 
+          selectedAIOpponent
+        )
+        if (matchId) {
+          onPlayQuiz(selectedQuiz.id, selectedMode, matchId)
+        }
+      } catch (error) {
+        console.error('Error creating solo match:', error)
+      }
     } else {
       onPlayQuiz(selectedQuiz.id, selectedMode)
     }
@@ -225,6 +282,76 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
               </SelectContent>
             </Select>
           </div>
+
+          {/* AI Opponent Selection - only show for solo mode */}
+          {selectedMode === 'solo' && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                <Bot className="inline h-4 w-4 mr-1" />
+                Choose AI Opponent
+              </label>
+              <Select 
+                value={selectedAIOpponent} 
+                onValueChange={setSelectedAIOpponent}
+                disabled={isLoadingAI}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingAI ? "Loading AI opponents..." : "Select AI opponent"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {aiOpponents.map((opponent) => (
+                    <SelectItem key={opponent.id} value={opponent.id}>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">{opponent.avatar || '🤖'}</span>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{opponent.name}</span>
+                          <div className="flex items-center space-x-2 text-xs text-gray-500">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              opponent.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                              opponent.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {opponent.difficulty}
+                            </span>
+                            <span>{opponent.accuracyRate}% accuracy</span>
+                          </div>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* AI Opponent Info */}
+              {selectedAIOpponent && (
+                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  {(() => {
+                    const selectedAI = aiOpponents.find(ai => ai.id === selectedAIOpponent)
+                    if (!selectedAI) return null
+                    
+                    return (
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl">{selectedAI.avatar || '🤖'}</span>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium text-sm text-gray-900 dark:text-white">
+                              {selectedAI.name}
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              {selectedAI.accuracyRate}% accuracy
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Response time: {selectedAI.responseTimeRange.min}-{selectedAI.responseTimeRange.max}s
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
 
           <Button
             onClick={handlePlayClick}

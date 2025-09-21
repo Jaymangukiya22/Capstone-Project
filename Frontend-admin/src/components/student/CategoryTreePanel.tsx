@@ -12,9 +12,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react'
-import { mockStudentCategories, type StudentQuiz } from '@/data/mockStudentData'
+import { type StudentQuiz, type StudentCategory } from '@/services/studentQuizService'
 
 interface CategoryTreePanelProps {
+  categories: StudentCategory[]
   selectedQuizId?: string
   onQuizSelect: (quiz: StudentQuiz) => void
   isCollapsed?: boolean
@@ -22,6 +23,7 @@ interface CategoryTreePanelProps {
 }
 
 export function CategoryTreePanel({ 
+  categories,
   selectedQuizId,
   onQuizSelect, 
   isCollapsed = false,
@@ -51,18 +53,19 @@ export function CategoryTreePanel({
     setExpandedSubcategories(newExpanded)
   }
 
-  const filteredCategories = mockStudentCategories.map(category => ({
+  const filteredCategories = categories.map((category: StudentCategory) => ({
     ...category,
-    subcategories: category.subcategories.map(subcategory => ({
+    subcategories: category.subcategories.map((subcategory: any) => ({
       ...subcategory,
-      quizzes: subcategory.quizzes.filter(quiz =>
+      quizzes: subcategory.quizzes.filter((quiz: StudentQuiz) =>
         quiz.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         quiz.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         quiz.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
         quiz.subcategory.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    })).filter(subcategory => subcategory.quizzes.length > 0 || searchQuery === '')
-  })).filter(category => category.subcategories.length > 0 || searchQuery === '')
+    })).filter((subcategory: any) => subcategory.quizzes.length > 0 || searchQuery === '')
+  })).filter((category: any) => 
+    category.subcategories.length > 0 || searchQuery === '')
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -116,7 +119,7 @@ export function CategoryTreePanel({
         {isCollapsed ? (
           /* Collapsed view - show minimal icons */
           <div className="space-y-2">
-            {mockStudentCategories.map((category) => (
+            {categories.map((category: StudentCategory) => (
               <div
                 key={category.id}
                 className="flex items-center justify-center p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
@@ -177,7 +180,7 @@ export function CategoryTreePanel({
                         {/* Quizzes */}
                         {expandedSubcategories.has(subcategory.id) && (
                           <div className="ml-4 space-y-1">
-                            {subcategory.quizzes.map((quiz) => (
+                            {subcategory.quizzes.map((quiz: StudentQuiz) => (
                               <div
                                 key={quiz.id}
                                 className={cn(

@@ -7,13 +7,14 @@ import { ThemeProvider } from "@/hooks/useTheme"
 import QuizCountdown from "@/components/student/QuizCountdown"
 import QuizInterface from "@/components/student/QuizInterface"
 import QuizResults from "@/components/student/QuizResults"
+import { LoginForm } from "@/pages/login/login"
 
 function App() {
   // Simple routing based on current path
   const currentPath = window.location.pathname
   
-  // Check if current page is a quiz page that should be full-screen
-  const isQuizPage = ['/quiz-countdown', '/quiz-interface', '/quiz-results'].includes(currentPath)
+  // Check if current page should be full-screen (without layout)
+  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/quiz-results', '/login'].includes(currentPath)
 
   const renderPage = () => {
     switch (currentPath) {
@@ -29,6 +30,8 @@ function App() {
         return <QuizBuilder />
       case '/question-bank':
         return <QuestionBank />
+      case '/login':
+        return <LoginForm />
       case '/categories':
       default:
         return <Categories />
@@ -38,11 +41,11 @@ function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="quizup-admin-theme">
       <div className="min-h-screen bg-background">
-        {isQuizPage ? (
-          // Full-screen quiz pages without sidebar/topbar
+        {isFullScreenPage ? (
+          // Full-screen pages without sidebar/topbar (quiz pages and login)
           renderPage()
         ) : (
-          // Regular pages with layout
+          // Regular admin pages with layout
           <Layout>
             {renderPage()}
           </Layout>

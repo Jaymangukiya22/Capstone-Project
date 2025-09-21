@@ -131,10 +131,10 @@ export function PlayWithFriendModal({
                 <Clock className="h-3 w-3 mr-1" />
                 <span>{selectedQuiz.estimatedDuration}m</span>
               </div>
-              <div className="flex items-center">
+              {/* <div className="flex items-center">
                 <Users className="h-3 w-3 mr-1" />
                 <span>Max {selectedQuiz.maxPlayers} players</span>
-              </div>
+              </div> */}
             </div>
           </div>
         )}

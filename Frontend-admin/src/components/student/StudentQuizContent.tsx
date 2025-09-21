@@ -6,6 +6,7 @@ import { mockStudentCategories, type StudentQuiz } from '@/data/mockStudentData'
 
 export function StudentQuizContent() {
   const [selectedQuiz, setSelectedQuiz] = useState<StudentQuiz | null>(null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   // Get the first quiz as default selection
   const defaultQuiz = mockStudentCategories[0]?.subcategories[0]?.quizzes[0] || null
@@ -21,34 +22,44 @@ export function StudentQuizContent() {
     setSelectedQuiz(quiz)
   }
 
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed)
+  }
+
   const handlePlayQuiz = (quizId: string, mode: string, gameCode?: string) => {
-    // This would normally route to the quiz waiting room or game page
-    let message = `Starting quiz "${selectedQuiz?.name}" in ${mode} mode`
-    if (gameCode) {
-      message += ` with code: ${gameCode}`
+    // Store quiz info in sessionStorage for the quiz flow
+    const quizInfo = {
+      quizId,
+      mode,
+      gameCode,
+      quizName: selectedQuiz?.name,
+      startTime: Date.now()
     }
+    sessionStorage.setItem('currentQuiz', JSON.stringify(quizInfo))
     
     toast({
       title: "Starting Quiz!",
-      description: message,
+      description: `Starting quiz "${selectedQuiz?.name}" in ${mode} mode`,
     })
     
-    // Placeholder for routing to quiz waiting room
-    console.log('Starting quiz:', { quizId, mode, gameCode })
+    // Navigate to quiz countdown page
+    window.location.pathname = '/quiz-countdown'
   }
 
   return (
     <div className="flex h-full">
       {/* Left Panel - Category Tree */}
-      <div className="w-80 flex-shrink-0">
+      <div className="flex-shrink-0">
         <CategoryTreePanel
           selectedQuizId={selectedQuiz?.id}
           onQuizSelect={handleQuizSelect}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={handleToggleSidebar}
         />
       </div>
       
       {/* Right Panel - Quiz Overview */}
-      <div className="flex-1">
+      <div className="flex-1 transition-all duration-300">
         <QuizOverviewPanel
           selectedQuiz={selectedQuiz}
           onPlayQuiz={handlePlayQuiz}

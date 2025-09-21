@@ -108,7 +108,7 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <BookOpen className="h-6 w-6 mx-auto mb-2 text-blue-500" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -125,13 +125,7 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
                 <div className="text-xs text-gray-500 dark:text-gray-400">Duration</div>
               </div>
               
-              <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <Users className="h-6 w-6 mx-auto mb-2 text-purple-500" />
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {selectedQuiz.maxPlayers}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Max Players</div>
-              </div>
+              
               
               <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <Calendar className="h-6 w-6 mx-auto mb-2 text-orange-500" />
@@ -238,7 +232,7 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
             className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
           >
             <Rocket className="h-5 w-5 mr-2" />
-            PLAY 🚀
+            PLAY 
           </Button>
 
           {!selectedQuiz.isActive && (

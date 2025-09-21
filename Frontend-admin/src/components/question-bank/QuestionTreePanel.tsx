@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { ChevronDown, ChevronRight, Globe, FolderTree, Layers, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,15 @@ export function QuestionTreePanel({
   onToggleCollapse
 }: QuestionTreePanelProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['global']))
+  
+  // Debug logging
+  console.log('🔍 QuestionTreePanel render:', {
+    treeNodesLength: treeNodes?.length,
+    treeNodesType: typeof treeNodes,
+    isArray: Array.isArray(treeNodes),
+    firstNode: treeNodes?.[0],
+    allNodes: treeNodes
+  })
 
   const toggleNode = (nodeId: string) => {
     const newExpanded = new Set(expandedNodes)
@@ -31,23 +40,20 @@ export function QuestionTreePanel({
     setExpandedNodes(newExpanded)
   }
 
-  const renderNode = (node: QuestionTreeNode) => {
-    const isExpanded = expandedNodes.has(node.id)
+  const renderNode = (node: any): React.ReactElement => {
     const isSelected = selectedNodeId === node.id
+    const isExpanded = expandedNodes.has(node.id)
     const hasChildren = node.children && node.children.length > 0
 
     const getIcon = () => {
-      if (node.type === 'global') {
-        return <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-      } else if (node.type === 'category') {
-        return <FolderTree className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-      } else {
-        return <Layers className="h-3 w-3 text-orange-600 dark:text-orange-400" />
-      }
+      if (node.type === 'global') return <Globe className="h-4 w-4 text-blue-600" />
+      if (node.type === 'category') return <FolderTree className="h-4 w-4 text-green-600" />
+      if (node.type === 'subcategory') return <Layers className="h-4 w-4 text-purple-600" />
+      return <FolderTree className="h-4 w-4 text-gray-600" />
     }
 
     const getIndentation = () => {
-      return node.level * 16 // 16px per level
+      return node.level * 20 // 20px per level for better hierarchy visibility
     }
 
     return (
@@ -63,7 +69,7 @@ export function QuestionTreePanel({
           onClick={() => onSelectNode(node.id, node.type)}
         >
           <div className="flex items-center space-x-2 flex-1 min-w-0">
-            {hasChildren && (
+            {hasChildren ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -79,32 +85,36 @@ export function QuestionTreePanel({
                   <ChevronRight className="h-3 w-3 text-gray-500" />
                 )}
               </Button>
+            ) : (
+              <div className="w-6 flex justify-center">
+                <div className="w-1 h-1 bg-gray-300 rounded-full" />
+              </div>
             )}
             
-            <div className={cn(
-              "flex items-center justify-center rounded",
-              node.type === 'global' ? "w-6 h-6 bg-blue-100 dark:bg-blue-900/30" :
-              node.type === 'category' ? "w-6 h-6 bg-blue-100 dark:bg-blue-900/30" :
-              "w-5 h-5 bg-orange-100 dark:bg-orange-900/30"
-            )}>
-              {getIcon()}
-            </div>
+            {getIcon()}
             
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
-                {node.name}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {node.totalQuestionCount} question{node.totalQuestionCount !== 1 ? 's' : ''}
-              </div>
-            </div>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+              {node.name}
+            </span>
+          </div>
+          
+          <div className="flex items-center space-x-2 text-xs">
+            <span className={cn(
+              "px-2 py-1 rounded-full font-medium",
+              node.questionCount > 0 
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+            )}>
+              {node.questionCount || 0}
+            </span>
           </div>
         </div>
-
+        
+        {/* Render children if expanded */}
         {/* Render children */}
         {hasChildren && isExpanded && (
           <div className="space-y-1">
-            {node.children!.map(child => renderNode(child))}
+            {node.children!.map((child: any) => renderNode(child))}
           </div>
         )}
       </div>
@@ -140,7 +150,21 @@ export function QuestionTreePanel({
       </div>
       {!isCollapsed && (
         <div className="p-4 space-y-2 overflow-y-auto">
-          {treeNodes.map(node => renderNode(node))}
+          {Array.isArray(treeNodes) && treeNodes.length > 0 ? (
+            <>
+              <div className="text-xs text-gray-500 mb-2">Found {treeNodes.length} categories</div>
+              {treeNodes.map(node => renderNode(node))}
+            </>
+          ) : (
+            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+              <div className="text-4xl mb-2">📁</div>
+              <p className="text-sm">No categories found</p>
+              <p className="text-xs mt-1">
+                Tree nodes: {Array.isArray(treeNodes) ? treeNodes.length : 'not array'} | 
+                Type: {typeof treeNodes}
+              </p>
+            </div>
+          )}
         </div>
       )}
       {isCollapsed && (

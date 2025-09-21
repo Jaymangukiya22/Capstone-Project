@@ -116,10 +116,12 @@ export class QuestionBankService {
    */
   async createQuestion(questionData: CreateQuestionBankDto): Promise<QuestionBankItem> {
     try {
+      console.log('🔄 Creating question with data:', questionData);
       const response = await apiClient.post<ApiResponse<QuestionBankItem>>(this.endpoint, questionData);
+      console.log('✅ Question created successfully:', response.data);
       return response.data.data;
     } catch (error) {
-      console.error('Error creating question:', error);
+      console.error('❌ Error creating question:', error);
       throw error;
     }
   }
@@ -129,10 +131,12 @@ export class QuestionBankService {
    */
   async updateQuestion(id: number, questionData: UpdateQuestionBankDto): Promise<QuestionBankItem> {
     try {
+      console.log(`🔄 Updating question ${id} with data:`, questionData);
       const response = await apiClient.put<ApiResponse<QuestionBankItem>>(`${this.endpoint}/${id}`, questionData);
+      console.log(`✅ Question ${id} updated successfully:`, response.data);
       return response.data.data;
     } catch (error) {
-      console.error(`Error updating question ${id}:`, error);
+      console.error(`❌ Error updating question ${id}:`, error);
       throw error;
     }
   }
@@ -183,8 +187,21 @@ export class QuestionBankService {
    */
   async getQuestionsByCategory(categoryId: number): Promise<QuestionBankItem[]> {
     try {
-      const response = await apiClient.get<ApiResponse<QuestionBankItem[]>>(`${this.endpoint}/category/${categoryId}`);
-      return response.data.data;
+      const response = await apiClient.get<ApiResponse<{ questions: QuestionBankItem[]; pagination?: any }>>(`${this.endpoint}/category/${categoryId}`);
+      console.log('🔍 API Response for category', categoryId, ':', response.data);
+      
+      // Handle the nested structure: response.data.data.questions
+      if (response.data && response.data.data && response.data.data.questions) {
+        return response.data.data.questions;
+      }
+      
+      // Fallback for direct array
+      if (Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      
+      console.warn('Unexpected API response structure:', response.data);
+      return [];
     } catch (error) {
       console.error(`Error fetching questions for category ${categoryId}:`, error);
       throw error;
@@ -216,6 +233,14 @@ export class QuestionBankService {
     subcategoryDepth = 10
   ): Promise<ExcelUploadResult> {
     try {
+      console.log('🔄 Uploading Excel file:', {
+        fileName: file.name,
+        fileSize: file.size,
+        categoryId,
+        includeSubcategories,
+        subcategoryDepth
+      });
+      
       const formData = new FormData();
       formData.append('file', file);
       formData.append('categoryId', categoryId.toString());
@@ -232,9 +257,10 @@ export class QuestionBankService {
         }
       );
 
+      console.log('✅ Excel upload successful:', response.data);
       return response.data.data;
     } catch (error) {
-      console.error('Error uploading Excel file:', error);
+      console.error('❌ Error uploading Excel file:', error);
       throw error;
     }
   }

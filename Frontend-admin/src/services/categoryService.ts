@@ -19,6 +19,7 @@ export class CategoryService {
     depth?: number;
     isActive?: boolean;
     search?: string;
+    hierarchy?: boolean;
   }): Promise<{ categories: Category[]; pagination?: any }> {
     try {
       const queryParams = new URLSearchParams();
@@ -28,10 +29,11 @@ export class CategoryService {
       if (params?.parentId !== undefined) {
         queryParams.append('parentId', params.parentId === null ? 'null' : params.parentId.toString());
       }
-      if (params?.includeChildren) queryParams.append('includeChildren', 'true');
+      if (params?.includeChildren !== undefined) queryParams.append('includeChildren', params.includeChildren.toString());
       if (params?.depth) queryParams.append('depth', params.depth.toString());
       if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
       if (params?.search) queryParams.append('search', params.search);
+      if (params?.hierarchy !== undefined) queryParams.append('hierarchy', params.hierarchy.toString());
 
       const url = queryParams.toString() ? `${this.endpoint}?${queryParams}` : this.endpoint;
       const response = await apiClient.get<ApiResponse<Category[]>>(url);

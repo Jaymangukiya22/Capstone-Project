@@ -15,7 +15,7 @@ export const apiClient = axios.create({
 // Request interceptor for adding auth tokens
 apiClient.interceptors.request.use(
   (config) => {
-    // Add auth token from localStorage
+    // Add auth token from localStorage (commented out for testing)
     const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

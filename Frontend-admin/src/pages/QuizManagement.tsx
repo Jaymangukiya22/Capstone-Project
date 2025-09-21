@@ -25,8 +25,8 @@ import type { Quiz } from '@/types/api'
 
 export function QuizManagement() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<string>("")
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("")
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all")
 
   // Fetch quizzes and categories
   const { 
@@ -43,8 +43,8 @@ export function QuizManagement() {
   const filteredQuizzes = quizzes.filter(quiz => {
     const matchesSearch = quiz.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          quiz.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = !selectedCategory || quiz.categoryId.toString() === selectedCategory
-    const matchesDifficulty = !selectedDifficulty || quiz.difficulty === selectedDifficulty
+    const matchesCategory = selectedCategory === "all" || quiz.categoryId.toString() === selectedCategory
+    const matchesDifficulty = selectedDifficulty === "all" || quiz.difficulty === selectedDifficulty
     
     return matchesSearch && matchesCategory && matchesDifficulty
   })
@@ -157,7 +157,7 @@ export function QuizManagement() {
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Categories</SelectItem>
+            <SelectItem value="all">All Categories</SelectItem>
             {categories.map((category) => (
               <SelectItem key={category.id} value={category.id.toString()}>
                 {category.name}
@@ -171,7 +171,7 @@ export function QuizManagement() {
             <SelectValue placeholder="All Difficulties" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Difficulties</SelectItem>
+            <SelectItem value="all">All Difficulties</SelectItem>
             <SelectItem value="EASY">Easy</SelectItem>
             <SelectItem value="MEDIUM">Medium</SelectItem>
             <SelectItem value="HARD">Hard</SelectItem>

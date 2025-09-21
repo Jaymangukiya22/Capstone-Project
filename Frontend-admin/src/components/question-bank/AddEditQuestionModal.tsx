@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Button } from '@/components/ui/button'
+import React, { useState, useEffect } from 'react'
+import { Button } from '../ui/button'
 import {
   Dialog,
   DialogContent,
@@ -7,26 +7,24 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { X } from 'lucide-react'
-import { generateParentOptions } from '@/utils/categoryUtils'
-import type { Question, Category } from '@/types'
+} from '../ui/dialog'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
+import { Textarea } from '../ui/textarea'
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { AlertCircle } from 'lucide-react'
+import type { QuestionBankItem } from '../../services/questionBankService'
+import type { Category as ApiCategory } from '../../types/api'
 
 interface AddEditQuestionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  question?: Question // undefined for add, Question for edit
-  categories: Category[]
+  question?: QuestionBankItem // undefined for add, QuestionBankItem for edit
+  categories: ApiCategory[]
   selectedNodeId?: string | null
-  selectedNodeType?: 'category' | 'subcategory' | 'global'
-  onSave: (questionData: Omit<Question, 'id' | 'createdAt' | 'updatedAt'>) => void
+  selectedNodeType?: 'category' | 'subcategory' | 'global' | 'quiz'
+  onSave: (questionData: any) => void
 }
 
 export function AddEditQuestionModal({
@@ -39,150 +37,106 @@ export function AddEditQuestionModal({
   onSave
 }: AddEditQuestionModalProps) {
   const [formData, setFormData] = useState({
-    text: '',
-    options: { A: '', B: '', C: '', D: '' },
-    correctOption: 'A' as 'A' | 'B' | 'C' | 'D',
-    difficulty: 'easy' as 'easy' | 'intermediate' | 'hard',
-    points: 5,
-    timeLimit: 30,
-    tags: [] as string[],
-    categoryId: '',
-    subcategoryId: '',
-    isGlobal: false
+    questionText: '',
+    options: [
+      { optionText: '', isCorrect: false },
+      { optionText: '', isCorrect: false },
+      { optionText: '', isCorrect: false },
+      { optionText: '', isCorrect: false }
+    ],
+    difficulty: 'EASY' as 'EASY' | 'MEDIUM' | 'HARD',
+    categoryId: null as number | null
   })
   
-  const [tagInput, setTagInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-
-  // Generate parent options for category selection
-  const parentOptions = useMemo(() => generateParentOptions(categories), [categories])
+  const [errors, setErrors] = useState<string[]>([])
 
   // Initialize form data when question changes
   useEffect(() => {
     if (question) {
+      // Edit mode - populate with existing question data
+      const options = [...question.options]
+      // Ensure we have exactly 4 options
+      while (options.length < 4) {
+        options.push({ 
+          id: 0, 
+          questionId: 0, 
+          optionText: '', 
+          isCorrect: false,
+          createdAt: '',
+          updatedAt: ''
+        })
+      }
+      
       setFormData({
-        text: question.text,
-        options: question.options,
-        correctOption: question.correctOption,
+        questionText: question.questionText,
+        options: options.slice(0, 4),
         difficulty: question.difficulty,
-        points: question.points,
-        timeLimit: question.timeLimit,
-        tags: question.tags,
-        categoryId: question.categoryId || '',
-        subcategoryId: question.subcategoryId || '',
-        isGlobal: !question.categoryId
+        categoryId: question.categoryId || null
       })
     } else {
-      // Reset form for new question - pre-populate with selected node
-      let initialCategoryId = ''
-      let initialSubcategoryId = ''
-      let initialIsGlobal = true
-
+      // Add mode - initialize with defaults
+      let initialCategoryId: number | null = null
+      
       if (selectedNodeId && selectedNodeType !== 'global') {
-        initialIsGlobal = false
-        if (selectedNodeType === 'category') {
-          initialCategoryId = selectedNodeId
-        } else if (selectedNodeType === 'subcategory') {
-          initialSubcategoryId = selectedNodeId
-          // Find the parent category for this subcategory
-          const parentCategory = categories.find(cat => 
-            cat.subcategories.some(sub => sub.id === selectedNodeId)
-          )
-          if (parentCategory) {
-            initialCategoryId = parentCategory.id
-          }
+        if (selectedNodeType === 'category' || selectedNodeType === 'subcategory') {
+          initialCategoryId = parseInt(selectedNodeId)
         }
       }
 
       setFormData({
-        text: '',
-        options: { A: '', B: '', C: '', D: '' },
-        correctOption: 'A',
-        difficulty: 'easy',
-        points: 5,
-        timeLimit: 30,
-        tags: [],
-        categoryId: initialCategoryId,
-        subcategoryId: initialSubcategoryId,
-        isGlobal: initialIsGlobal
+        questionText: '',
+        options: [
+          { optionText: '', isCorrect: false },
+          { optionText: '', isCorrect: false },
+          { optionText: '', isCorrect: false },
+          { optionText: '', isCorrect: false }
+        ],
+        difficulty: 'EASY',
+        categoryId: initialCategoryId
       })
     }
-    setTagInput('')
-  }, [question, open, selectedNodeId, selectedNodeType, categories])
+    setErrors([])
+  }, [question, open, selectedNodeId, selectedNodeType])
 
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleOptionChange = (option: 'A' | 'B' | 'C' | 'D', value: string) => {
+  const handleOptionChange = (index: number, field: 'optionText' | 'isCorrect', value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
-      options: { ...prev.options, [option]: value }
+      options: prev.options.map((option, i) => 
+        i === index ? { ...option, [field]: value } : option
+      )
     }))
   }
 
-  const handleGlobalChange = (isGlobal: boolean) => {
+  const handleCorrectAnswerChange = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      isGlobal,
-      categoryId: isGlobal ? '' : prev.categoryId,
-      subcategoryId: isGlobal ? '' : prev.subcategoryId
-    }))
-  }
-
-  const handleCategoryChange = (parentId: string) => {
-    const selectedParent = parentOptions.find(option => option.id === parentId)
-    if (selectedParent) {
-      if (selectedParent.type === 'category') {
-        setFormData(prev => ({
-          ...prev,
-          categoryId: parentId,
-          subcategoryId: ''
-        }))
-      } else {
-        // It's a subcategory
-        const category = categories.find(cat => 
-          cat.subcategories.some(sub => sub.id === parentId)
-        )
-        setFormData(prev => ({
-          ...prev,
-          categoryId: category?.id || '',
-          subcategoryId: parentId
-        }))
-      }
-    }
-  }
-
-  const addTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, tagInput.trim()]
+      options: prev.options.map((option, i) => ({
+        ...option,
+        isCorrect: i === index
       }))
-      setTagInput('')
-    }
-  }
-
-  const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
     }))
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      addTag()
-    }
   }
 
   const validateForm = () => {
-    if (!formData.text.trim()) return false
-    if (!formData.options.A.trim() || !formData.options.B.trim() || 
-        !formData.options.C.trim() || !formData.options.D.trim()) return false
-    if (formData.points < 1 || formData.timeLimit < 10) return false
-    return true
+    const newErrors: string[] = []
+    
+    if (!formData.questionText.trim()) {
+      newErrors.push('Question text is required')
+    }
+    
+    const filledOptions = formData.options.filter(opt => opt.optionText.trim())
+    if (filledOptions.length < 2) {
+      newErrors.push('At least 2 options are required')
+    }
+    
+    const hasCorrectAnswer = formData.options.some(opt => opt.isCorrect && opt.optionText.trim())
+    if (!hasCorrectAnswer) {
+      newErrors.push('Please select a correct answer from the filled options')
+    }
+    
+    setErrors(newErrors)
+    return newErrors.length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -191,58 +145,24 @@ export function AddEditQuestionModal({
 
     setIsLoading(true)
     try {
+      // Filter out empty options
+      const validOptions = formData.options.filter(opt => opt.optionText.trim())
+      
       const questionData = {
-        text: formData.text.trim(),
-        options: formData.options,
-        correctOption: formData.correctOption,
+        questionText: formData.questionText.trim(),
+        options: validOptions,
         difficulty: formData.difficulty,
-        points: formData.points,
-        timeLimit: formData.timeLimit,
-        tags: formData.tags,
-        categoryId: formData.isGlobal ? undefined : formData.categoryId || undefined,
-        subcategoryId: formData.isGlobal ? undefined : formData.subcategoryId || undefined
+        categoryId: formData.categoryId ? Number(formData.categoryId) : null
       }
 
       await onSave(questionData)
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to save question:', error)
+      setErrors(['Failed to save question. Please try again.'])
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleReset = () => {
-    if (question) {
-      // Reset to original question data
-      setFormData({
-        text: question.text,
-        options: question.options,
-        correctOption: question.correctOption,
-        difficulty: question.difficulty,
-        points: question.points,
-        timeLimit: question.timeLimit,
-        tags: question.tags,
-        categoryId: question.categoryId || '',
-        subcategoryId: question.subcategoryId || '',
-        isGlobal: !question.categoryId
-      })
-    } else {
-      // Reset to empty form
-      setFormData({
-        text: '',
-        options: { A: '', B: '', C: '', D: '' },
-        correctOption: 'A',
-        difficulty: 'easy',
-        points: 5,
-        timeLimit: 30,
-        tags: [],
-        categoryId: '',
-        subcategoryId: '',
-        isGlobal: false
-      })
-    }
-    setTagInput('')
   }
 
   return (
@@ -260,6 +180,20 @@ export function AddEditQuestionModal({
           </DialogDescription>
         </DialogHeader>
 
+        {errors.length > 0 && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+            <div className="flex items-center space-x-2 text-red-800 dark:text-red-200">
+              <AlertCircle className="h-4 w-4" />
+              <span className="font-medium">Please fix the following errors:</span>
+            </div>
+            <ul className="mt-2 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+              {errors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Question Text */}
           <div className="space-y-2">
@@ -269,8 +203,8 @@ export function AddEditQuestionModal({
             <Textarea
               id="question-text"
               placeholder="Enter your question..."
-              value={formData.text}
-              onChange={(e) => handleInputChange('text', e.target.value)}
+              value={formData.questionText}
+              onChange={(e) => setFormData(prev => ({ ...prev, questionText: e.target.value }))}
               className="min-h-[80px]"
               required
             />
@@ -281,166 +215,106 @@ export function AddEditQuestionModal({
             <Label className="text-sm font-medium">
               Answer Options <span className="text-red-500">*</span>
             </Label>
-            <RadioGroup
-              value={formData.correctOption}
-              onValueChange={(value) => handleInputChange('correctOption', value)}
-            >
-              {(['A', 'B', 'C', 'D'] as const).map((option) => (
-                <div key={option} className="flex items-center space-x-3">
-                  <RadioGroupItem value={option} id={`option-${option}`} />
-                  <Label htmlFor={`option-${option}`} className="font-medium">
-                    {option}
+            <div className="space-y-3">
+              {formData.options.map((option, index) => (
+                <div key={index} className="flex items-center space-x-3">
+                  <input
+                    type="radio"
+                    name="correctAnswer"
+                    checked={option.isCorrect}
+                    onChange={() => handleCorrectAnswerChange(index)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <Label className="font-medium min-w-[20px]">
+                    {String.fromCharCode(65 + index)}
                   </Label>
                   <Input
-                    placeholder={`Option ${option}`}
-                    value={formData.options[option]}
-                    onChange={(e) => handleOptionChange(option, e.target.value)}
+                    placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                    value={option.optionText}
+                    onChange={(e) => handleOptionChange(index, 'optionText', e.target.value)}
                     className="flex-1"
-                    required
                   />
                 </div>
               ))}
-            </RadioGroup>
+            </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Select the radio button next to the correct answer
+              Select the radio button next to the correct answer. At least 2 options are required.
             </p>
           </div>
 
-          {/* Question Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="difficulty" className="text-sm font-medium">
-                Difficulty
-              </Label>
-              <Select
-                value={formData.difficulty}
-                onValueChange={(value: 'easy' | 'intermediate' | 'hard') => 
-                  handleInputChange('difficulty', value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="easy">Easy</SelectItem>
-                  <SelectItem value="intermediate">Intermediate</SelectItem>
-                  <SelectItem value="hard">Hard</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="points" className="text-sm font-medium">
-                Points
-              </Label>
-              <Input
-                id="points"
-                type="number"
-                min="1"
-                max="100"
-                value={formData.points}
-                onChange={(e) => handleInputChange('points', parseInt(e.target.value) || 5)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="timeLimit" className="text-sm font-medium">
-                Time Limit (seconds)
-              </Label>
-              <Input
-                id="timeLimit"
-                type="number"
-                min="10"
-                max="300"
-                value={formData.timeLimit}
-                onChange={(e) => handleInputChange('timeLimit', parseInt(e.target.value) || 30)}
-              />
-            </div>
+          {/* Difficulty */}
+          <div className="space-y-2">
+            <Label htmlFor="difficulty" className="text-sm font-medium">
+              Difficulty
+            </Label>
+            <Select
+              value={formData.difficulty}
+              onValueChange={(value: 'EASY' | 'MEDIUM' | 'HARD') =>
+                setFormData(prev => ({ ...prev, difficulty: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EASY">Easy</SelectItem>
+                <SelectItem value="MEDIUM">Medium</SelectItem>
+                <SelectItem value="HARD">Hard</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Category Selection */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="global-question"
-                checked={formData.isGlobal}
-                onCheckedChange={handleGlobalChange}
-              />
-              <Label htmlFor="global-question" className="text-sm font-medium">
-                Global Question (No Category)
-              </Label>
-            </div>
-
-            {!formData.isGlobal && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Category</Label>
-                <Select
-                  value={formData.subcategoryId || formData.categoryId}
-                  onValueChange={handleCategoryChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category or subcategory" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {parentOptions.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {option.displayName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          {/* Tags */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Tags</Label>
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Add a tag..."
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                className="flex-1"
-              />
-              <Button type="button" onClick={addTag} variant="outline">
-                Add
-              </Button>
-            </div>
-            {formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {formData.tags.map((tag, index) => (
-                  <Badge
-                    key={index}
-                    variant="secondary"
-                    className="flex items-center space-x-1"
-                  >
-                    <span>{tag}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-4 w-4 p-0 hover:bg-transparent"
-                      onClick={() => removeTag(tag)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <Label className="text-sm font-medium">Category</Label>
+            <Select
+              value={formData.categoryId ? formData.categoryId.toString() : 'global'}
+              onValueChange={(value) => 
+                setFormData(prev => ({ 
+                  ...prev, 
+                  categoryId: value === 'global' ? null : parseInt(value) 
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select category (optional for global questions)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="global">Global Question (No Category)</SelectItem>
+                {(categories || [])
+                  .filter(category => {
+                    const isValid = category && 
+                      category.id && 
+                      typeof category.id === 'number' && 
+                      category.id > 0 &&
+                      category.name &&
+                      typeof category.name === 'string' &&
+                      category.name.trim() !== ''
+                    
+                    if (!isValid) {
+                      console.warn('Filtered out invalid category:', category)
+                    }
+                    return isValid
+                  })
+                  .map((category) => {
+                    const value = category.id.toString()
+                    if (!value || value.trim() === '') {
+                      console.error('Category has invalid ID:', category)
+                      return null
+                    }
+                    return (
+                      <SelectItem key={category.id} value={value}>
+                        {category.name}
+                      </SelectItem>
+                    )
+                  })
+                  .filter(Boolean)
+                }
+              </SelectContent>
+            </Select>
           </div>
 
           <DialogFooter className="flex space-x-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleReset}
-              disabled={isLoading}
-            >
-              Reset
-            </Button>
             <Button
               type="button"
               variant="outline"
@@ -451,7 +325,7 @@ export function AddEditQuestionModal({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !validateForm()}
+              disabled={isLoading}
             >
               {isLoading ? 'Saving...' : question ? 'Update Question' : 'Add Question'}
             </Button>

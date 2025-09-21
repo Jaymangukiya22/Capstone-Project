@@ -13,7 +13,7 @@ export interface QuestionTreeNode {
 /**
  * Generates a tree structure with question counts for the question bank
  */
-export function generateQuestionTree(categories: Category[], questions: Question[]): QuestionTreeNode[] {
+export function generateQuestionTree(categories: Category[], questions: Question[] | any[]): QuestionTreeNode[] {
   const tree: QuestionTreeNode[] = []
 
   // Add global/unassigned questions node
@@ -36,17 +36,24 @@ export function generateQuestionTree(categories: Category[], questions: Question
   return tree
 }
 
-function processCategoryNode(category: Category, questions: Question[], level: number): QuestionTreeNode {
+function processCategoryNode(category: Category, questions: Question[] | any[], level: number): QuestionTreeNode {
   const children: QuestionTreeNode[] = []
   
   // Process subcategories recursively
-  category.subcategories.forEach(subcategory => {
-    const subcategoryNode = processSubcategoryNode(subcategory, questions, level + 1)
-    children.push(subcategoryNode)
-  })
+  if (category.subcategories && Array.isArray(category.subcategories)) {
+    category.subcategories.forEach(subcategory => {
+      const subcategoryNode = processSubcategoryNode(subcategory, questions, level + 1)
+      children.push(subcategoryNode)
+    })
+  }
 
   // Count questions directly in this category
-  const directQuestions = questions.filter(q => q.categoryId === category.id && !q.subcategoryId)
+  // Handle both Question and QuestionBankItem formats
+  const directQuestions = questions.filter(q => {
+    const categoryId = q.categoryId ? q.categoryId.toString() : null
+    const categoryIdToMatch = category.id ? category.id.toString() : null
+    return categoryId === categoryIdToMatch && !q.subcategoryId
+  })
   
   // Calculate total questions (direct + all descendants)
   const totalQuestionCount = directQuestions.length + 
@@ -63,7 +70,7 @@ function processCategoryNode(category: Category, questions: Question[], level: n
   }
 }
 
-function processSubcategoryNode(subcategory: any, questions: Question[], level: number): QuestionTreeNode {
+function processSubcategoryNode(subcategory: any, questions: Question[] | any[], level: number): QuestionTreeNode {
   const children: QuestionTreeNode[] = []
   
   // Process nested subcategories recursively
@@ -75,7 +82,11 @@ function processSubcategoryNode(subcategory: any, questions: Question[], level: 
   }
 
   // Count questions directly in this subcategory
-  const directQuestions = questions.filter(q => q.subcategoryId === subcategory.id)
+  const directQuestions = questions.filter(q => {
+    const subcategoryId = q.subcategoryId ? q.subcategoryId.toString() : null
+    const subcategoryIdToMatch = subcategory.id ? subcategory.id.toString() : null
+    return subcategoryId === subcategoryIdToMatch
+  })
   
   // Calculate total questions (direct + all descendants)
   const totalQuestionCount = directQuestions.length + 

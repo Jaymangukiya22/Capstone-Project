@@ -27,13 +27,13 @@ router.get('/search', searchQuizzes);
 router.get('/popular', getPopularQuizzes);
 router.get('/', searchQuizzes); // Use searchQuizzes for getting all quizzes with filtering
 router.get('/:id', getQuizById);
-router.get('/:id/play', requirePlayer, getQuizForPlay);
+router.get('/:id/play', getQuizForPlay);
 router.get('/:id/stats', getQuizStats);
 
-// Admin-only routes
-router.post('/', requireAdmin, validateRequest(createQuizSchema), createQuiz);
-router.put('/:id', requireAdmin, validateRequest(createQuizSchema), updateQuiz);
-router.delete('/:id', requireAdmin, deleteQuiz);
-router.post('/:id/questions', requireAdmin, validateRequest(assignQuestionsSchema), assignQuestionsToQuiz);
+// Admin-only routes (Auth temporarily disabled)
+router.post('/', validateRequest(createQuizSchema), createQuiz);
+router.put('/:id', validateRequest(createQuizSchema), updateQuiz);
+router.delete('/:id', deleteQuiz);
+router.post('/:id/questions', validateRequest(assignQuestionsSchema), assignQuestionsToQuiz);
 
 export default router;

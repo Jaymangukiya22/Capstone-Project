@@ -1,18 +1,18 @@
 import { useState } from 'react'
-import { Eye, Edit, Trash2, Clock, Award } from 'lucide-react'
+import { Eye, Edit, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { getDifficultyColor } from '@/utils/questionUtils'
-import type { Question } from '@/types'
+import type { QuestionBankItem } from '@/services/questionBankService'
 
 interface QuestionCardProps {
-  question: Question
+  question: QuestionBankItem
   isSelected: boolean
   onSelect: (questionId: string, selected: boolean) => void
-  onPreview: (question: Question) => void
-  onEdit: (question: Question) => void
+  onPreview: (question: QuestionBankItem) => void
+  onEdit: (question: QuestionBankItem) => void
   onDelete: (questionId: string) => void
 }
 
@@ -27,7 +27,7 @@ export function QuestionCard({
   const [isHovered, setIsHovered] = useState(false)
 
   const handleCheckboxChange = (checked: boolean) => {
-    onSelect(question.id, checked)
+    onSelect(question.id.toString(), checked)
   }
 
   return (
@@ -49,17 +49,14 @@ export function QuestionCard({
             className="mt-1"
           />
           <div className="flex items-center space-x-2">
-            <Badge className={getDifficultyColor(question.difficulty)}>
+            <Badge className={getDifficultyColor(question.difficulty.toLowerCase() === 'medium' ? 'intermediate' : question.difficulty.toLowerCase() as 'easy' | 'intermediate' | 'hard')}>
               {question.difficulty}
             </Badge>
-            <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
-              <Award className="h-3 w-3" />
-              <span>{question.points} pts</span>
-            </div>
-            <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
-              <Clock className="h-3 w-3" />
-              <span>{question.timeLimit}s</span>
-            </div>
+            {question.category && (
+              <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
+                <span>{question.category.name}</span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -90,7 +87,7 @@ export function QuestionCard({
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/20"
-            onClick={() => onDelete(question.id)}
+            onClick={() => onDelete(question.id.toString())}
             title="Delete"
           >
             <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
@@ -101,32 +98,32 @@ export function QuestionCard({
       {/* Question text */}
       <div className="mb-4">
         <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-relaxed">
-          {question.text}
+          {question.questionText}
         </p>
       </div>
 
       {/* Options */}
       <div className="space-y-2 mb-4">
-        {Object.entries(question.options).map(([key, value]) => (
+        {question.options.map((option, index) => (
           <div
-            key={key}
+            key={option.id}
             className={cn(
               "flex items-center space-x-2 p-2 rounded border text-sm",
-              question.correctOption === key
+              option.isCorrect
                 ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300"
                 : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300"
             )}
           >
             <span className={cn(
               "flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium",
-              question.correctOption === key
+              option.isCorrect
                 ? "bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200"
                 : "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400"
             )}>
-              {key}
+              {String.fromCharCode(65 + index)}
             </span>
-            <span className="flex-1">{value}</span>
-            {question.correctOption === key && (
+            <span className="flex-1">{option.optionText}</span>
+            {option.isCorrect && (
               <div className="text-green-600 dark:text-green-400 text-xs font-medium">
                 ✓ Correct
               </div>
@@ -135,20 +132,10 @@ export function QuestionCard({
         ))}
       </div>
 
-      {/* Tags */}
-      {question.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {question.tags.map((tag, index) => (
-            <Badge
-              key={index}
-              variant="secondary"
-              className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-            >
-              {tag}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {/* Created date */}
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        Created: {new Date(question.createdAt).toLocaleDateString()}
+      </div>
     </div>
   )
 }

@@ -15,7 +15,9 @@ export interface ParentOption {
 export function generateParentOptions(categories: Category[]): ParentOption[] {
   const options: ParentOption[] = []
 
-  const traverseSubcategories = (subcategories: Subcategory[], level: number) => {
+  const traverseSubcategories = (subcategories: Subcategory[] | undefined, level: number) => {
+    if (!subcategories || !Array.isArray(subcategories)) return
+    
     subcategories.forEach(subcategory => {
       const indent = '  '.repeat(level)
       options.push({
@@ -27,10 +29,14 @@ export function generateParentOptions(categories: Category[]): ParentOption[] {
       })
 
       // Recursively traverse nested subcategories
-      if (subcategory.subcategories.length > 0) {
+      if (subcategory.subcategories && subcategory.subcategories.length > 0) {
         traverseSubcategories(subcategory.subcategories, level + 1)
       }
     })
+  }
+
+  if (!categories || !Array.isArray(categories)) {
+    return options
   }
 
   categories.forEach(category => {
@@ -44,7 +50,9 @@ export function generateParentOptions(categories: Category[]): ParentOption[] {
     })
 
     // Add all subcategories (including nested ones) as parent options
-    traverseSubcategories(category.subcategories, 1)
+    if (category.subcategories) {
+      traverseSubcategories(category.subcategories, 1)
+    }
   })
 
   return options
@@ -54,7 +62,10 @@ export function generateParentOptions(categories: Category[]): ParentOption[] {
  * Finds a subcategory by ID in the category tree
  */
 export function findSubcategoryById(categories: Category[], subcategoryId: string): Subcategory | null {
-  const searchInSubcategories = (subcategories: Subcategory[]): Subcategory | null => {
+  if (!categories || !Array.isArray(categories)) return null
+  
+  const searchInSubcategories = (subcategories: Subcategory[] | undefined): Subcategory | null => {
+    if (!subcategories || !Array.isArray(subcategories)) return null
     for (const subcategory of subcategories) {
       if (subcategory.id === subcategoryId) {
         return subcategory

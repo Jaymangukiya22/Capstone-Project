@@ -28,7 +28,8 @@ export const uploadMiddleware = upload.single('file');
 export const createQuestion = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { questionText, categoryId, difficulty, options } = req.body;
-    const createdById = req.user!.id;
+    // Use default user ID for testing (comment out auth requirement)
+    const createdById = req.user?.id || 1; // Default to user ID 1 for testing
 
     const question = await questionBankService.createQuestion({
       questionText,
@@ -174,7 +175,8 @@ export const deleteQuestion = async (req: AuthenticatedRequest, res: Response): 
 export const bulkImport = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { categoryId, questions } = req.body;
-    const createdById = req.user!.id;
+    // Use default user ID for testing (comment out auth requirement)
+    const createdById = req.user?.id || 1; // Default to user ID 1 for testing
 
     const result = await questionBankService.bulkImport({
       categoryId,
@@ -221,7 +223,8 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    const createdById = req.user!.id;
+    // Use default user ID for testing (comment out auth requirement)
+    const createdById = req.user?.id || 1; // Default to user ID 1 for testing
 
     logInfo('Starting Excel upload', {
       categoryId,

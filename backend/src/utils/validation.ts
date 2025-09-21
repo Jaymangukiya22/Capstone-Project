@@ -71,7 +71,7 @@ export const createQuizSchema = Joi.object({
 // Question Bank validation schemas
 export const createQuestionBankSchema = Joi.object({
   questionText: Joi.string().min(1).required(),
-  categoryId: Joi.number().integer().positive().required(),
+  categoryId: Joi.number().integer().positive().allow(null).optional(),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').default('MEDIUM'),
   options: Joi.array().items(
     Joi.object({

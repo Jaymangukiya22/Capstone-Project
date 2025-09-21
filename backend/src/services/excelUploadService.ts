@@ -85,16 +85,51 @@ export class ExcelUploadService {
   }
 
   /**
-   * Validate Excel headers
+   * Normalize correct answer format - converts A,B,C,D to 1,2,3,4
+   */
+  private normalizeCorrectAnswer(answer: string): string {
+    if (!answer) return '1';
+    
+    return answer
+      .split(',')
+      .map(a => {
+        const trimmed = a.trim().toLowerCase();
+        // Convert letter format to number format
+        if (trimmed === 'a') return '1';
+        if (trimmed === 'b') return '2';
+        if (trimmed === 'c') return '3';
+        if (trimmed === 'd') return '4';
+        // If already a number, keep it
+        return trimmed;
+      })
+      .join(',');
+  }
+
+  /**
+   * Validate Excel headers - supports multiple column naming conventions
    */
   private validateHeaders(headers: string[]): void {
-    const requiredHeaders = ['question', 'option1', 'option2', 'correctAnswers'];
     const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
     
-    for (const required of requiredHeaders) {
-      if (!normalizedHeaders.includes(required.toLowerCase())) {
-        throw new Error(`Missing required column: ${required}`);
-      }
+    // Check for required question column
+    if (!normalizedHeaders.includes('question')) {
+      throw new Error(`Missing required column: question`);
+    }
+    
+    // Check for option columns - support both formats
+    const hasNewFormat = normalizedHeaders.includes('option1') && normalizedHeaders.includes('option2');
+    const hasOldFormat = normalizedHeaders.includes('option_a') && normalizedHeaders.includes('option_b');
+    
+    if (!hasNewFormat && !hasOldFormat) {
+      throw new Error(`Missing required option columns. Expected either: option1, option2 OR option_a, option_b`);
+    }
+    
+    // Check for correct answer column - support both formats
+    const hasCorrectAnswers = normalizedHeaders.includes('correctanswers') || 
+                             normalizedHeaders.includes('correct_answer');
+    
+    if (!hasCorrectAnswers) {
+      throw new Error(`Missing required column: correctAnswers or correct_answer`);
     }
   }
 
@@ -114,11 +149,11 @@ export class ExcelUploadService {
       try {
         const question: ExcelQuestionRow = {
           question: this.getCellValue(row, headerMap, 'question'),
-          option1: this.getCellValue(row, headerMap, 'option1'),
-          option2: this.getCellValue(row, headerMap, 'option2'),
-          option3: this.getCellValue(row, headerMap, 'option3'),
-          option4: this.getCellValue(row, headerMap, 'option4'),
-          correctAnswers: this.getCellValue(row, headerMap, 'correctAnswers') || this.getCellValue(row, headerMap, 'correct_answers') || '1',
+          option1: this.getCellValue(row, headerMap, 'option1') || this.getCellValue(row, headerMap, 'option_a'),
+          option2: this.getCellValue(row, headerMap, 'option2') || this.getCellValue(row, headerMap, 'option_b'),
+          option3: this.getCellValue(row, headerMap, 'option3') || this.getCellValue(row, headerMap, 'option_c'),
+          option4: this.getCellValue(row, headerMap, 'option4') || this.getCellValue(row, headerMap, 'option_d'),
+          correctAnswers: this.normalizeCorrectAnswer(this.getCellValue(row, headerMap, 'correctAnswers') || this.getCellValue(row, headerMap, 'correct_answer') || '1'),
           difficulty: this.getCellValue(row, headerMap, 'difficulty') || 'MEDIUM',
           category: this.getCellValue(row, headerMap, 'category')
         };

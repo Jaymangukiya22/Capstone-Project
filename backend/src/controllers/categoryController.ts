@@ -43,13 +43,33 @@ export class CategoryController {
       
       let result;
       if (hierarchy === 'true') {
-        const categories = await categoryService.getCategoryHierarchy(options.depth || 5);
-        result = {
-          categories,
-          total: categories.length,
-          page: 1,
-          totalPages: 1
-        };
+        try {
+          const categories = await categoryService.getCategoryHierarchy(options.depth || 5);
+          console.log('🔍 Backend Hierarchy Response:', categories.length, 'root categories found');
+          
+          // If no root categories found, fall back to getting all categories
+          if (categories.length === 0) {
+            console.log('🔍 No root categories found, falling back to all categories');
+            const allCategories = await categoryService.getAllCategories({ 
+              limit: 1000, 
+              isActive: true 
+            } as CategoryQueryOptions);
+            result = allCategories;
+          } else {
+            result = {
+              categories,
+              total: categories.length,
+              page: 1,
+              totalPages: 1
+            };
+          }
+        } catch (error) {
+          console.log('🔍 Hierarchy failed, falling back to all categories:', error);
+          result = await categoryService.getAllCategories({ 
+            limit: 1000, 
+            isActive: true 
+          } as CategoryQueryOptions);
+        }
       } else {
         result = await categoryService.getAllCategories(options as CategoryQueryOptions);
       }

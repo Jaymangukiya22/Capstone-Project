@@ -39,7 +39,7 @@ const sequelize = new Sequelize({
     acquire: 30000,
     idle: 10000,
   },
-  
+
 });
 
 // Test database connection
@@ -50,8 +50,25 @@ export const connectDatabase = async (): Promise<void> => {
     
     // Sync models in development
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ force: true }); // Use force: true to recreate tables
-      logInfo('Database models synchronized with force: true');
+      await sequelize.sync({ force: true }); // Recreate tables to fix schema issues
+      logInfo('Database models synchronized with force: true - tables recreated');
+      
+      // Run seeder after sync
+      try {
+        const { MassiveSeeder, DEFAULT_CONFIG } = await import('../seeders/massiveSeeder');
+        const seeder = new MassiveSeeder({
+          users: 10,              // Minimal for testing
+          categories: 5,          // 5 categories
+          questionsPerCategory: 20, // 20 questions per category
+          quizzesPerCategory: 3,   // 3 quizzes per category
+          attemptsPerUser: 2,      // 2 attempts per user
+          questionsPerQuiz: 5      // 5 questions per quiz
+        });
+        await seeder.seed();
+        logInfo('Database seeded successfully');
+      } catch (seedError) {
+        logError('Error seeding database', seedError as Error);
+      }
     } else {
       logInfo('Database sync skipped - using existing schema');
     }

@@ -4,22 +4,22 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { QuestionCard } from './QuestionCard'
-import type { Question } from '@/types'
+import type { QuestionBankItem } from '@/services/questionBankService'
 
 interface QuestionListPanelProps {
-  questions: Question[]
+  questions: QuestionBankItem[]
   selectedQuestions: Set<string>
   searchQuery: string
-  difficultyFilter: 'all' | 'easy' | 'intermediate' | 'hard'
+  difficultyFilter: 'all' | 'EASY' | 'MEDIUM' | 'HARD'
   onSearchChange: (query: string) => void
-  onDifficultyFilterChange: (difficulty: 'all' | 'easy' | 'intermediate' | 'hard') => void
+  onDifficultyFilterChange: (difficulty: 'all' | 'EASY' | 'MEDIUM' | 'HARD') => void
   onSelectQuestion: (questionId: string, selected: boolean) => void
   onSelectAll: (selected: boolean) => void
   onAddQuestion: () => void
   onImportCSV: () => void
   onExportQuestions: () => void
-  onPreviewQuestion: (question: Question) => void
-  onEditQuestion: (question: Question) => void
+  onPreviewQuestion: (question: QuestionBankItem) => void
+  onEditQuestion: (question: QuestionBankItem) => void
   onDeleteQuestion: (questionId: string) => void
   onBulkDelete: () => void
   selectedNodeName?: string
@@ -43,12 +43,14 @@ export function QuestionListPanel({
   onBulkDelete,
   selectedNodeName
 }: QuestionListPanelProps) {
-  const isAllSelected = questions.length > 0 && questions.every(q => selectedQuestions.has(q.id))
+  const isAllSelected = Array.isArray(questions) && questions.length > 0 && questions.every(q => selectedQuestions.has(q.id.toString()))
   const someSelected = selectedQuestions.size > 0
 
 
   const clearSelection = () => {
-    questions.forEach(q => onSelectQuestion(q.id, false))
+    if (Array.isArray(questions)) {
+      questions.forEach(q => onSelectQuestion(q.id.toString(), false))
+    }
   }
 
   return (
@@ -110,9 +112,9 @@ export function QuestionListPanel({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Difficulties</SelectItem>
-              <SelectItem value="easy">Easy</SelectItem>
-              <SelectItem value="intermediate">Intermediate</SelectItem>
-              <SelectItem value="hard">Hard</SelectItem>
+              <SelectItem value="EASY">Easy</SelectItem>
+              <SelectItem value="MEDIUM">Medium</SelectItem>
+              <SelectItem value="HARD">Hard</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -171,7 +173,7 @@ export function QuestionListPanel({
 
       {/* Question List */}
       <div className="flex-1 overflow-y-auto p-6">
-        {questions.length === 0 ? (
+        {!Array.isArray(questions) || questions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-500 dark:text-gray-400">
             <div className="text-6xl mb-4">📝</div>
             <h3 className="text-lg font-medium mb-2">No questions found</h3>
@@ -190,11 +192,11 @@ export function QuestionListPanel({
           </div>
         ) : (
           <div className="grid gap-4">
-            {questions.map((question) => (
+            {Array.isArray(questions) && questions.map((question) => (
               <QuestionCard
                 key={question.id}
                 question={question}
-                isSelected={selectedQuestions.has(question.id)}
+                isSelected={selectedQuestions.has(question.id.toString())}
                 onSelect={onSelectQuestion}
                 onPreview={onPreviewQuestion}
                 onEdit={onEditQuestion}

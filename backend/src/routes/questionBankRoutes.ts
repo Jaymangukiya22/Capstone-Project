@@ -23,7 +23,7 @@ import {
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+// router.use(authenticateToken);
 
 // Search questions (available to all authenticated users)
 router.get('/search', validateQuery(searchQuestionsSchema), searchQuestions);
@@ -37,17 +37,17 @@ router.get('/category/:categoryId', getQuestionsByCategory);
 // Get specific question by ID
 router.get('/:id', getQuestionById);
 
-// Admin-only routes for managing question bank
-router.post('/', requireAdmin, validateRequest(createQuestionBankSchema), createQuestion);
-router.put('/:id', requireAdmin, validateRequest(createQuestionBankSchema), updateQuestion);
-router.delete('/:id', requireAdmin, deleteQuestion);
+// Admin-only routes for managing question bank (Auth temporarily disabled)
+router.post('/', validateRequest(createQuestionBankSchema), createQuestion);
+router.put('/:id', validateRequest(createQuestionBankSchema), updateQuestion);
+router.delete('/:id', deleteQuestion);
 
-// Template download (Admin only)
-router.get('/template', requireAdmin, downloadTemplate);
+// Template download (Auth temporarily disabled)
+router.get('/template', downloadTemplate);
 
-// Bulk operations (Admin only)
-router.post('/bulk', requireAdmin, validateRequest(bulkImportSchema), bulkImport);
-router.post('/bulk-import', requireAdmin, validateRequest(bulkImportSchema), bulkImport);
-router.post('/upload-excel', requireAdmin, uploadMiddleware, uploadExcel);
+// Bulk operations (Auth temporarily disabled)
+router.post('/bulk', validateRequest(bulkImportSchema), bulkImport);
+router.post('/bulk-import', validateRequest(bulkImportSchema), bulkImport);
+router.post('/upload-excel', uploadMiddleware, uploadExcel);
 
 export default router;

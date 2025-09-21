@@ -8,3 +8,6 @@ backend/logs/error.log
 # Ignore all logs
 logs
 
+backend/logs/app.log
+backend/logs/combined.log
+backend/logs/error.log

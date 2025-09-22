@@ -1,8 +1,43 @@
+import { useState } from 'react';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth } from "@/contexts/AuthContext"
 
 export function LoginForm() {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { login, error, clearError } = useAuth();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when user starts typing
+    if (error) clearError();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await login(formData);
+      // Redirect will be handled by the app after successful login
+      window.location.href = '/dashboard';
+    } catch (error) {
+      // Error is handled by the auth context
+      console.error('Login failed:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   return (
     <div className="min-h-screen flex">
       {/* Logo at top-left corner */}
@@ -20,7 +55,7 @@ export function LoginForm() {
       {/* Left Side - Login Form (50%) */}
       <div className="w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md mx-auto">
-          <form className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
                 Login to your account
@@ -29,6 +64,13 @@ export function LoginForm() {
                 Enter your email below to login to your account
               </p>
             </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+                {error}
+              </div>
+            )}
             
             <div className="space-y-4">
               <div className="space-y-2">
@@ -37,8 +79,11 @@ export function LoginForm() {
                 </Label>
                 <Input 
                   id="email" 
+                  name="email"
                   type="email" 
                   placeholder="admin@example.com" 
+                  value={formData.email}
+                  onChange={handleInputChange}
                   required 
                   className="h-11"
                 />
@@ -58,20 +103,27 @@ export function LoginForm() {
                 </div>
                 <Input 
                   id="password" 
+                  name="password"
                   type="password" 
+                  value={formData.password}
+                  onChange={handleInputChange}
                   required 
                   className="h-11"
                 />
               </div>
             </div>
             
-            <Button type="submit" className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white">
-              Sign in
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            >
+              {isSubmitting ? 'Signing in...' : 'Sign in'}
             </Button>
             
             <p className="text-center text-sm text-gray-600 dark:text-gray-400">
               Don&apos;t have an account?{" "}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
+              <a href="/signup" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
                 Sign up
               </a>
             </p>

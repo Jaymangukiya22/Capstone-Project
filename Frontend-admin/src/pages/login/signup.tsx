@@ -1,8 +1,70 @@
+import { useState } from 'react';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth } from "@/contexts/AuthContext"
 
 export function SignUpForm() {
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    username: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { register, error, clearError } = useAuth();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when user starts typing
+    if (error) clearError();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Basic validation
+    if (formData.password !== formData.confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    if (formData.password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Generate username from email if not provided
+      const username = formData.username || formData.email.split('@')[0];
+      
+      await register({
+        username,
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: 'ADMIN' // Default to ADMIN for admin panel
+      });
+      
+      // Redirect will be handled by the app after successful registration
+      window.location.href = '/dashboard';
+    } catch (error) {
+      // Error is handled by the auth context
+      console.error('Registration failed:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   return (
 
     <div className="min-h-screen flex">
@@ -59,27 +121,52 @@ export function SignUpForm() {
         </div>
       </div>
 
-      {/* Left Side - Login Form (50%) */}
+      {/* Right Side - Signup Form (50%) */}
       <div className="w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md mx-auto">
-          <form className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-                Signin to create your account
+                Create your account
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Enter your email below to create your account
+                Enter your details below to create your account
               </p>
             </div>
 
+            {/* Error Display */}
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+                {error}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300">First Name</Label>
-                    <Input id="name" type="text" placeholder="John" required className="h-11" />
+                    <Label htmlFor="firstName" className="text-sm font-medium text-gray-700 dark:text-gray-300">First Name</Label>
+                    <Input 
+                      id="firstName" 
+                      name="firstName"
+                      type="text" 
+                      placeholder="John" 
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      required 
+                      className="h-11" 
+                    />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="last-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</Label>
-                    <Input id="last-name" type="text" placeholder="Doe" required className="h-11" />
+                    <Label htmlFor="lastName" className="text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</Label>
+                    <Input 
+                      id="lastName" 
+                      name="lastName"
+                      type="text" 
+                      placeholder="Doe" 
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      required 
+                      className="h-11" 
+                    />
                 </div>
             </div>
             
@@ -90,51 +177,60 @@ export function SignUpForm() {
                 </Label>
                 <Input 
                   id="email" 
+                  name="email"
                   type="email" 
                   placeholder="admin@example.com" 
+                  value={formData.email}
+                  onChange={handleInputChange}
                   required 
                   className="h-11"
                 />
               </div>
               
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Password
-                  </Label>
-                  
-                </div>
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Password
+                </Label>
                 <Input 
                   id="password" 
+                  name="password"
                   type="password" 
+                  placeholder="At least 6 characters"
+                  value={formData.password}
+                  onChange={handleInputChange}
                   required 
                   className="h-11"
                 />
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="confirm-password" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Confirm password
-                  </Label>
-                  
-                </div>
+                <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Confirm password
+                </Label>
                 <Input 
-                  id="confirm-password" 
+                  id="confirmPassword" 
+                  name="confirmPassword"
                   type="password" 
+                  placeholder="Confirm your password"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
                   required 
                   className="h-11"
                 />
               </div>
             </div>
             
-            <Button type="submit" className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white">
-              Sign up
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            >
+              {isSubmitting ? 'Creating account...' : 'Sign up'}
             </Button>
             
             <p className="text-center text-sm text-gray-600 dark:text-gray-400">
               Already have an account?{" "}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
+              <a href="/login" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
                 Sign in
               </a>
             </p>

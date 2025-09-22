@@ -1,4 +1,5 @@
 import { apiClient } from './api';
+import type { ApiResponse } from './api';
 
 // Auth types
 export interface LoginRequest {
@@ -15,16 +16,10 @@ export interface RegisterRequest {
   role?: 'ADMIN' | 'PLAYER';
 }
 
-export interface AuthResponse {
+export interface AuthData {
+  user: User;
   token: string;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    role: string;
-  };
+  refreshToken: string;
 }
 
 export interface User {
@@ -34,10 +29,12 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role: string;
-  eloRating: number;
-  totalMatches: number;
-  wins: number;
-  losses: number;
+  eloRating?: number;
+  totalMatches?: number;
+  wins?: number;
+  losses?: number;
+  createdAt?: string;
+  lastLoginAt?: string;
 }
 
 /**
@@ -49,17 +46,18 @@ export class AuthService {
   /**
    * Login user
    */
-  async login(credentials: LoginRequest): Promise<AuthResponse> {
+  async login(credentials: LoginRequest): Promise<AuthData> {
     try {
-      const response = await apiClient.post<AuthResponse>(`${this.endpoint}/login`, credentials);
+      const response = await apiClient.post<ApiResponse<AuthData>>(`${this.endpoint}/login`, credentials);
       
-      // Store token in localStorage
-      if (response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+      // Store token and user data in localStorage
+      if (response.data.data.token) {
+        localStorage.setItem('authToken', response.data.data.token);
+        localStorage.setItem('refreshToken', response.data.data.refreshToken);
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
       }
       
-      return response.data;
+      return response.data.data;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -69,17 +67,18 @@ export class AuthService {
   /**
    * Register new user
    */
-  async register(userData: RegisterRequest): Promise<AuthResponse> {
+  async register(userData: RegisterRequest): Promise<AuthData> {
     try {
-      const response = await apiClient.post<AuthResponse>(`${this.endpoint}/register`, userData);
+      const response = await apiClient.post<ApiResponse<AuthData>>(`${this.endpoint}/register`, userData);
       
-      // Store token in localStorage
-      if (response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+      // Store token and user data in localStorage
+      if (response.data.data.token) {
+        localStorage.setItem('authToken', response.data.data.token);
+        localStorage.setItem('refreshToken', response.data.data.refreshToken);
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
       }
       
-      return response.data;
+      return response.data.data;
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -104,6 +103,7 @@ export class AuthService {
    */
   logout(): void {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   }
 

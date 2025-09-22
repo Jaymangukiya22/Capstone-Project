@@ -1,22 +1,50 @@
+// Dynamic API configuration that works for both local and network access
+const getApiBaseUrl = (): string => {
+  const { protocol, hostname } = window.location;
+  
+  // If accessing from localhost, use localhost for backend
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:3000/api';
+  }
+  
+  // For network access, use the same hostname but different port
+  return `${protocol}//${hostname}:3000/api`;
+};
+
+const getWebSocketUrl = (): string => {
+  const { hostname } = window.location;
+  
+  // If accessing from localhost, use localhost for WebSocket
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'ws://localhost:3001';
+  }
+  
+  // For network access, use the same hostname but different port
+  return `ws://${hostname}:3001`;
+};
+
+export const API_BASE_URL = getApiBaseUrl();
+export const WEBSOCKET_URL = getWebSocketUrl();
+
+// Log the URLs being used (for debugging)
+console.log('🌐 API Base URL:', API_BASE_URL);
+console.log('🔌 WebSocket URL:', WEBSOCKET_URL);
+
+// API client for making HTTP requests
 import axios from 'axios';
 
-// Base API configuration
-const API_BASE_URL = 'http://localhost:3000/api';
-
-// Create axios instance with default config
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Include cookies for authentication
 });
 
-// Request interceptor for adding auth tokens
+// Add auth token to requests if available
 apiClient.interceptors.request.use(
   (config) => {
-    // Add auth token from localStorage (commented out for testing)
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -27,46 +55,39 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for handling common errors
+// Handle response errors
 apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
-    // Handle common errors
     if (error.response?.status === 401) {
-      // Handle unauthorized access - clear token and redirect to login
-      localStorage.removeItem('authToken');
-      console.error('Unauthorized access - token cleared');
-      // You can add redirect logic here if needed
-    } else if (error.response?.status === 500) {
-      // Handle server errors
-      console.error('Server error:', error.response?.data?.message || 'Internal server error');
+      // Unauthorized - clear token and redirect to login
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
 );
 
-// API Response types - Updated to match backend format
-export interface ApiResponse<T> {
+// Export types
+export interface ApiResponse<T = any> {
   success: boolean;
-  data: T;
-  message: string;
-  pagination?: {
-    total: number;
-    page: number;
-    totalPages: number;
-    limit: number;
-  };
+  data?: T;
+  error?: string;
+  message?: string;
 }
 
 export interface ApiError {
-  success: false;
-  error: string;
-  message: string;
-  details?: Array<{
-    field: string;
-    message: string;
-    type: string;
-  }>;
+  response?: {
+    data?: {
+      error?: string;
+      message?: string;
+    };
+    status?: number;
+  };
+  message?: string;
 }
+
+export default API_BASE_URL;

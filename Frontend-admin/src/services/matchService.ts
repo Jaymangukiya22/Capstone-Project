@@ -1,4 +1,4 @@
-import { apiClient } from './api'
+import { apiClient, WEBSOCKET_URL } from './api'
 import { io, Socket } from 'socket.io-client'
 
 // Types for AI Opponents
@@ -260,19 +260,37 @@ class MatchService {
    */
   async createFriendMatch(quizId: number): Promise<{ matchId: string; joinCode: string; websocketUrl: string } | null> {
     try {
-      const response = await apiClient.post<ApiResponse<{ matchId: string; joinCode: string; websocketUrl: string }>>(
+      // Get user data from localStorage
+      const userData = localStorage.getItem('user');
+      let userId = 1;
+      let username = 'Player1';
+      
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          userId = user.id;
+          username = user.email || user.username;
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      
+      const response = await apiClient.post<ApiResponse<{ matchId: string; joinCode: string }>>(
         this.friendMatchUrl,
-        { quizId }
+        { quizId, userId, username }
       )
       
-      if (response.data.success) {
-        return response.data.data
-      } else {
-        console.error('Failed to create friend match:', response.data.message)
-        return null
+      if (response.data.success && response.data.data) {
+        // Use the dynamic WEBSOCKET_URL from api.ts
+        return {
+          ...response.data.data,
+          websocketUrl: WEBSOCKET_URL
+        }
       }
+      
+      return null
     } catch (error) {
-      console.error('Error creating friend match:', error)
+      console.error('Failed to create friend match:', error)
       return null
     }
   }
@@ -326,7 +344,21 @@ export class GameWebSocket {
           console.log('Connected to match WebSocket via Socket.IO')
           // Authenticate if userId and username are provided
           if (userId && username) {
-            this.send('authenticate', { userId, username })
+            // Get user data from localStorage for firstName/lastName
+            const userData = localStorage.getItem('user');
+            let firstName = '';
+            let lastName = '';
+            if (userData) {
+              try {
+                const user = JSON.parse(userData);
+                firstName = user.firstName || '';
+                lastName = user.lastName || '';
+              } catch (e) {
+                console.error('Error parsing user data:', e);
+              }
+            }
+            console.log('Sending authenticate with:', { userId, username, firstName, lastName });
+            this.send('authenticate', { userId, username, firstName, lastName })
           }
           resolve()
         })
@@ -423,6 +455,23 @@ export class GameWebSocket {
   }
 
   /**
+   * Emit event (alias for send)
+   */
+  emit(event: string, data?: any): void {
+    this.send(event, data)
+  }
+
+  /**
+   * Remove all event listeners
+   */
+  removeAllListeners(): void {
+    this.eventHandlers.clear()
+    if (this.socket) {
+      this.socket.removeAllListeners()
+    }
+  }
+
+  /**
    * Mark player as ready
    */
   setReady(ready: boolean = true): void {
@@ -452,7 +501,7 @@ export class GameWebSocket {
    * Join match by code via WebSocket
    */
   joinMatchByCode(joinCode: string): void {
-    this.send('join_match_by_code', { joinCode: joinCode.toUpperCase() })
+    this.send('join_match', { joinCode: joinCode.toUpperCase() })
   }
 }
 

@@ -32,13 +32,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const passwordHash = await hashPassword(password);
 
     // Create user
+    // Default to ADMIN for testing (change to PLAYER in production)
     const user = await User.create({
       username,
       email,
       passwordHash,
       firstName,
       lastName,
-      role: role || UserRole.PLAYER
+      role: role || UserRole.ADMIN  // Changed from PLAYER to ADMIN for testing
     });
 
     // Return user without password

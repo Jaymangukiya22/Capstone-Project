@@ -20,8 +20,11 @@ interface FriendMatchQuestion {
 interface MatchPlayer {
   userId: number;
   username: string;
+  firstName?: string;
+  lastName?: string;
   isReady: boolean;
 }
+
 
 const FriendMatchInterface: React.FC = () => {
   // Match state
@@ -89,24 +92,41 @@ const FriendMatchInterface: React.FC = () => {
 
   const connectToMatch = async (websocketUrl: string, mode: 'create' | 'join', joinCode?: string) => {
     try {
-      // Get user info (in a real app, this would come from auth context)
-      const userId = 1; // Mock user ID
-      const username = `Player${userId}`;
+      // Get real user info from localStorage
+      let userId = 1;
+      let username = 'Player1';
+      let firstName = '';
+      let lastName = '';
+      
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          console.log('Raw user data from localStorage:', userData);
+          userId = userData.id;
+          // Use email as username if available, otherwise use username
+          username = userData.email || userData.username;
+          firstName = userData.firstName || '';
+          lastName = userData.lastName || '';
+          console.log('Using real user data:', { userId, username, firstName, lastName });
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
 
+      // Clear any existing listeners to prevent duplicates
+      gameWebSocket.removeAllListeners();
+      
+      // Set up event listeners BEFORE connecting, pass mode and joinCode
+      setupWebSocketListeners(mode, joinCode);
+
+      // Connect to WebSocket - pass the full user data
+      console.log('Connecting with user data:', { userId, username, firstName, lastName });
       await gameWebSocket.connect(websocketUrl, userId, username);
       setIsConnected(true);
       wsConnected.current = true;
 
-      // Set up event listeners
-      setupWebSocketListeners();
-
-      if (mode === 'create') {
-        // If creating, the match should already be created via HTTP API
-        gameWebSocket.setReady();
-      } else if (mode === 'join' && joinCode) {
-        // Join the match by code
-        gameWebSocket.joinMatchByCode(joinCode);
-      }
+      // Actions will be performed after authentication in the listener
 
     } catch (error) {
       console.error('Failed to connect to match:', error);
@@ -119,10 +139,39 @@ const FriendMatchInterface: React.FC = () => {
     }
   };
 
-  const setupWebSocketListeners = () => {
-    // Authentication success
+  const setupWebSocketListeners = (mode: 'create' | 'join', joinCode?: string) => {
+    let hasPerformedAction = false; // Flag to prevent duplicate actions
+    
+    // Authentication success - perform actions after authentication
     gameWebSocket.on('authenticated', (data: any) => {
       console.log('Authenticated:', data);
+      
+      // Prevent duplicate actions
+      if (hasPerformedAction) {
+        console.log('Action already performed, skipping...');
+        return;
+      }
+      hasPerformedAction = true;
+      
+      // Now that we're authenticated, perform the appropriate action
+      if (mode === 'create' && matchId) {
+        console.log('Authenticated! Now connecting to match:', matchId);
+        gameWebSocket.emit('connect_to_match', { matchId });
+      } else if (mode === 'join' && joinCode) {
+        console.log('Authenticated! Now joining match with code:', joinCode);
+        gameWebSocket.joinMatchByCode(joinCode);
+      }
+    });
+
+    // Match connected (when creator connects to their match)
+    gameWebSocket.on('match_connected', (data: any) => {
+      console.log('Connected to match:', data);
+      setJoinCode(data.joinCode);
+      setPlayers(data.players || []);
+      toast({
+        title: "Connected to Match!",
+        description: `Share code ${data.joinCode} with your friend`,
+      });
     });
 
     // Friend match created
@@ -152,6 +201,12 @@ const FriendMatchInterface: React.FC = () => {
         title: "Player Joined",
         description: `${data.username} joined the match`,
       });
+    });
+
+    // Player list updated
+    gameWebSocket.on('player_list_updated', (data: any) => {
+      console.log('Player list updated:', data);
+      setPlayers(data.players || []);
     });
 
     // Player ready
@@ -296,6 +351,14 @@ const FriendMatchInterface: React.FC = () => {
     submitCurrentAnswer();
   };
 
+  // Function to get display name for a player
+  const getPlayerDisplayName = (player: MatchPlayer) => {
+    if (player.firstName || player.lastName) {
+      return `${player.firstName} ${player.lastName}`.trim();
+    }
+    return player.username;
+  };
+
   // Timer countdown effect for individual questions
   useEffect(() => {
     if (questionTimeRemaining <= 0 || isLoading || isWaitingForPlayers) return;
@@ -375,14 +438,28 @@ const FriendMatchInterface: React.FC = () => {
               <h3 className="text-lg font-semibold mb-3">Players ({players.length}/2)</h3>
               <div className="space-y-2">
                 {players.map((player) => (
-                  <div key={player.userId} className="flex items-center justify-between p-2 bg-muted rounded">
-                    <span>{player.username}</span>
-                    <span className={`text-sm ${player.isReady ? 'text-green-500' : 'text-yellow-500'}`}>
-                      {player.isReady ? 'Ready' : 'Not Ready'}
+                  <div key={player.userId} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex flex-col">
+                      <span className="font-medium">{getPlayerDisplayName(player)}</span>
+                      <span className="text-xs text-muted-foreground">@{player.username}</span>
+                    </div>
+                    <span className={`text-sm font-medium px-2 py-1 rounded ${player.isReady ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                      {player.isReady ? '✓ Ready' : 'Waiting...'}
                     </span>
                   </div>
                 ))}
               </div>
+              
+              {players.length === 2 && !players.every(p => p.isReady) && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => gameWebSocket.setReady(true)}
+                    className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                  >
+                    I'm Ready!
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

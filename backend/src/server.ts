@@ -32,7 +32,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+const IP_ADD = process.env.NETWORK_IP || '0.0.0.0';
 // Prometheus metrics middleware
 const metricsMiddleware = promBundle({
   includeMethod: true,
@@ -47,7 +47,28 @@ const metricsMiddleware = promBundle({
 
 // Middleware
 app.use(helmet());
-app.use(cors({ origin: '*' }));
+// CORS Configuration
+const allowedOrigins = [
+  `http://${IP_ADD}:5173`,
+  `http://${IP_ADD}:3001`,
+  'http://localhost:5173',
+  'http://localhost:3001'
+];
+ 
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow mobile apps, curl, etc.
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error(`CORS blocked for origin: ${origin}`), false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(compression());
 app.use(metricsMiddleware);
 app.use(requestLogger);
@@ -138,12 +159,15 @@ async function startServer() {
     await connectDatabase();
     logInfo('Connected to PostgreSQL database');
 
-    app.listen(PORT, () => {
+    app.listen(Number(PORT), '0.0.0.0', () => {
+      const networkIP = process.env.NETWORK_IP || 'localhost';
       logInfo('Server started successfully', {
         port: PORT,
+        host: '0.0.0.0',
         environment: process.env.NODE_ENV || 'development',
-        healthCheck: `http://localhost:${PORT}/health`,
-        metrics: `http://localhost:${PORT}/metrics`
+        healthCheck: `http://${networkIP}:${PORT}/health`,
+        metrics: `http://${networkIP}:${PORT}/metrics`,
+        networkAccess: `http://${networkIP}:${PORT}`
       });
     });
   } catch (error) {

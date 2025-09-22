@@ -42,9 +42,24 @@ class FriendMatchService {
    */
   async createFriendMatch(quizId: number): Promise<FriendMatchResponse | null> {
     try {
+      // Get user data from localStorage
+      const userData = localStorage.getItem('user');
+      let userId = 1;
+      let username = 'Player1';
+      
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          userId = user.id;
+          username = user.email || user.username;
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      
       const response = await apiClient.post<ApiResponse<FriendMatchResponse>>(
         this.baseUrl,
-        { quizId }
+        { quizId, userId, username }
       )
       
       if (response.data.success) {

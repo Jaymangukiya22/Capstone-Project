@@ -47,9 +47,11 @@ const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://localhost:300
  */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { quizId } = req.body;
-    const userId = req.user?.id || 1; // Default to user ID 1 for testing
-    const username = req.user?.username || `User${userId}`;
+    const { quizId, userId: bodyUserId, username: bodyUsername } = req.body;
+    
+    // Get userId from request body if provided (for testing), otherwise from auth
+    const userId = bodyUserId || req.user?.id || 1;
+    const username = bodyUsername || req.user?.username || `User${userId}`;
 
     if (!quizId) {
       return res.status(400).json({
@@ -65,20 +67,27 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       username
     });
 
+    // Check if response has the expected structure
+    const matchData = response.data?.data || response.data;
+    
+    if (!matchData?.matchId || !matchData?.joinCode) {
+      throw new Error('Invalid response from match service');
+    }
+
     logInfo('Friend match created via API', { 
       quizId, 
       userId, 
-      matchId: response.data.data.matchId,
-      joinCode: response.data.data.joinCode 
+      matchId: matchData.matchId,
+      joinCode: matchData.joinCode 
     });
 
     return res.json({
       success: true,
       data: {
-        matchId: response.data.data.matchId,
-        joinCode: response.data.data.joinCode,
-        message: `Share this code with your friend: ${response.data.data.joinCode}`,
-        websocketUrl: `ws://localhost:3001`
+        matchId: matchData.matchId,
+        joinCode: matchData.joinCode,
+        message: `Share this code with your friend: ${matchData.joinCode}`,
+        websocketUrl: `ws://${process.env.NETWORK_IP || 'localhost'}:3001`
       }
     });
 

@@ -9,7 +9,6 @@ import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption } from '
 import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
 import { logInfo, logError } from './utils/logger';
-import { InMemoryStore } from './utils/InMemoryStore';
 import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
@@ -21,11 +20,34 @@ const port = process.env.MATCH_SERVICE_PORT || 3001;
 
 // Store interface for Redis/InMemory compatibility
 interface StoreInterface {
-  set(key: string, value: string): Promise<string | null>;
   get(key: string): Promise<string | null>;
-  del(key: string): Promise<number>;
-  exists(key: string): Promise<number>;
-  keys?(pattern: string): Promise<string[]>;
+  set(key: string, value: string, ttl?: number): Promise<void>;
+  del(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+}
+
+// In-memory store implementation
+class InMemoryStore implements StoreInterface {
+  private data: Map<string, string> = new Map();
+
+  async get(key: string): Promise<string | null> {
+    return this.data.get(key) || null;
+  }
+
+  async set(key: string, value: string, ttl?: number): Promise<void> {
+    this.data.set(key, value);
+    if (ttl) {
+      setTimeout(() => this.data.delete(key), ttl * 1000);
+    }
+  }
+
+  async del(key: string): Promise<void> {
+    this.data.delete(key);
+  }
+
+  async exists(key: string): Promise<boolean> {
+    return this.data.has(key);
+  }
 }
 
 // Initialize Redis with fallback to in-memory store
@@ -49,48 +71,171 @@ async function initializeStore(): Promise<void> {
     // Try to connect with timeout
     await Promise.race([
       redis.connect(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 5000)
-      )
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connection timeout')), 3000))
     ]);
     
-    // Test the connection
+    // Test connection
     await redis.ping();
     
-    store = redis;
+    store = redis as any;
     isRedisConnected = true;
-    console.log('✅ Connected to Redis');
-    logInfo('Successfully connected to Redis', { url: process.env.REDIS_URL || 'redis://localhost:6379' });
-    
+    logInfo('Connected to Redis for match service');
   } catch (error) {
-    console.log('⚠️ Redis not available, using in-memory store instead');
-    logError('Redis connection failed, falling back to in-memory store', error as Error);
-    
+    logInfo('Redis unavailable, using in-memory store as fallback');
     store = new InMemoryStore();
     isRedisConnected = false;
   }
 }
 
+// CORS configuration
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // In production, check against allowed origins
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174'
+    ];
+    
+    // Add network IP if configured
+    const networkIP = process.env.NETWORK_IP;
+    if (networkIP) {
+      allowedOrigins.push(`http://${networkIP}:5173`);
+      allowedOrigins.push(`http://${networkIP}:5174`);
+    }
+    
+    // Allow any IP in the local network range for LAN play
+    if (origin.match(/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d{4,5}$/)) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+};
+
 // Middleware
 app.use(helmet());
 app.use(compression());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
-// Enhanced Match Interfaces
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    service: 'Enhanced Match Service',
+    version: '2.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    store: isRedisConnected ? 'Redis' : 'In-Memory'
+  });
+});
+
+// Get match by join code
+app.get('/matches/code/:joinCode', async (req, res) => {
+  try {
+    const { joinCode } = req.params;
+    
+    // Get match ID from join code
+    const matchId = await store.get(`joinCode:${joinCode.toUpperCase()}`);
+    
+    if (!matchId) {
+      return res.status(404).json({
+        success: false,
+        error: 'No match found with that join code'
+      });
+    }
+    
+    // Get match data
+    const matchData = await store.get(`match:${matchId}`);
+    
+    if (!matchData) {
+      return res.status(404).json({
+        success: false,
+        error: 'Match data not found'
+      });
+    }
+    
+    const match = JSON.parse(matchData);
+    
+    // Get quiz details from database
+    let quizDetails = null;
+    try {
+      const quiz = await Quiz.findByPk(match.quizId);
+      if (quiz) {
+        quizDetails = {
+          id: quiz.id,
+          title: quiz.title,
+          description: quiz.description,
+          difficulty: quiz.difficulty,
+          timeLimit: quiz.timeLimit
+        };
+      }
+    } catch (error) {
+      logError('Failed to fetch quiz details', error as Error);
+    }
+    
+    return res.json({
+      success: true,
+      data: {
+        match: {
+          id: matchId,
+          matchId,
+          joinCode: match.joinCode,
+          quizId: match.quizId,
+          quiz: quizDetails || {
+            id: match.quizId,
+            title: `Quiz ${match.quizId}`,
+            description: 'Quiz description',
+            difficulty: 'MEDIUM',
+            timeLimit: 30
+          },
+          status: match.status,
+          playerCount: match.players ? match.players.length : 0,
+          maxPlayers: 2,
+          matchType: 'FRIEND',
+          players: match.players,
+          createdAt: match.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    logError('Failed to get match by code', error as Error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get match by code'
+    });
+  }
+});
+
+// Match data structures
 interface MatchPlayer {
   userId: number;
   username: string;
+  firstName?: string;
+  lastName?: string;
   socketId: string;
   score: number;
   currentQuestionIndex: number;
   isReady: boolean;
-  answers: Array<{
-    questionId: number;
-    selectedOptions: number[];
-    timeSpent: number;
-    isCorrect: boolean;
-  }>;
+  isAI: boolean;
+  answers: any[];
 }
 
 interface MatchRoom {
@@ -105,11 +250,10 @@ interface MatchRoom {
   timeLimit: number;
   questions: any[];
   createdAt: Date;
-  joinCode: string;
-  matchType: 'FRIEND_1V1' | 'MULTIPLAYER';
+  joinCode?: string;
+  matchType: 'SOLO' | 'MULTIPLAYER' | 'FRIEND_1V1';
 }
 
-// Enhanced Match Service
 class EnhancedMatchService {
   private io: SocketIOServer;
   private matches: Map<string, MatchRoom> = new Map();
@@ -118,36 +262,22 @@ class EnhancedMatchService {
 
   constructor(server: any) {
     this.io = new SocketIOServer(server, {
-      cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-      }
+      cors: corsOptions,
+      transports: ['websocket', 'polling']
     });
 
     this.setupSocketHandlers();
-    this.startMatchCleanup();
   }
 
-  /**
-   * Generate a unique 6-character join code
-   */
   private generateJoinCode(): string {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    
-    do {
-      result = '';
-      for (let i = 0; i < 6; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-      }
-    } while (this.joinCodeToMatch.has(result));
-    
-    return result;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
   }
 
-  /**
-   * Load questions for a quiz from the database
-   */
   private async loadQuizQuestions(quizId: number): Promise<any[]> {
     try {
       const quizQuestions = await QuizQuestion.findAll({
@@ -163,15 +293,16 @@ class EnhancedMatchService {
         order: [['order', 'ASC']]
       });
 
-      return quizQuestions.map(qq => ({
+      return quizQuestions.map((qq: any) => ({
         id: qq.question.id,
         questionText: qq.question.questionText,
-        difficulty: qq.question.difficulty,
         options: qq.question.options.map((opt: any) => ({
           id: opt.id,
           optionText: opt.optionText,
           isCorrect: opt.isCorrect
-        }))
+        })),
+        difficulty: qq.question.difficulty,
+        points: qq.points || 100
       }));
     } catch (error) {
       logError('Failed to load quiz questions', error as Error);
@@ -183,18 +314,73 @@ class EnhancedMatchService {
     this.io.on('connection', (socket) => {
       logInfo('Client connected', { socketId: socket.id });
 
-      // Authenticate user (simplified for testing)
-      socket.on('authenticate', async (data: { userId?: number; username?: string }) => {
+      // Authenticate user
+      socket.on('authenticate', async (data: any) => {
         try {
-          // Simplified authentication for testing
-          const userId = data.userId || 1;
-          const username = data.username || `User${userId}`;
-          
+          let userId: number;
+          let username: string;
+          let firstName: string = '';
+          let lastName: string = '';
+
+          if (typeof data === 'string') {
+            // JWT token authentication
+            const decoded = jwt.verify(data, process.env.JWT_SECRET!) as any;
+            const user = await User.findByPk(decoded.userId, {
+              attributes: ['id', 'username', 'firstName', 'lastName', 'email', 'isActive']
+            });
+
+            if (!user || !user.isActive) {
+              socket.emit('auth_error', { message: 'Invalid token or user inactive' });
+              return;
+            }
+
+            userId = user.id;
+            username = user.email || user.username;
+            firstName = user.firstName || '';
+            lastName = user.lastName || '';
+          } else {
+            // Direct user data for testing
+            userId = data.userId || Math.floor(Math.random() * 1000);
+            username = data.username || `Player${userId}`;
+            
+            // First check if firstName/lastName are provided directly
+            if (data.firstName || data.lastName) {
+              firstName = data.firstName || '';
+              lastName = data.lastName || '';
+            } else {
+              // Try to get real user from database
+              try {
+                const user = await User.findByPk(userId, {
+                  attributes: ['id', 'username', 'firstName', 'lastName', 'email', 'isActive']
+                });
+                if (user) {
+                  username = user.email || user.username;
+                  firstName = user.firstName || '';
+                  lastName = user.lastName || '';
+                }
+              } catch (error) {
+                logInfo('Using fallback user data', { userId, username });
+              }
+            }
+          }
+
           socket.data.userId = userId;
           socket.data.username = username;
-          socket.emit('authenticated', { user: { id: userId, username } });
+          socket.data.firstName = firstName;
+          socket.data.lastName = lastName;
+          
+          const userData = { id: userId, username, firstName, lastName };
+          socket.emit('authenticated', { user: userData });
 
-          logInfo('User authenticated', { userId, socketId: socket.id });
+          logInfo('User authenticated', { 
+            userId, 
+            username,
+            firstName,
+            lastName,
+            socketId: socket.id,
+            receivedData: data,
+            finalData: userData
+          });
         } catch (error) {
           socket.emit('auth_error', { message: 'Authentication failed' });
           logError('Authentication error', error as Error);
@@ -209,15 +395,90 @@ class EnhancedMatchService {
             return;
           }
 
-          const { matchId, joinCode } = await this.createFriendMatch(data.quizId, socket.data.userId, socket.data.username);
-          socket.join(matchId);
-          socket.emit('friend_match_created', { 
-            matchId, 
-            joinCode,
-            message: `Share this code with your friend: ${joinCode}` 
+          const quiz = await Quiz.findOne({
+            where: { id: data.quizId, isActive: true }
           });
 
-          logInfo('Friend match created', { matchId, joinCode, userId: socket.data.userId });
+          if (!quiz) {
+            socket.emit('error', { message: 'Quiz not found' });
+            return;
+          }
+
+          const matchId = uuidv4();
+          const joinCode = this.generateJoinCode();
+          const questions = await this.loadQuizQuestions(data.quizId);
+
+          const match: MatchRoom = {
+            id: matchId,
+            quizId: data.quizId,
+            quiz: {
+              id: quiz.id,
+              title: quiz.title,
+              timeLimit: quiz.timeLimit
+            },
+            players: new Map(),
+            status: 'WAITING',
+            currentQuestionIndex: 0,
+            questionStartTime: 0,
+            maxPlayers: 2,
+            timeLimit: quiz.timeLimit || 30,
+            questions,
+            createdAt: new Date(),
+            joinCode,
+            matchType: 'FRIEND_1V1'
+          };
+
+          // Add creator as first player
+          const creator: MatchPlayer = {
+            userId: socket.data.userId,
+            username: socket.data.username,
+            firstName: socket.data.firstName,
+            lastName: socket.data.lastName,
+            socketId: socket.id,
+            score: 0,
+            currentQuestionIndex: 0,
+            isReady: false,
+            isAI: false,
+            answers: []
+          };
+
+          match.players.set(socket.data.userId, creator);
+          this.matches.set(matchId, match);
+          this.userToMatch.set(socket.data.userId, matchId);
+          this.joinCodeToMatch.set(joinCode, matchId);
+
+          socket.join(matchId);
+          socket.emit('friend_match_created', { matchId, joinCode });
+
+          // Store match in Redis/InMemory with player data
+          const matchDataToStore = {
+            id: matchId,
+            quizId: data.quizId,
+            joinCode,
+            status: match.status,
+            createdAt: match.createdAt,
+            players: Array.from(match.players.values()).map(p => ({
+              userId: p.userId,
+              username: p.username,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              isReady: p.isReady
+            }))
+          };
+          
+          logInfo('Storing match in Redis', { 
+            matchId,
+            playersData: matchDataToStore.players
+          });
+          
+          await store.set(`match:${matchId}`, JSON.stringify(matchDataToStore));
+
+          logInfo('Friend match created', { 
+            matchId, 
+            joinCode, 
+            userId: socket.data.userId,
+            username: socket.data.username 
+          });
         } catch (error) {
           socket.emit('error', { message: 'Failed to create friend match' });
           logError('Create friend match error', error as Error);
@@ -225,47 +486,278 @@ class EnhancedMatchService {
       });
 
       // Join match by code
-      socket.on('join_match_by_code', async (data: { joinCode: string }) => {
+      socket.on('join_match', async (data: { joinCode: string }) => {
         try {
           if (!socket.data.userId) {
             socket.emit('error', { message: 'Not authenticated' });
             return;
           }
 
-          const matchId = this.joinCodeToMatch.get(data.joinCode.toUpperCase());
+          // First check in-memory map
+          let matchId = this.joinCodeToMatch.get(data.joinCode.toUpperCase());
+          
+          // If not found in memory, check store
           if (!matchId) {
-            socket.emit('error', { message: `No match found with code: ${data.joinCode}` });
+            const storedMatchId = await store.get(`joinCode:${data.joinCode.toUpperCase()}`);
+            if (!storedMatchId) {
+              socket.emit('error', { message: 'Invalid join code' });
+              return;
+            }
+            matchId = storedMatchId;
+          }
+
+          // Try to get match from memory first
+          let match = this.matches.get(matchId);
+          
+          // If not in memory, try to load from store
+          if (!match) {
+            const matchData = await store.get(`match:${matchId}`);
+            if (!matchData) {
+              socket.emit('error', { message: 'Match not found' });
+              return;
+            }
+            
+            // Parse stored match data and create match object
+            const storedMatch = JSON.parse(matchData);
+            
+            // Load quiz questions
+            const questions = await this.loadQuizQuestions(storedMatch.quizId);
+            
+            // Create match in memory
+            match = {
+              id: matchId,
+              quizId: storedMatch.quizId,
+              quiz: null,
+              joinCode: storedMatch.joinCode,
+              players: new Map(),
+              maxPlayers: 2,
+              status: 'WAITING',
+              questions,
+              currentQuestionIndex: 0,
+              questionStartTime: 0,
+              timeLimit: 30,
+              createdAt: new Date(storedMatch.createdAt),
+              matchType: 'FRIEND_1V1'
+            };
+            
+            // Add creator if exists
+            if (storedMatch.players && storedMatch.players.length > 0) {
+              const creator = storedMatch.players[0];
+              const creatorPlayer: MatchPlayer = {
+                userId: creator.userId,
+                username: creator.username,
+                firstName: creator.firstName || '',
+                lastName: creator.lastName || '',
+                socketId: '',
+                score: 0,
+                currentQuestionIndex: 0,
+                isReady: false,
+                isAI: false,
+                answers: []
+              };
+              match.players.set(creator.userId, creatorPlayer);
+            }
+            
+            // Store in memory maps
+            if (match) {
+              this.matches.set(matchId, match);
+              this.joinCodeToMatch.set(storedMatch.joinCode, matchId);
+            }
+          }
+          
+          if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
+            socket.emit('error', { message: 'Match not available' });
             return;
           }
 
-          const success = await this.joinMatch(matchId, socket.data.userId, socket.id, socket.data.username);
-          if (success) {
-            socket.join(matchId);
-            const match = this.matches.get(matchId)!;
+          // Check if user is already in the match
+          if (match.players.has(socket.data.userId)) {
+            socket.emit('error', { message: 'Already in this match' });
+            return;
+          }
+
+          // Add player to match
+          const player: MatchPlayer = {
+            userId: socket.data.userId,
+            username: socket.data.username,
+            firstName: socket.data.firstName,
+            lastName: socket.data.lastName,
+            socketId: socket.id,
+            score: 0,
+            currentQuestionIndex: 0,
+            isReady: false,
+            isAI: false,
+            answers: []
+          };
+
+          match.players.set(socket.data.userId, player);
+          this.userToMatch.set(socket.data.userId, matchId);
+
+          socket.join(matchId);
+          socket.emit('match_joined', { 
+            matchId, 
+            players: Array.from(match.players.values()).map(p => ({
+              userId: p.userId,
+              username: p.username,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              isReady: p.isReady
+            }))
+          });
+
+          // Notify all players about the new joiner
+          this.io.to(matchId).emit('player_list_updated', {
+            players: Array.from(match.players.values()).map(p => ({
+              userId: p.userId,
+              username: p.username,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              isReady: p.isReady
+            }))
+          });
+
+          // Update match in Redis with new player data
+          await store.set(`match:${matchId}`, JSON.stringify({
+            id: matchId,
+            quizId: match.quizId,
+            joinCode: match.joinCode,
+            status: match.status,
+            createdAt: match.createdAt,
+            players: Array.from(match.players.values()).map(p => ({
+              userId: p.userId,
+              username: p.username,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              isReady: p.isReady
+            }))
+          }));
+
+          logInfo('Player joined match', { 
+            matchId, 
+            userId: socket.data.userId,
+            playerCount: match.players.size 
+          });
+        } catch (error) {
+          socket.emit('error', { message: 'Failed to join match' });
+          logError('Join match error', error as Error);
+        }
+      });
+
+      // Connect to existing match (for creator or reconnection)
+      socket.on('connect_to_match', async (data: { matchId: string }) => {
+        try {
+          if (!socket.data.userId) {
+            socket.emit('error', { message: 'Not authenticated' });
+            return;
+          }
+          
+          
+          // Try to get match from memory first
+          let match = this.matches.get(data.matchId);
+          
+          // If not in memory, try to load from store
+          if (!match) {
+            const matchData = await store.get(`match:${data.matchId}`);
+            if (!matchData) {
+              socket.emit('error', { message: 'Match not found' });
+              return;
+            }
             
-            socket.emit('match_joined', { 
-              matchId,
-              joinCode: data.joinCode,
+            // Parse stored match data and create match object
+            const storedMatch = JSON.parse(matchData);
+            
+            // Load quiz questions
+            const questions = await this.loadQuizQuestions(storedMatch.quizId);
+            
+            // Create match in memory
+            match = {
+              id: data.matchId,
+              quizId: storedMatch.quizId,
+              quiz: null,
+              joinCode: storedMatch.joinCode,
+              players: new Map(),
+              maxPlayers: 2,
+              status: 'WAITING',
+              questions,
+              currentQuestionIndex: 0,
+              questionStartTime: 0,
+              timeLimit: 30,
+              createdAt: new Date(storedMatch.createdAt),
+              matchType: 'FRIEND_1V1'
+            };
+            
+            // Restore players from stored data
+            if (storedMatch.players && Array.isArray(storedMatch.players)) {
+              for (const storedPlayer of storedMatch.players) {
+                const restoredPlayer: MatchPlayer = {
+                  userId: storedPlayer.userId,
+                  username: storedPlayer.username,
+                  firstName: storedPlayer.firstName || '',
+                  lastName: storedPlayer.lastName || '',
+                  socketId: '', // Will be updated when they reconnect
+                  score: 0,
+                  currentQuestionIndex: 0,
+                  isReady: storedPlayer.isReady || false,
+                  isAI: false,
+                  answers: []
+                };
+                match.players.set(storedPlayer.userId, restoredPlayer);
+              }
+            }
+            
+            // Store in memory maps
+            this.matches.set(data.matchId, match);
+            this.joinCodeToMatch.set(storedMatch.joinCode, data.matchId);
+          }
+
+          if (match) {
+            // Check if player already exists in match (reconnecting)
+            const existingPlayer = match.players.get(socket.data.userId);
+            
+            if (existingPlayer) {
+              // Update existing player's socket ID
+              existingPlayer.socketId = socket.id;
+            } else {
+              // Add new player
+              const player: MatchPlayer = {
+                userId: socket.data.userId,
+                username: socket.data.username,
+                firstName: socket.data.firstName,
+                lastName: socket.data.lastName,
+                socketId: socket.id,
+                score: 0,
+                currentQuestionIndex: 0,
+                isReady: false,
+                isAI: false,
+                answers: []
+              };
+              match.players.set(socket.data.userId, player);
+            }
+            
+            this.userToMatch.set(socket.data.userId, data.matchId);
+
+            socket.join(data.matchId);
+            socket.emit('match_connected', { 
+              matchId: data.matchId,
+              joinCode: match.joinCode,
               players: Array.from(match.players.values()).map(p => ({
                 userId: p.userId,
                 username: p.username,
+                firstName: p.firstName,
+                lastName: p.lastName,
                 isReady: p.isReady
               }))
             });
 
-            // Notify other players
-            socket.to(matchId).emit('player_joined', {
+            logInfo('Player connected to match', { 
+              matchId: data.matchId, 
               userId: socket.data.userId,
-              username: socket.data.username
+              playerCount: match.players.size 
             });
-
-            logInfo('Player joined match', { matchId, userId: socket.data.userId });
-          } else {
-            socket.emit('error', { message: 'Failed to join match - match may be full or already started' });
           }
         } catch (error) {
-          socket.emit('error', { message: 'Failed to join match' });
-          logError('Join match error', error as Error);
+          socket.emit('error', { message: 'Failed to connect to match' });
+          logError('Connect to match error', error as Error);
         }
       });
 
@@ -295,10 +787,8 @@ class EnhancedMatchService {
 
             // Check if all players are ready
             const allReady = Array.from(match.players.values()).every(p => p.isReady);
-            const minPlayers = match.matchType === 'FRIEND_1V1' ? 2 : 2;
-            
-            if (allReady && match.players.size >= minPlayers) {
-              await this.startMatch(matchId);
+            if (allReady && match.players.size === match.maxPlayers) {
+              this.startMatch(matchId);
             }
           }
         } catch (error) {
@@ -314,113 +804,80 @@ class EnhancedMatchService {
       }) => {
         try {
           const matchId = this.userToMatch.get(socket.data.userId);
-          if (!matchId) {
-            socket.emit('error', { message: 'Not in a match' });
-            return;
-          }
+          if (!matchId) return;
 
-          await this.submitAnswer(matchId, socket.data.userId, data);
+          const match = this.matches.get(matchId);
+          if (!match || match.status !== 'IN_PROGRESS') return;
+
+          const player = match.players.get(socket.data.userId);
+          if (!player) return;
+
+          const currentQuestion = match.questions[match.currentQuestionIndex];
+          if (!currentQuestion || currentQuestion.id !== data.questionId) return;
+
+          // Check if answer is correct
+          const correctOptionIds = currentQuestion.options
+            .filter((opt: any) => opt.isCorrect)
+            .map((opt: any) => opt.id);
+
+          const isCorrect = data.selectedOptions.length === correctOptionIds.length &&
+            data.selectedOptions.every(id => correctOptionIds.includes(id));
+
+          // Calculate points
+          const basePoints = 100;
+          const timeBonus = Math.max(0, Math.floor((match.timeLimit - data.timeSpent) * 2));
+          const points = isCorrect ? basePoints + timeBonus : 0;
+
+          // Update player score
+          player.score += points;
+          player.answers.push({
+            questionId: data.questionId,
+            selectedOptions: data.selectedOptions,
+            isCorrect,
+            timeSpent: data.timeSpent,
+            points
+          });
+
+          // Notify player of result
+          socket.emit('answer_result', {
+            isCorrect,
+            points,
+            correctOptions: correctOptionIds,
+            totalScore: player.score
+          });
+
+          // Check if all players have answered
+          const allAnswered = Array.from(match.players.values()).every(
+            p => p.answers.length > match.currentQuestionIndex
+          );
+
+          if (allAnswered) {
+            this.nextQuestion(matchId);
+          }
         } catch (error) {
-          socket.emit('error', { message: 'Failed to submit answer' });
           logError('Submit answer error', error as Error);
         }
       });
 
-      // Disconnect
+      // Handle disconnection
       socket.on('disconnect', () => {
-        this.handleDisconnect(socket.data.userId, socket.id);
-        logInfo('Client disconnected', { socketId: socket.id, userId: socket.data.userId });
+        logInfo('Client disconnected', { socketId: socket.id });
+        
+        if (socket.data.userId) {
+          const matchId = this.userToMatch.get(socket.data.userId);
+          if (matchId) {
+            const match = this.matches.get(matchId);
+            if (match) {
+              // Notify other players
+              socket.to(matchId).emit('player_disconnected', {
+                userId: socket.data.userId,
+                username: socket.data.username
+              });
+            }
+          }
+        }
       });
     });
-  }
-
-  /**
-   * Create a friend match (1v1 with join code)
-   */
-  public async createFriendMatch(quizId: number, userId: number, username: string): Promise<{ matchId: string; joinCode: string }> {
-    const quiz = await Quiz.findOne({
-      where: { id: quizId, isActive: true }
-    });
-
-    if (!quiz) {
-      throw new Error('Quiz not found');
-    }
-
-    const matchId = uuidv4();
-    const joinCode = this.generateJoinCode();
-    const questions = await this.loadQuizQuestions(quizId);
-
-    const match: MatchRoom = {
-      id: matchId,
-      quizId,
-      quiz: {
-        id: quiz.id,
-        title: quiz.title,
-        timeLimit: quiz.timeLimit
-      },
-      players: new Map(),
-      status: 'WAITING',
-      currentQuestionIndex: 0,
-      questionStartTime: 0,
-      maxPlayers: 2, // 1v1 match
-      timeLimit: quiz.timeLimit || 30,
-      questions,
-      createdAt: new Date(),
-      joinCode,
-      matchType: 'FRIEND_1V1'
-    };
-
-    // Add creator as first player
-    const creator: MatchPlayer = {
-      userId,
-      username,
-      socketId: '',
-      score: 0,
-      currentQuestionIndex: 0,
-      isReady: false,
-      answers: []
-    };
-
-    match.players.set(userId, creator);
-    this.matches.set(matchId, match);
-    this.userToMatch.set(userId, matchId);
-    this.joinCodeToMatch.set(joinCode, matchId);
-
-    // Store match for persistence
-    await store.set(`match:${matchId}`, JSON.stringify({
-      id: matchId,
-      quizId,
-      joinCode,
-      status: 'WAITING',
-      players: [],
-      createdAt: new Date().toISOString()
-    }));
-
-    logInfo('Friend match created', { matchId, joinCode, quizId, creator: username });
-
-    return { matchId, joinCode };
-  }
-
-  public async joinMatch(matchId: string, userId: number, socketId: string, username: string): Promise<boolean> {
-    const match = this.matches.get(matchId);
-    if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
-      return false;
-    }
-
-    const player: MatchPlayer = {
-      userId,
-      username,
-      socketId,
-      score: 0,
-      currentQuestionIndex: 0,
-      isReady: false,
-      answers: []
-    };
-
-    match.players.set(userId, player);
-    this.userToMatch.set(userId, matchId);
-
-    return true;
   }
 
   private async startMatch(matchId: string) {
@@ -439,7 +896,6 @@ class EnhancedMatchService {
       options: currentQuestion.options.map((opt: any) => ({
         id: opt.id,
         optionText: opt.optionText
-        // Don't send isCorrect to players
       })),
       timeLimit: match.timeLimit
     };
@@ -458,66 +914,6 @@ class EnhancedMatchService {
     logInfo('Match started', { matchId, players: match.players.size });
   }
 
-  private async submitAnswer(
-    matchId: string, 
-    userId: number, 
-    answerData: { questionId: number; selectedOptions: number[]; timeSpent: number }
-  ) {
-    const match = this.matches.get(matchId);
-    if (!match || match.status !== 'IN_PROGRESS') return;
-
-    const player = match.players.get(userId);
-    if (!player) return;
-
-    const currentQuestion = match.questions[match.currentQuestionIndex];
-    if (currentQuestion.id !== answerData.questionId) return;
-
-    // Check if answer is correct
-    const correctOptionIds = currentQuestion.options
-      .filter((opt: any) => opt.isCorrect)
-      .map((opt: any) => opt.id);
-
-    const isCorrect = answerData.selectedOptions.length === correctOptionIds.length &&
-      answerData.selectedOptions.every(id => correctOptionIds.includes(id));
-
-    // Calculate points (faster answers get more points)
-    const maxTime = match.timeLimit;
-    const timeBonus = Math.max(0, (maxTime - answerData.timeSpent) / maxTime);
-    const points = isCorrect ? Math.round(100 + (timeBonus * 50)) : 0;
-
-    player.answers.push({
-      questionId: answerData.questionId,
-      selectedOptions: answerData.selectedOptions,
-      timeSpent: answerData.timeSpent,
-      isCorrect
-    });
-
-    player.score += points;
-
-    // Notify player of result
-    this.io.to(player.socketId).emit('answer_result', {
-      isCorrect,
-      points,
-      correctOptions: correctOptionIds,
-      totalScore: player.score
-    });
-
-    // Broadcast to other players that this player answered
-    this.io.to(matchId).emit('player_answered', {
-      userId,
-      username: player.username,
-      timeSpent: answerData.timeSpent
-    });
-
-    logInfo('Answer submitted', { 
-      matchId, 
-      userId, 
-      isCorrect, 
-      points, 
-      timeSpent: answerData.timeSpent 
-    });
-  }
-
   private async nextQuestion(matchId: string) {
     const match = this.matches.get(matchId);
     if (!match) return;
@@ -526,7 +922,7 @@ class EnhancedMatchService {
 
     if (match.currentQuestionIndex >= match.questions.length) {
       // Match completed
-      await this.endMatch(matchId);
+      this.endMatch(matchId);
       return;
     }
 
@@ -550,7 +946,7 @@ class EnhancedMatchService {
       totalQuestions: match.questions.length
     });
 
-    // Set timer for next question
+    // Set timer for question
     setTimeout(() => {
       this.nextQuestion(matchId);
     }, match.timeLimit * 1000);
@@ -562,305 +958,108 @@ class EnhancedMatchService {
 
     match.status = 'COMPLETED';
 
-    // Calculate final rankings
-    const rankings = Array.from(match.players.values())
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        // Tiebreaker: faster average time
-        const avgTimeA = a.answers.reduce((sum, ans) => sum + ans.timeSpent, 0) / a.answers.length;
-        const avgTimeB = b.answers.reduce((sum, ans) => sum + ans.timeSpent, 0) / b.answers.length;
-        return avgTimeA - avgTimeB;
-      })
-      .map((player, index) => ({
-        rank: index + 1,
-        userId: player.userId,
-        username: player.username,
-        score: player.score,
-        correctAnswers: player.answers.filter(a => a.isCorrect).length,
-        totalAnswers: player.answers.length
-      }));
+    // Calculate final results
+    const results = Array.from(match.players.values()).map(player => ({
+      userId: player.userId,
+      username: player.username,
+      firstName: player.firstName,
+      lastName: player.lastName,
+      score: player.score,
+      answers: player.answers
+    }));
 
-    // Send final results
+    // Sort by score
+    results.sort((a, b) => b.score - a.score);
+
+    // Send results to all players
     this.io.to(matchId).emit('match_completed', {
-      rankings,
-      matchId,
-      winner: rankings[0]
+      results,
+      winner: results[0],
+      matchId
     });
 
     // Clean up
-    for (const player of match.players.values()) {
+    match.players.forEach(player => {
       this.userToMatch.delete(player.userId);
-    }
-    this.joinCodeToMatch.delete(match.joinCode);
-
-    // Keep match data for a while before cleanup
-    setTimeout(() => {
-      this.matches.delete(matchId);
-      store.del(`match:${matchId}`);
-    }, 300000); // 5 minutes
-
-    logInfo('Match completed', { matchId, players: rankings.length, winner: rankings[0].username });
-  }
-
-  private handleDisconnect(userId: number, socketId: string) {
-    const matchId = this.userToMatch.get(userId);
-    if (!matchId) return;
-
-    const match = this.matches.get(matchId);
-    if (!match) return;
-
-    const player = match.players.get(userId);
-    if (!player) return;
-
-    // Notify other players
-    this.io.to(matchId).emit('player_disconnected', {
-      userId,
-      username: player.username
     });
-
-    // If match hasn't started, remove player
-    if (match.status === 'WAITING') {
-      match.players.delete(userId);
-      this.userToMatch.delete(userId);
-
-      // If no players left, clean up match
-      if (match.players.size === 0) {
-        this.matches.delete(matchId);
-        this.joinCodeToMatch.delete(match.joinCode);
-        store.del(`match:${matchId}`);
-      }
+    
+    if (match.joinCode) {
+      this.joinCodeToMatch.delete(match.joinCode);
     }
-  }
+    
+    this.matches.delete(matchId);
 
-  private startMatchCleanup() {
-    // Clean up old matches every 10 minutes
-    setInterval(() => {
-      const now = Date.now();
-      const maxAge = 60 * 60 * 1000; // 1 hour
-
-      for (const [matchId, match] of this.matches) {
-        if (now - match.createdAt.getTime() > maxAge) {
-          this.matches.delete(matchId);
-          this.joinCodeToMatch.delete(match.joinCode);
-          store.del(`match:${matchId}`);
-          logInfo('Cleaned up old match', { matchId });
-        }
-      }
-    }, 10 * 60 * 1000);
-  }
-
-  // Public methods for HTTP API integration
-  public getActiveMatches(): any[] {
-    return Array.from(this.matches.values()).map(match => ({
-      id: match.id,
-      quizId: match.quizId,
-      quiz: match.quiz,
-      playerCount: match.players.size,
-      maxPlayers: match.maxPlayers,
-      status: match.status,
-      joinCode: match.joinCode,
-      matchType: match.matchType,
-      createdAt: match.createdAt
-    }));
-  }
-
-  public getMatchById(matchId: string): MatchRoom | undefined {
-    return this.matches.get(matchId);
-  }
-
-  public findMatchByJoinCode(joinCode: string): MatchRoom | undefined {
-    const matchId = this.joinCodeToMatch.get(joinCode.toUpperCase());
-    return matchId ? this.matches.get(matchId) : undefined;
+    logInfo('Match completed', { matchId, results });
   }
 }
 
-// Enhanced Match Service will be initialized in startServer function
-let enhancedMatchService: EnhancedMatchService;
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'Enhanced Quiz Match Service',
-    version: '2.0.0',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// Get active matches (for monitoring/admin)
-app.get('/matches', (req, res) => {
-  try {
-    const matches = enhancedMatchService.getActiveMatches();
-    res.json({
-      success: true,
-      data: { matches },
-      count: matches.length
-    });
-  } catch (error) {
-    logError('Failed to get active matches', error as Error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get active matches'
-    });
-  }
-});
-
-// Get specific match details
-app.get('/matches/:matchId', (req, res) => {
-  try {
-    const match = enhancedMatchService.getMatchById(req.params.matchId);
-    if (!match) {
-      res.status(404).json({
-        success: false,
-        error: 'Match not found'
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      data: {
-        match: {
-          id: match.id,
-          quizId: match.quizId,
-          quiz: match.quiz,
-          playerCount: match.players.size,
-          maxPlayers: match.maxPlayers,
-          status: match.status,
-          joinCode: match.joinCode,
-          matchType: match.matchType,
-          currentQuestionIndex: match.currentQuestionIndex,
-          totalQuestions: match.questions.length,
-          createdAt: match.createdAt
-        }
-      }
-    });
-  } catch (error) {
-    logError('Failed to get match details', error as Error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get match details'
-    });
-  }
-});
-
-// Find match by join code
-app.get('/matches/code/:joinCode', (req, res) => {
-  try {
-    const match = enhancedMatchService.findMatchByJoinCode(req.params.joinCode);
-    if (!match) {
-      res.status(404).json({
-        success: false,
-        error: 'No match found with that join code'
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      data: {
-        match: {
-          id: match.id,
-          quizId: match.quizId,
-          quiz: match.quiz,
-          playerCount: match.players.size,
-          maxPlayers: match.maxPlayers,
-          status: match.status,
-          joinCode: match.joinCode,
-          matchType: match.matchType,
-          createdAt: match.createdAt
-        }
-      }
-    });
-  } catch (error) {
-    logError('Failed to find match by code', error as Error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to find match by code'
-    });
-  }
-});
-
-// Create friend match via HTTP (for testing)
+// API Routes for friend matches
 app.post('/matches/friend', async (req, res) => {
   try {
-    const { quizId, userId = 1, username = 'TestUser' } = req.body;
+    const { quizId, userId, username } = req.body;
     
-    if (!quizId) {
-      res.status(400).json({
-        success: false,
-        error: 'Quiz ID is required'
-      });
-      return;
-    }
-
-    const result = await enhancedMatchService.createFriendMatch(quizId, userId, username);
+    logInfo('Friend match request received', { quizId, userId, username });
+    
+    // Generate a unique match ID and join code
+    const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const joinCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+    
+    // Store match info in memory/redis for WebSocket to use
+    const matchInfo = {
+      matchId,
+      joinCode,
+      quizId,
+      creatorId: userId,
+      creatorName: username,
+      status: 'waiting',
+      players: [{
+        userId,
+        username,
+        ready: false
+      }],
+      createdAt: new Date()
+    };
+    
+    // Store match info - stringify the object for storage
+    await store.set(`match:${matchId}`, JSON.stringify(matchInfo));
+    await store.set(`joinCode:${joinCode}`, matchId);
+    
+    logInfo('Friend match created', { matchId, joinCode, quizId, userId });
+    
+    // Return the match info
     res.json({
       success: true,
-      data: result
+      data: {
+        matchId,
+        joinCode
+      }
     });
   } catch (error) {
-    logError('Failed to create friend match', error as Error);
+    logError('Failed to handle friend match request', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create friend match'
+      error: 'Failed to process request'
     });
   }
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found',
-    message: `Cannot ${req.method} ${req.originalUrl}`
-  });
-});
-
-// Error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logError('Unhandled error in match service', err);
-  res.status(500).json({
-    success: false,
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
-
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logInfo('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    if (isRedisConnected && (store as any).disconnect) {
-      (store as any).disconnect();
-    }
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', async () => {
-  logInfo('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    if (isRedisConnected && (store as any).disconnect) {
-      (store as any).disconnect();
-    }
-    process.exit(0);
-  });
 });
 
 // Start server
+let enhancedMatchService: EnhancedMatchService;
+
 async function startServer() {
-  // Initialize store (Redis with fallback to in-memory)
   await initializeStore();
   
   // Create match service instance
   enhancedMatchService = new EnhancedMatchService(server);
   
-  server.listen(port, () => {
-    logInfo(`Enhanced Match service started on port ${port}`, {
+  // Listen on all network interfaces for LAN access
+  server.listen(port as number, '0.0.0.0', () => {
+    const networkIP = process.env.NETWORK_IP || 'localhost';
+    logInfo(`Enhanced Match service started`, {
       port,
+      host: '0.0.0.0',
       environment: process.env.NODE_ENV || 'development',
+      networkAccess: `http://${networkIP}:${port}`,
       timestamp: new Date().toISOString(),
       store: isRedisConnected ? 'Redis' : 'In-Memory'
     });

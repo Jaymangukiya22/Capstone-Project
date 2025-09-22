@@ -452,7 +452,7 @@ export class EngineeringSeeder {
       console.log('🚀 Starting Engineering Database Seeding...\n');
       
       // 1. Clear existing data
-      await this.clearExistingData();
+      // await this.clearExistingData();
       
       // 2. Create users
       const users = await this.createUsers();
@@ -537,7 +537,7 @@ export class EngineeringSeeder {
         passwordHash: hashedPassword,
         firstName,
         lastName,
-        role: UserRole.PLAYER,
+        role: UserRole.ADMIN,  // Changed from PLAYER to ADMIN for testing
         isActive: true
       });
     });
@@ -706,7 +706,7 @@ export class EngineeringSeeder {
   private async createSampleAttempts(users: any[], quizzes: any[]) {
     console.log('🎯 Creating sample quiz attempts...');
     
-    const studentUsers = users.filter(u => u.role === UserRole.PLAYER);
+    const studentUsers = users.filter(u => u.role === UserRole.ADMIN);  // Changed to ADMIN for testing
     const attempts = [];
     
     // Create 50 sample attempts

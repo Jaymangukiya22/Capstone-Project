@@ -57,7 +57,7 @@ export function SignUpForm() {
       });
       
       // Redirect will be handled by the app after successful registration
-      window.location.href = '/dashboard';
+      window.location.href = '/categories';
     } catch (error) {
       // Error is handled by the auth context
       console.error('Registration failed:', error);

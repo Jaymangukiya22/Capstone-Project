@@ -30,7 +30,7 @@ export function LoginForm() {
     try {
       await login(formData);
       // Redirect will be handled by the app after successful login
-      window.location.href = '/dashboard';
+      window.location.href = '/categories';
     } catch (error) {
       // Error is handled by the auth context
       console.error('Login failed:', error);

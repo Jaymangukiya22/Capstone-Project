@@ -6178,3 +6178,486 @@
 {"level":"info","message":"POST /api/quiz-attempts/702/complete 200 25.523 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:06:32"}
 {"level":"info","message":"Quiz attempt completed","metadata":{"attemptId":704,"correctAnswers":0,"score":0,"service":"quiz-app-backend","timeSpent":3,"totalQuestions":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:06:39"}
 {"level":"info","message":"POST /api/quiz-attempts/704/complete 200 23.804 ms - 884","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:06:39"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:11:19"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:11:19"}
+{"level":"info","message":"Engineering database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:11:20"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:11:20"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:11:20"}
+{"level":"error","message":"Failed to start quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:25:56"}
+{"level":"error","message":"Error starting quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:25:56"}
+{"level":"info","message":"POST /api/quiz-attempts/start 500 90.461 ms - 95","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:25:56"}
+{"level":"error","message":"Failed to start quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:25:56"}
+{"level":"error","message":"Error starting quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:25:56"}
+{"level":"info","message":"POST /api/quiz-attempts/start 500 63.671 ms - 95","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:25:56"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 34.949 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 36.891 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 18.678 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 25.009 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 15.220 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.454 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:06"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.792 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.574 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.965 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.296 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 200 14.074 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 11.554 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.507 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.350 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.645 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:09"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 34.963 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 37.608 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.504 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.453 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.575 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.386 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:26:24"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:37:45"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:37:45"}
+{"level":"info","message":"Engineering database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:37:47"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:37:47"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:37:47"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 3.975 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 2.594 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:25"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.449 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:25"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.679 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.876 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:31"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.549 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:31"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 2.170 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:31"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.503 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:41:31"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 1.116 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:27"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 1.294 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:27"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 1.147 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:27"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 1.058 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:27"}
+{"level":"info","message":"GET /api/matches/ai-opponents 401 0.747 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.580 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/matches/ai-opponents 401 0.268 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 401 0.622 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.237 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 401 0.326 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/matches/ai-opponents 401 0.519 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/matches/ai-opponents 401 0.803 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:42:59"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.412 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:28"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.528 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:28"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.499 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:28"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 2.827 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:28"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.329 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:52"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.316 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:52"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 401 0.414 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:52"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 401 0.229 ms - 97","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:43:52"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:48:49"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:48:49"}
+{"level":"info","message":"Engineering database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:48:51"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:48:51"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:48:51"}
+{"level":"info","message":"User registered successfully","metadata":{"service":"quiz-app-backend","userId":569,"username":"aryanmahida2","version":"1.0.0"},"timestamp":"2025-09-22 10:52:14"}
+{"level":"info","message":"POST /api/auth/register 201 667.243 ms - 672","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:14"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 35.911 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 40.267 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 23.885 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 26.565 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.997 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.044 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:15"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.049 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.076 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 17.166 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 200 20.381 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 7.214 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 14.657 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:22"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.439 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.311 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.313 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.308 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:23"}
+{"level":"info","message":"User logged in successfully","metadata":{"service":"quiz-app-backend","userId":569,"username":"aryanmahida2","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"POST /api/auth/login 200 581.024 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 27.848 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 37.537 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 22.947 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.266 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.002 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.230 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:54"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.304 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 1.150 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.429 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 9.929 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.009 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 12.291 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.270 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.499 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.302 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.641 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 10:52:58"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 32.670 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 39.251 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 19.162 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.190 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 22.847 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.292 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.795 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 11.675 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.361 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 6.017 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.923 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.509 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.418 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.217 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:45"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.286 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:01:46"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 64.493 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 67.016 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.225 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.327 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.571 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.250 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:09:43"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 39.094 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 45.443 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 14.828 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 17.781 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.103 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.953 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.667 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 18.602 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 17.648 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 9.903 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.658 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.817 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.934 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 13.383 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.539 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 18.850 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.091 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.666 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:13"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 25.953 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 29.742 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.194 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 13.511 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.226 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.452 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:20"}
+{"level":"error","message":"Failed to start quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:21"}
+{"level":"error","message":"Error starting quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:21"}
+{"level":"info","message":"POST /api/quiz-attempts/start 500 41.649 ms - 95","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:21"}
+{"level":"error","message":"Failed to start quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:21"}
+{"level":"error","message":"Error starting quiz attempt","metadata":{"error":"Error: Quiz not found or inactive\n    at QuizAttemptService.startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\services\\quizAttemptService.ts:31:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at startQuizAttempt (D:\\Projects\\Capstone-Project\\backend\\src\\controllers\\quizAttemptController.ts:26:21)","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:21"}
+{"level":"info","message":"POST /api/quiz-attempts/start 500 48.298 ms - 95","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:21"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.565 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 9.815 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.065 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 23.385 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.569 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.602 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:25"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 20.890 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 27.451 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 16.011 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 19.467 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.262 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.323 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:10:35"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.456 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:13:38"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.346 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:14:01"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.416 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:14:13"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 36.528 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 34.962 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.037 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.256 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.828 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.392 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:16:14"}
+{"level":"info","message":"User registered successfully","metadata":{"service":"quiz-app-backend","userId":570,"username":"ritesh","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"POST /api/auth/register 201 290.386 ms - 647","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.119 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 21.830 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 17.918 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 15.693 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.333 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.425 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:05"}
+{"level":"info","message":"POST /api/auth/login 401 294.579 ms - 90","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:38"}
+{"level":"info","message":"User logged in successfully","metadata":{"service":"quiz-app-backend","userId":570,"username":"ritesh","version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"POST /api/auth/login 200 299.941 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 16.501 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 25.148 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.618 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 15.891 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:47"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.091 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:48"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.296 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:48"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.596 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 11.130 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.232 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 10.061 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.422 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.874 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.107 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 11.556 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 8.755 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 14.666 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.194 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:52"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.596 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:52"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.483 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 6.801 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.646 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.283 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 3.970 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.671 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:55"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.480 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.035 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.184 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.940 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 3.890 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.448 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:57"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.175 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.061 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.670 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 8.397 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 3.943 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.928 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:17:58"}
+{"level":"info","message":"User logged in successfully","metadata":{"service":"quiz-app-backend","userId":570,"username":"ritesh","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"POST /api/auth/login 200 306.613 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.809 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 21.216 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 13.983 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 13.427 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.832 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.694 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:18:10"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 34.385 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 39.441 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 8.690 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.011 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.010 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.907 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:01"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.191 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.479 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.143 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 4.960 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.194 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.581 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.911 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 14.135 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.974 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 12.289 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.959 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.404 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:02"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.343 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:03"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.221 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:03"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.179 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:03"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.284 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:03"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.898 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.181 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.125 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 9.230 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.509 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.499 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:10"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.944 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 10.289 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 16.177 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 18.555 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.362 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.237 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 7.593 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.492 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 4.720 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.351 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.392 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.286 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:11"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.713 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:12"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.425 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:12"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.709 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:12"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.260 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:12"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 34.260 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 44.130 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 14.320 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 15.748 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.786 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 12.386 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.536 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.871 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.446 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 9.465 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.311 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.237 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.697 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 8.265 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.274 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 5.862 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 3.930 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.293 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:23"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.330 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:24"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.392 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:24"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.313 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:24"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.540 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 8.399 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.715 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.550 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.190 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.348 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.762 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 9.035 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.965 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":1,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":6,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/categories?includeChildren=false&depth=1 304 6.864 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.341 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 3.983 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.425 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 14.616 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.661 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.540 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.147 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.732 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.294 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.179 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:32"}
+{"level":"info","message":"GET /api/matches/ai-opponents 304 0.185 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:27:33"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 31.137 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 33.347 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 4.746 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 7.369 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.819 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.492 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.473 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 9.842 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.592 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 11.794 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.588 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.958 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:28:08"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:34:48"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:34:48"}
+{"level":"info","message":"Engineering database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:34:49"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:34:49"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:34:49"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 46.730 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 41.456 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.712 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 13.655 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.098 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.154 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:07"}
+{"level":"info","message":"POST /api/auth/login 401 81.079 ms - 90","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:26"}
+{"level":"info","message":"POST /api/auth/login 401 8.171 ms - 90","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:30"}
+{"level":"info","message":"User registered successfully","metadata":{"service":"quiz-app-backend","userId":596,"username":"aryanmahida2","version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"POST /api/auth/register 201 568.114 ms - 672","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 22.588 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 34.330 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 26.611 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 20.290 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:41"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 15.783 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:42"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.930 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:42"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.936 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 14.879 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 11.531 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.396 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.615 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.290 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:35:51"}
+{"level":"info","message":"User logged in successfully","metadata":{"service":"quiz-app-backend","userId":596,"username":"aryanmahida2","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"POST /api/auth/login 200 486.972 ms - 679","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 17.920 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 26.636 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 20.023 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 16.696 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.809 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 8.972 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:36:06"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 24.536 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 31.084 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.531 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 12.644 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 6.136 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 5.760 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:18"}
+{"level":"info","message":"User logged in successfully","metadata":{"service":"quiz-app-backend","userId":596,"username":"aryanmahida2","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"POST /api/auth/login 200 293.695 ms - 701","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 19.088 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 14.352 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 23.845 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 14.714 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.447 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 7.050 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:29"}
+{"level":"info","message":"Database connection established successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:41"}
+{"level":"info","message":"Database models synchronized with force: true - tables recreated","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:41"}
+{"level":"info","message":"Engineering database seeded successfully","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:42"}
+{"level":"info","message":"Connected to PostgreSQL database","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:42"}
+{"level":"info","message":"Server started successfully","metadata":{"environment":"development","healthCheck":"http://localhost:3000/health","metrics":"http://localhost:3000/metrics","port":"3000","service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 11:41:42"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 200 60.955 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 200 60.943 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 19.156 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"Retrieved categories with pagination","metadata":{"count":60,"depth":5,"includeChildren":false,"page":1,"service":"quiz-app-backend","totalPages":1,"version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"GET /api/categories?hierarchy=true&depth=5&limit=1000 304 23.076 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 10.965 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}
+{"level":"info","message":"GET /api/quizzes?limit=1000 304 9.450 ms - -","metadata":{"service":"quiz-app-backend","version":"1.0.0"},"timestamp":"2025-09-22 12:23:22"}

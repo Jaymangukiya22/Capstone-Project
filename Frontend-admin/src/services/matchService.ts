@@ -475,6 +475,7 @@ export class GameWebSocket {
    * Mark player as ready
    */
   setReady(ready: boolean = true): void {
+    console.log('🚀 SENDING player_ready event with ready:', ready)
     this.send('player_ready', { ready })
   }
 
@@ -501,6 +502,7 @@ export class GameWebSocket {
    * Join match by code via WebSocket
    */
   joinMatchByCode(joinCode: string): void {
+    console.log('🚀 SENDING join_match event with code:', joinCode.toUpperCase())
     this.send('join_match', { joinCode: joinCode.toUpperCase() })
   }
 }

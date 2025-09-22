@@ -5,11 +5,23 @@ import Leaderboard from './quiz-results/Leaderboard';
 import FriendMatchLeaderboard from './quiz-results/FriendMatchLeaderboard';
 import ActionButtons from './quiz-results/ActionButtons';
 
-const QuizResults: React.FC = () => {
-  const [quizData, setQuizData] = useState<QuizResultsType | null>(null);
+export function QuizResults() {
+  const [quizData, setQuizData] = useState<any>(null);
   const [friendMatchData, setFriendMatchData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [isFriendMatch, setIsFriendMatch] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Get current user's username
+  const getCurrentUsername = () => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        return user.username || user.email || 'Current Student';
+      }
+    } catch (e) {}
+    return 'Current Student';
+  };
 
   useEffect(() => {
     // Check for friend match results first
@@ -18,7 +30,7 @@ const QuizResults: React.FC = () => {
       const results = JSON.parse(friendMatchResults);
       setFriendMatchData(results);
       setIsFriendMatch(true);
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
 
@@ -38,7 +50,7 @@ const QuizResults: React.FC = () => {
         answers: []
       });
     }
-    setLoading(false);
+    setIsLoading(false);
   }, []);
 
   const handleRetakeQuiz = () => {
@@ -50,7 +62,7 @@ const QuizResults: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -73,8 +85,15 @@ const QuizResults: React.FC = () => {
 
   // Calculate percentage based on match type
   const percentage = isFriendMatch && friendMatchData
-    ? Math.round((friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.correctAnswers || 0) / 
-        (friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.totalAnswers || 1) * 100)
+    ? (() => {
+        if (friendMatchData.results) {
+          const currentUser = friendMatchData.results.find((r: any) => r.username === getCurrentUsername());
+          return Math.round((currentUser?.score || 0) / (currentUser?.answers?.length || 1) * 100);
+        } else if (friendMatchData.playerResults) {
+          return Math.round((friendMatchData.playerResults.score || 0) / (friendMatchData.playerResults.answers?.length || 1) * 100);
+        }
+        return 0;
+      })()
     : Math.round(((quizData?.score || 0) / (quizData?.totalQuestions || 1)) * 100);
 
   return (
@@ -110,8 +129,14 @@ const QuizResults: React.FC = () => {
           <div className="animate-in zoom-in duration-600 delay-200">
             {isFriendMatch && friendMatchData ? (
               <ScoreDisplay
-                score={friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.score || 0}
-                totalQuestions={friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.totalAnswers || 10}
+                score={friendMatchData.results ? 
+                  friendMatchData.results.find((r: any) => r.username === getCurrentUsername())?.score || 0 :
+                  friendMatchData.playerResults?.score || 0
+                }
+                totalQuestions={friendMatchData.results ? 
+                  friendMatchData.results.find((r: any) => r.username === getCurrentUsername())?.answers?.length || 2 :
+                  friendMatchData.playerResults?.answers?.length || 2
+                }
                 percentage={percentage}
               />
             ) : (

@@ -50,8 +50,10 @@ app.use(helmet());
 // CORS Configuration
 const allowedOrigins = [
   `http://${IP_ADD}:5173`,
+  `http://${IP_ADD}:5174`,
   `http://${IP_ADD}:3001`,
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:3001'
 ];
  

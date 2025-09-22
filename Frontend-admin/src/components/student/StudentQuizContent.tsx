@@ -9,6 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useQuizzes } from '@/hooks/useQuizzes'
 import { useCategories } from '@/hooks/useCategories'
+import { WEBSOCKET_URL } from '@/services/api';
+import { friendMatchService } from '@/services/friendMatchService';
+
 import type { Quiz } from '@/types/api'
 
 interface StudentQuiz extends Quiz {
@@ -115,40 +118,64 @@ export function StudentQuizContent() {
     window.location.pathname = '/quiz-countdown'
   }
 
-  const handleCreateFriendGame = (joinCode: string) => {
+  const handleCreateFriendGame = async (joinCode: string) => {
+    console.log('🎮 handleCreateFriendGame called with code:', joinCode)
     if (!selectedQuiz) return
 
-    // Store friend match info in sessionStorage
-    const friendMatchInfo = {
-      matchId: `match_${Date.now()}`, // Will be replaced with actual matchId from backend
-      joinCode,
-      websocketUrl: 'ws://localhost:3001',
-      quizName: selectedQuiz.title,
-      quizId: selectedQuiz.id,
-      mode: 'create'
+    try {
+      // Get the actual match details from backend using the join code
+      const match = await friendMatchService.findMatchByCode(joinCode)
+      
+      if (match) {
+        // Store friend match info in sessionStorage with real matchId
+        const friendMatchInfo = {
+          matchId: match.id, // Real matchId from backend
+          joinCode,
+          websocketUrl: WEBSOCKET_URL,
+          quizName: selectedQuiz.title,
+          quizId: selectedQuiz.id,
+          mode: 'create'
+        }
+        console.log('🎮 Setting CREATE mode in sessionStorage with real matchId:', friendMatchInfo)
+        sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
+        
+        toast({
+          title: "Friend Match Created!",
+          description: `Share code ${joinCode} with your friend`,
+        })
+        
+        // Navigate to friend match interface
+        window.location.pathname = '/friend-match'
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to find match details. Please try again.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error('Error getting match details:', error)
+      toast({
+        title: "Error", 
+        description: "Failed to create match. Please try again.",
+        variant: "destructive"
+      })
     }
-    sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
-    
-    toast({
-      title: "Friend Match Created!",
-      description: `Share code ${joinCode} with your friend`,
-    })
-    
-    // Navigate to friend match interface
-    window.location.pathname = '/friend-match'
   }
 
   const handleJoinFriendGame = (joinCode: string) => {
+    console.log('🎮 handleJoinFriendGame called with code:', joinCode)
     if (!selectedQuiz) return
 
     // Store friend match info in sessionStorage
     const friendMatchInfo = {
       joinCode,
-      websocketUrl: 'ws://localhost:3001',
+      websocketUrl: WEBSOCKET_URL,
       quizName: selectedQuiz.title,
       quizId: selectedQuiz.id,
       mode: 'join'
     }
+    console.log('🎮 Setting JOIN mode in sessionStorage:', friendMatchInfo)
     sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
     
     toast({

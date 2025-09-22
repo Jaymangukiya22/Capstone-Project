@@ -97,6 +97,8 @@ export function PlayWithFriendModal({
   }
 
   const handleJoinGame = async () => {
+    console.log('🎯 JOIN GAME BUTTON CLICKED - Code:', joinCode.trim())
+    
     if (!joinCode.trim()) {
       toast({
         title: "Invalid Code",
@@ -114,6 +116,7 @@ export function PlayWithFriendModal({
           title: "Match Found!",
           description: `Joining "${match.quiz.title}" match...`,
         })
+        console.log('🎯 CALLING onJoinGame with code:', joinCode.trim().toUpperCase())
         onJoinGame(joinCode.trim().toUpperCase())
         onOpenChange(false)
       } else {
@@ -136,6 +139,8 @@ export function PlayWithFriendModal({
   }
 
   const handleCreateGame = () => {
+    console.log('🎯 CREATE GAME BUTTON CLICKED - Code:', generatedCode)
+    console.log('🎯 CALLING onCreateGame with code:', generatedCode)
     onCreateGame(generatedCode)
     onOpenChange(false)
   }

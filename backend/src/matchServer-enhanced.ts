@@ -378,8 +378,8 @@ class EnhancedMatchService {
             firstName,
             lastName,
             socketId: socket.id,
-            receivedData: data,
-            finalData: userData
+            receivedDataType: typeof data,
+            finalUserData: userData
           });
         } catch (error) {
           socket.emit('auth_error', { message: 'Authentication failed' });
@@ -594,6 +594,14 @@ class EnhancedMatchService {
           this.userToMatch.set(socket.data.userId, matchId);
 
           socket.join(matchId);
+          
+          logInfo('Second player joined WebSocket room', { 
+            matchId, 
+            userId: socket.data.userId,
+            socketId: socket.id,
+            roomSizeAfterJoin: this.io.sockets.adapter.rooms.get(matchId)?.size || 0
+          });
+          
           socket.emit('match_joined', { 
             matchId, 
             players: Array.from(match.players.values()).map(p => ({
@@ -606,6 +614,12 @@ class EnhancedMatchService {
           });
 
           // Notify all players about the new joiner
+          logInfo('Broadcasting player list update', { 
+            matchId, 
+            roomSize: this.io.sockets.adapter.rooms.get(matchId)?.size || 0,
+            playerCount: match.players.size 
+          });
+          
           this.io.to(matchId).emit('player_list_updated', {
             players: Array.from(match.players.values()).map(p => ({
               userId: p.userId,
@@ -614,6 +628,21 @@ class EnhancedMatchService {
               lastName: p.lastName,
               isReady: p.isReady
             }))
+          });
+          
+          // Also emit to individual sockets as backup
+          Array.from(match.players.values()).forEach(player => {
+            if (player.socketId) {
+              this.io.to(player.socketId).emit('player_list_updated', {
+                players: Array.from(match.players.values()).map(p => ({
+                  userId: p.userId,
+                  username: p.username,
+                  firstName: p.firstName,
+                  lastName: p.lastName,
+                  isReady: p.isReady
+                }))
+              });
+            }
           });
 
           // Update match in Redis with new player data
@@ -737,9 +766,28 @@ class EnhancedMatchService {
             this.userToMatch.set(socket.data.userId, data.matchId);
 
             socket.join(data.matchId);
+            
+            logInfo('Player joined WebSocket room', { 
+              matchId: data.matchId, 
+              userId: socket.data.userId,
+              socketId: socket.id,
+              roomSize: this.io.sockets.adapter.rooms.get(data.matchId)?.size || 0
+            });
+            
             socket.emit('match_connected', { 
               matchId: data.matchId,
               joinCode: match.joinCode,
+              players: Array.from(match.players.values()).map(p => ({
+                userId: p.userId,
+                username: p.username,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                isReady: p.isReady
+              }))
+            });
+
+            // Broadcast updated player list to all players in the match
+            this.io.to(data.matchId).emit('player_list_updated', {
               players: Array.from(match.players.values()).map(p => ({
                 userId: p.userId,
                 username: p.username,
@@ -762,11 +810,11 @@ class EnhancedMatchService {
       });
 
       // Player ready
-      socket.on('player_ready', async () => {
+      socket.on('player_ready', async (data: { ready?: boolean } = {}) => {
         try {
           const matchId = this.userToMatch.get(socket.data.userId);
           if (!matchId) {
-            socket.emit('error', { message: 'Not in a match' });
+            socket.emit('error', { message: 'Not in any match' });
             return;
           }
 
@@ -778,16 +826,53 @@ class EnhancedMatchService {
 
           const player = match.players.get(socket.data.userId);
           if (player) {
-            player.isReady = true;
+            player.isReady = data.ready !== false; // Default to true if not specified
             
+            // Emit individual player ready event
             this.io.to(matchId).emit('player_ready', {
               userId: socket.data.userId,
-              username: socket.data.username
+              username: socket.data.username,
+              isReady: player.isReady
+            });
+
+            // Emit updated player list to all players
+            this.io.to(matchId).emit('player_list_updated', {
+              players: Array.from(match.players.values()).map(p => ({
+                userId: p.userId,
+                username: p.username,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                isReady: p.isReady
+              }))
+            });
+
+            // Update match in Redis with new ready status
+            await store.set(`match:${matchId}`, JSON.stringify({
+              id: matchId,
+              quizId: match.quizId,
+              joinCode: match.joinCode,
+              status: match.status,
+              createdAt: match.createdAt,
+              players: Array.from(match.players.values()).map(p => ({
+                userId: p.userId,
+                username: p.username,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                isReady: p.isReady
+              }))
+            }));
+
+            logInfo('Player ready status updated', { 
+              matchId, 
+              userId: socket.data.userId,
+              isReady: player.isReady,
+              playerCount: match.players.size 
             });
 
             // Check if all players are ready
             const allReady = Array.from(match.players.values()).every(p => p.isReady);
             if (allReady && match.players.size === match.maxPlayers) {
+              logInfo('All players ready, starting match', { matchId });
               this.startMatch(matchId);
             }
           }

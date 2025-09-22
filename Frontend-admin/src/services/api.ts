@@ -14,12 +14,8 @@ const getApiBaseUrl = (): string => {
 const getWebSocketUrl = (): string => {
   const { hostname } = window.location;
   
-  // If accessing from localhost, use localhost for WebSocket
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'ws://localhost:3001';
-  }
-  
-  // For network access, use the same hostname but different port
+  // Always use the current hostname for WebSocket connection
+  // This ensures it works for both localhost and network access
   return `ws://${hostname}:3001`;
 };
 

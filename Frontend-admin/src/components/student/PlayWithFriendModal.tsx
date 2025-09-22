@@ -18,9 +18,11 @@ import {
   Users,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react'
-import { generateJoinCode, type StudentQuiz } from '@/services/studentQuizService'
+import { type StudentQuiz } from '@/services/studentQuizService'
+import { friendMatchService } from '@/services/friendMatchService'
 
 interface PlayWithFriendModalProps {
   open: boolean
@@ -47,16 +49,31 @@ export function PlayWithFriendModal({
     if (!selectedQuiz) return
     
     setIsGenerating(true)
-    // Simulate API call delay
-    setTimeout(() => {
-      const code = generateJoinCode()
-      setGeneratedCode(code)
-      setIsGenerating(false)
+    try {
+      const result = await friendMatchService.createFriendMatch(parseInt(selectedQuiz.id))
+      if (result) {
+        setGeneratedCode(result.joinCode)
+        toast({
+          title: "Game Created!",
+          description: result.message || "Share this code with your friend to start playing together.",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create game. Please try again.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error('Error creating friend match:', error)
       toast({
-        title: "Game Created!",
-        description: "Share this code with your friend to start playing together.",
+        title: "Error",
+        description: "Failed to create game. Please try again.",
+        variant: "destructive"
       })
-    }, 1000)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleCopyCode = () => {
@@ -79,7 +96,7 @@ export function PlayWithFriendModal({
     }
   }
 
-  const handleJoinGame = () => {
+  const handleJoinGame = async () => {
     if (!joinCode.trim()) {
       toast({
         title: "Invalid Code",
@@ -90,12 +107,32 @@ export function PlayWithFriendModal({
     }
 
     setIsJoining(true)
-    // Simulate API call delay
-    setTimeout(() => {
+    try {
+      const match = await friendMatchService.findMatchByCode(joinCode.trim())
+      if (match) {
+        toast({
+          title: "Match Found!",
+          description: `Joining "${match.quiz.title}" match...`,
+        })
+        onJoinGame(joinCode.trim().toUpperCase())
+        onOpenChange(false)
+      } else {
+        toast({
+          title: "Match Not Found",
+          description: "No active match found with that code. Please check the code and try again.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error('Error joining match:', error)
+      toast({
+        title: "Error",
+        description: "Failed to join match. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
       setIsJoining(false)
-      onJoinGame(joinCode.trim().toUpperCase())
-      onOpenChange(false)
-    }, 1000)
+    }
   }
 
   const handleCreateGame = () => {
@@ -160,7 +197,14 @@ export function PlayWithFriendModal({
                     disabled={isGenerating || !selectedQuiz}
                     className="w-full"
                   >
-                    {isGenerating ? "Generating..." : "Generate Game Code"}
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      "Generate Game Code"
+                    )}
                   </Button>
                 </>
               ) : (
@@ -224,7 +268,14 @@ export function PlayWithFriendModal({
                 disabled={isJoining || joinCode.length !== 6}
                 className="w-full"
               >
-                {isJoining ? "Joining..." : "Join Game"}
+                {isJoining ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Joining...
+                  </>
+                ) : (
+                  "Join Game"
+                )}
               </Button>
             </div>
           </TabsContent>

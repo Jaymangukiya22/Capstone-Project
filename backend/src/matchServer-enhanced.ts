@@ -5,10 +5,11 @@ import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import { Server as SocketIOServer } from 'socket.io';
-import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption } from './models';
+import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption } from './models/index';
 import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
 import { logInfo, logError } from './utils/logger';
+import { InMemoryStore } from './utils/InMemoryStore';
 import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
@@ -18,9 +19,57 @@ const app = express();
 const server = createServer(app);
 const port = process.env.MATCH_SERVICE_PORT || 3001;
 
-// Initialize Redis
-const redis = createClient({ url: process.env.REDIS_URL });
-redis.connect().catch(console.error);
+// Store interface for Redis/InMemory compatibility
+interface StoreInterface {
+  set(key: string, value: string): Promise<string | null>;
+  get(key: string): Promise<string | null>;
+  del(key: string): Promise<number>;
+  exists(key: string): Promise<number>;
+  keys?(pattern: string): Promise<string[]>;
+}
+
+// Initialize Redis with fallback to in-memory store
+let store: StoreInterface;
+let isRedisConnected = false;
+
+async function initializeStore(): Promise<void> {
+  try {
+    const redis = createClient({ 
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
+      socket: {
+        connectTimeout: 3000 // 3 second timeout
+      }
+    });
+    
+    // Disable automatic reconnection for faster fallback
+    redis.on('error', () => {
+      // Silently handle errors during connection attempt
+    });
+
+    // Try to connect with timeout
+    await Promise.race([
+      redis.connect(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 5000)
+      )
+    ]);
+    
+    // Test the connection
+    await redis.ping();
+    
+    store = redis;
+    isRedisConnected = true;
+    console.log('✅ Connected to Redis');
+    logInfo('Successfully connected to Redis', { url: process.env.REDIS_URL || 'redis://localhost:6379' });
+    
+  } catch (error) {
+    console.log('⚠️ Redis not available, using in-memory store instead');
+    logError('Redis connection failed, falling back to in-memory store', error as Error);
+    
+    store = new InMemoryStore();
+    isRedisConnected = false;
+  }
+}
 
 // Middleware
 app.use(helmet());
@@ -337,17 +386,18 @@ class EnhancedMatchService {
     this.userToMatch.set(userId, matchId);
     this.joinCodeToMatch.set(joinCode, matchId);
 
-    // Store match in Redis for persistence
-    await redis.setEx(`match:${matchId}`, 3600, JSON.stringify({
+    // Store match for persistence
+    await store.set(`match:${matchId}`, JSON.stringify({
       id: matchId,
       quizId,
       joinCode,
-      matchType: 'FRIEND_1V1',
-      status: match.status,
-      createdAt: match.createdAt
+      status: 'WAITING',
+      players: [],
+      createdAt: new Date().toISOString()
     }));
 
-    logInfo('Friend match created', { matchId, joinCode, quizId });
+    logInfo('Friend match created', { matchId, joinCode, quizId, creator: username });
+
     return { matchId, joinCode };
   }
 
@@ -546,7 +596,7 @@ class EnhancedMatchService {
     // Keep match data for a while before cleanup
     setTimeout(() => {
       this.matches.delete(matchId);
-      redis.del(`match:${matchId}`);
+      store.del(`match:${matchId}`);
     }, 300000); // 5 minutes
 
     logInfo('Match completed', { matchId, players: rankings.length, winner: rankings[0].username });
@@ -577,7 +627,7 @@ class EnhancedMatchService {
       if (match.players.size === 0) {
         this.matches.delete(matchId);
         this.joinCodeToMatch.delete(match.joinCode);
-        redis.del(`match:${matchId}`);
+        store.del(`match:${matchId}`);
       }
     }
   }
@@ -592,7 +642,7 @@ class EnhancedMatchService {
         if (now - match.createdAt.getTime() > maxAge) {
           this.matches.delete(matchId);
           this.joinCodeToMatch.delete(match.joinCode);
-          redis.del(`match:${matchId}`);
+          store.del(`match:${matchId}`);
           logInfo('Cleaned up old match', { matchId });
         }
       }
@@ -624,8 +674,8 @@ class EnhancedMatchService {
   }
 }
 
-// Initialize Enhanced Match Service
-const enhancedMatchService = new EnhancedMatchService(server);
+// Enhanced Match Service will be initialized in startServer function
+let enhancedMatchService: EnhancedMatchService;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -782,7 +832,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 process.on('SIGTERM', async () => {
   logInfo('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    redis.disconnect();
+    if (isRedisConnected && (store as any).disconnect) {
+      (store as any).disconnect();
+    }
     process.exit(0);
   });
 });
@@ -790,18 +842,34 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   logInfo('SIGINT received, shutting down gracefully');
   server.close(() => {
-    redis.disconnect();
+    if (isRedisConnected && (store as any).disconnect) {
+      (store as any).disconnect();
+    }
     process.exit(0);
   });
 });
 
 // Start server
-server.listen(port, () => {
-  logInfo(`Enhanced Match service started on port ${port}`, {
-    port,
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+async function startServer() {
+  // Initialize store (Redis with fallback to in-memory)
+  await initializeStore();
+  
+  // Create match service instance
+  enhancedMatchService = new EnhancedMatchService(server);
+  
+  server.listen(port, () => {
+    logInfo(`Enhanced Match service started on port ${port}`, {
+      port,
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString(),
+      store: isRedisConnected ? 'Redis' : 'In-Memory'
+    });
   });
+}
+
+startServer().catch((error) => {
+  logError('Failed to start server', error);
+  process.exit(1);
 });
 
 export { enhancedMatchService };

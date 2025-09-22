@@ -2,14 +2,27 @@ import React, { useState, useEffect } from 'react';
 import type { QuizResults as QuizResultsType } from '@/types/quiz';
 import ScoreDisplay from './quiz-results/ScoreDisplay';
 import Leaderboard from './quiz-results/Leaderboard';
+import FriendMatchLeaderboard from './quiz-results/FriendMatchLeaderboard';
 import ActionButtons from './quiz-results/ActionButtons';
 
 const QuizResults: React.FC = () => {
   const [quizData, setQuizData] = useState<QuizResultsType | null>(null);
+  const [friendMatchData, setFriendMatchData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isFriendMatch, setIsFriendMatch] = useState(false);
 
   useEffect(() => {
-    // Get results from sessionStorage
+    // Check for friend match results first
+    const friendMatchResults = sessionStorage.getItem('friendMatchResults');
+    if (friendMatchResults) {
+      const results = JSON.parse(friendMatchResults);
+      setFriendMatchData(results);
+      setIsFriendMatch(true);
+      setLoading(false);
+      return;
+    }
+
+    // Get regular quiz results from sessionStorage
     const storedResults = sessionStorage.getItem('quizResults');
     if (storedResults) {
       const results = JSON.parse(storedResults);
@@ -29,7 +42,12 @@ const QuizResults: React.FC = () => {
   }, []);
 
   const handleRetakeQuiz = () => {
-    sessionStorage.removeItem('quizResults');
+    if (isFriendMatch) {
+      sessionStorage.removeItem('friendMatchResults');
+      sessionStorage.removeItem('friendMatch');
+    } else {
+      sessionStorage.removeItem('quizResults');
+    }
   };
 
   if (loading) {
@@ -43,7 +61,7 @@ const QuizResults: React.FC = () => {
     );
   }
 
-  if (!quizData) {
+  if (!quizData && !friendMatchData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -53,7 +71,11 @@ const QuizResults: React.FC = () => {
     );
   }
 
-  const percentage = Math.round((quizData.score / quizData.totalQuestions) * 100);
+  // Calculate percentage based on match type
+  const percentage = isFriendMatch && friendMatchData
+    ? Math.round((friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.correctAnswers || 0) / 
+        (friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.totalAnswers || 1) * 100)
+    : Math.round(((quizData?.score || 0) / (quizData?.totalQuestions || 1)) * 100);
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -86,19 +108,35 @@ const QuizResults: React.FC = () => {
 
           {/* Main Score Display */}
           <div className="animate-in zoom-in duration-600 delay-200">
-            <ScoreDisplay
-              score={quizData.score}
-              totalQuestions={quizData.totalQuestions}
-              percentage={percentage}
-            />
+            {isFriendMatch && friendMatchData ? (
+              <ScoreDisplay
+                score={friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.score || 0}
+                totalQuestions={friendMatchData.rankings.find((r: any) => r.username === 'Current Student')?.totalAnswers || 10}
+                percentage={percentage}
+              />
+            ) : (
+              <ScoreDisplay
+                score={quizData?.score || 0}
+                totalQuestions={quizData?.totalQuestions || 10}
+                percentage={percentage}
+              />
+            )}
           </div>
 
-          {/* Leaderboard */}
+          {/* Leaderboard - Different for friend matches */}
           <div className="animate-in slide-in-from-bottom duration-600 delay-400">
-            <Leaderboard
-              currentScore={quizData.score}
-              totalQuestions={quizData.totalQuestions}
-            />
+            {isFriendMatch && friendMatchData ? (
+              <FriendMatchLeaderboard
+                rankings={friendMatchData.rankings}
+                winner={friendMatchData.winner}
+                matchId={friendMatchData.matchId}
+              />
+            ) : (
+              <Leaderboard
+                currentScore={quizData?.score || 0}
+                totalQuestions={quizData?.totalQuestions || 10}
+              />
+            )}
           </div>
 
           {/* Action Buttons */}

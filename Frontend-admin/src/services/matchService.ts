@@ -70,6 +70,7 @@ interface ApiResponse<T> {
 
 class MatchService {
   private baseUrl = '/matches'
+  private friendMatchUrl = '/api/friend-matches'
 
   /**
    * Get available AI opponents
@@ -252,6 +253,49 @@ class MatchService {
       }
     }
   }
+
+  /**
+   * Create a friend match (1v1 with join code)
+   */
+  async createFriendMatch(quizId: number): Promise<{ matchId: string; joinCode: string; websocketUrl: string } | null> {
+    try {
+      const response = await apiClient.post<ApiResponse<{ matchId: string; joinCode: string; websocketUrl: string }>>(
+        this.friendMatchUrl,
+        { quizId }
+      )
+      
+      if (response.data.success) {
+        return response.data.data
+      } else {
+        console.error('Failed to create friend match:', response.data.message)
+        return null
+      }
+    } catch (error) {
+      console.error('Error creating friend match:', error)
+      return null
+    }
+  }
+
+  /**
+   * Find match by join code
+   */
+  async findMatchByCode(joinCode: string): Promise<any | null> {
+    try {
+      const response = await apiClient.get<ApiResponse<{ match: any }>>(
+        `${this.friendMatchUrl}/code/${joinCode.toUpperCase()}`
+      )
+      
+      if (response.data.success) {
+        return response.data.data.match
+      } else {
+        console.error('Failed to find match by code:', response.data.message)
+        return null
+      }
+    } catch (error) {
+      console.error('Error finding match by code:', error)
+      return null
+    }
+  }
 }
 
 // Export singleton instance
@@ -266,15 +310,17 @@ export class GameWebSocket {
   /**
    * Connect to match WebSocket
    */
-  connect(matchId: string): Promise<void> {
+  connect(websocketUrl: string, userId?: number, username?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.matchId = matchId
-        const wsUrl = `ws://localhost:3001?matchId=${matchId}`
-        this.socket = new WebSocket(wsUrl)
+        this.socket = new WebSocket(websocketUrl)
 
         this.socket.onopen = () => {
           console.log('Connected to match WebSocket')
+          // Authenticate if userId and username are provided
+          if (userId && username) {
+            this.send('authenticate', { userId, username })
+          }
           resolve()
         }
 
@@ -381,12 +427,27 @@ export class GameWebSocket {
   /**
    * Submit answer for current question
    */
-  submitAnswer(questionId: number, selectedOptions: number[]): void {
+  submitAnswer(questionId: number, selectedOptions: number[], timeSpent?: number): void {
     this.send('submit_answer', {
       questionId,
       selectedOptions,
+      timeSpent: timeSpent || 0,
       timestamp: Date.now()
     })
+  }
+
+  /**
+   * Create friend match via WebSocket
+   */
+  createFriendMatch(quizId: number): void {
+    this.send('create_friend_match', { quizId })
+  }
+
+  /**
+   * Join match by code via WebSocket
+   */
+  joinMatchByCode(joinCode: string): void {
+    this.send('join_match_by_code', { joinCode: joinCode.toUpperCase() })
   }
 }
 

@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/hooks/useTheme"
 // import { ApiTest } from '@/components/ApiTest' // Unused for now
 import QuizCountdown from "@/components/student/QuizCountdown"
 import QuizInterface from "@/components/student/QuizInterface"
+import FriendMatchInterface from "@/components/student/FriendMatchInterface"
 import QuizResults from "@/components/student/QuizResults"
 import { LoginForm } from "@/pages/login/login"
 import { SignUpForm } from "@/pages/login/signup"
@@ -17,7 +18,7 @@ function App() {
   const currentPath = window.location.pathname
   
   // Check if current page should be full-screen (without layout)
-  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/quiz-results', '/login', '/signup'].includes(currentPath)
+  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/friend-match', '/quiz-results', '/login', '/signup'].includes(currentPath)
 
   const renderPage = () => {
     switch (currentPath) {
@@ -27,6 +28,8 @@ function App() {
         return <QuizCountdown />
       case '/quiz-interface':
         return <QuizInterface />
+      case '/friend-match':
+        return <FriendMatchInterface />
       case '/quiz-results':
         return <QuizResults />
       case '/quiz-builder':

@@ -19,9 +19,16 @@ import { PlayWithFriendModal } from './PlayWithFriendModal'
 interface QuizOverviewPanelProps {
   selectedQuiz: StudentQuiz | null
   onPlayQuiz: (quizId: string, mode: string, gameCode?: string) => void
+  onCreateFriendGame?: (joinCode: string) => void
+  onJoinFriendGame?: (joinCode: string) => void
 }
 
-export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPanelProps) {
+export function QuizOverviewPanel({ 
+  selectedQuiz, 
+  onPlayQuiz, 
+  onCreateFriendGame, 
+  onJoinFriendGame 
+}: QuizOverviewPanelProps) {
   const [selectedMode, setSelectedMode] = useState<string>('')
   const [showFriendModal, setShowFriendModal] = useState(false)
   const [aiOpponents, setAIOpponents] = useState<AIOpponent[]>([])
@@ -101,12 +108,20 @@ export function QuizOverviewPanel({ selectedQuiz, onPlayQuiz }: QuizOverviewPane
 
   const handleJoinGame = (code: string) => {
     if (!selectedQuiz) return
-    onPlayQuiz(selectedQuiz.id, 'play-with-friend', code)
+    if (onJoinFriendGame) {
+      onJoinFriendGame(code)
+    } else {
+      onPlayQuiz(selectedQuiz.id, 'play-with-friend', code)
+    }
   }
 
   const handleCreateGame = (code: string) => {
     if (!selectedQuiz) return
-    onPlayQuiz(selectedQuiz.id, 'play-with-friend', code)
+    if (onCreateFriendGame) {
+      onCreateFriendGame(code)
+    } else {
+      onPlayQuiz(selectedQuiz.id, 'play-with-friend', code)
+    }
   }
 
   if (!selectedQuiz) {

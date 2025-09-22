@@ -83,6 +83,12 @@ export function StudentQuizContent() {
   }
 
   const handlePlayQuiz = (quizId: string, mode: string, gameCode?: string) => {
+    if (mode === 'play-with-friend') {
+      // For friend matches, we don't navigate immediately
+      // The PlayWithFriendModal will handle the navigation
+      return
+    }
+
     // Store quiz info in sessionStorage for the quiz flow
     const quizInfo = {
       quizId,
@@ -107,6 +113,51 @@ export function StudentQuizContent() {
     
     // Navigate to quiz countdown page
     window.location.pathname = '/quiz-countdown'
+  }
+
+  const handleCreateFriendGame = (joinCode: string) => {
+    if (!selectedQuiz) return
+
+    // Store friend match info in sessionStorage
+    const friendMatchInfo = {
+      matchId: `match_${Date.now()}`, // Will be replaced with actual matchId from backend
+      joinCode,
+      websocketUrl: 'ws://localhost:3001',
+      quizName: selectedQuiz.title,
+      quizId: selectedQuiz.id,
+      mode: 'create'
+    }
+    sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
+    
+    toast({
+      title: "Friend Match Created!",
+      description: `Share code ${joinCode} with your friend`,
+    })
+    
+    // Navigate to friend match interface
+    window.location.pathname = '/friend-match'
+  }
+
+  const handleJoinFriendGame = (joinCode: string) => {
+    if (!selectedQuiz) return
+
+    // Store friend match info in sessionStorage
+    const friendMatchInfo = {
+      joinCode,
+      websocketUrl: 'ws://localhost:3001',
+      quizName: selectedQuiz.title,
+      quizId: selectedQuiz.id,
+      mode: 'join'
+    }
+    sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
+    
+    toast({
+      title: "Joining Friend Match!",
+      description: `Joining match with code ${joinCode}`,
+    })
+    
+    // Navigate to friend match interface
+    window.location.pathname = '/friend-match'
   }
 
   const getDifficultyColor = (difficulty: string) => {
@@ -282,9 +333,11 @@ export function StudentQuizContent() {
             timePerQuestion: selectedQuiz.timeLimit || 30,
             maxPlayers: 10,
             lastUpdated: new Date(selectedQuiz.updatedAt),
-            isActive: selectedQuiz.isActive
+            isActive: true
           } : null}
           onPlayQuiz={handlePlayQuiz}
+          onCreateFriendGame={handleCreateFriendGame}
+          onJoinFriendGame={handleJoinFriendGame}
         />
       </div>
     </div>

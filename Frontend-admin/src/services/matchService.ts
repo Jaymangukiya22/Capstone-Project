@@ -1,4 +1,5 @@
 import { apiClient } from './api'
+import { io, Socket } from 'socket.io-client'
 
 // Types for AI Opponents
 export interface AIOpponent {
@@ -301,47 +302,51 @@ class MatchService {
 // Export singleton instance
 export const matchService = new MatchService()
 
-// WebSocket connection for real-time gameplay
+// WebSocket connection for real-time gameplay using Socket.IO
 export class GameWebSocket {
-  private socket: WebSocket | null = null
+  private socket: Socket | null = null
   private matchId: string | null = null
   private eventHandlers: Map<string, Function[]> = new Map()
 
   /**
-   * Connect to match WebSocket
+   * Connect to match WebSocket using Socket.IO
    */
   connect(websocketUrl: string, userId?: number, username?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.socket = new WebSocket(websocketUrl)
+        // Extract base URL from websocketUrl (remove ws:// and path)
+        const baseUrl = websocketUrl.replace('ws://', 'http://').replace('wss://', 'https://')
+        
+        this.socket = io(baseUrl, {
+          transports: ['websocket', 'polling'],
+          timeout: 10000,
+        })
 
-        this.socket.onopen = () => {
-          console.log('Connected to match WebSocket')
+        this.socket.on('connect', () => {
+          console.log('Connected to match WebSocket via Socket.IO')
           // Authenticate if userId and username are provided
           if (userId && username) {
             this.send('authenticate', { userId, username })
           }
           resolve()
-        }
+        })
 
-        this.socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            this.handleMessage(data.type, data.payload)
-          } catch (error) {
-            console.error('Error parsing WebSocket message:', error)
-          }
-        }
-
-        this.socket.onclose = () => {
-          console.log('WebSocket connection closed')
+        this.socket.on('disconnect', () => {
+          console.log('Socket.IO connection closed')
           this.socket = null
-        }
+        })
 
-        this.socket.onerror = (error) => {
-          console.error('WebSocket error:', error)
+        this.socket.on('connect_error', (error) => {
+          console.error('Socket.IO connection error:', error)
           reject(error)
-        }
+        })
+
+        // Listen for all events and forward to handlers
+        this.socket.onAny((eventName, ...args) => {
+          const data = args[0] || {}
+          this.handleMessage(eventName, data)
+        })
+
       } catch (error) {
         reject(error)
       }
@@ -349,11 +354,11 @@ export class GameWebSocket {
   }
 
   /**
-   * Disconnect from WebSocket
+   * Disconnect from Socket.IO
    */
   disconnect(): void {
     if (this.socket) {
-      this.socket.close()
+      this.socket.disconnect()
       this.socket = null
     }
     this.matchId = null
@@ -361,13 +366,13 @@ export class GameWebSocket {
   }
 
   /**
-   * Send message to server
+   * Send message to server via Socket.IO
    */
   send(type: string, payload: any): void {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type, payload }))
+    if (this.socket && this.socket.connected) {
+      this.socket.emit(type, payload)
     } else {
-      console.warn('WebSocket not connected')
+      console.warn('Socket.IO not connected')
     }
   }
 

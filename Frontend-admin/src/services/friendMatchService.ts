@@ -1,4 +1,5 @@
 import { apiClient } from './api'
+import { io, Socket } from 'socket.io-client'
 
 // Types for Friend Match API
 export interface FriendMatchResponse {
@@ -34,7 +35,7 @@ export interface ApiResponse<T> {
 }
 
 class FriendMatchService {
-  private baseUrl = '/api/friend-matches'
+  private baseUrl = '/friend-matches'
 
   /**
    * Create a friend match (1v1 with join code)
@@ -137,44 +138,48 @@ class FriendMatchService {
 // Export singleton instance
 export const friendMatchService = new FriendMatchService()
 
-// WebSocket connection for friend matches
+// Socket.IO connection for friend matches
 export class FriendMatchWebSocket {
-  private socket: WebSocket | null = null
+  private socket: Socket | null = null
   private eventHandlers: Map<string, Function[]> = new Map()
 
   /**
-   * Connect to friend match WebSocket
+   * Connect to friend match using Socket.IO
    */
   connect(websocketUrl: string, userId: number, username: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.socket = new WebSocket(websocketUrl)
+        // Extract base URL from websocketUrl (remove ws:// and path)
+        const baseUrl = websocketUrl.replace('ws://', 'http://').replace('wss://', 'https://')
+        
+        this.socket = io(baseUrl, {
+          transports: ['websocket', 'polling'],
+          timeout: 10000,
+        })
 
-        this.socket.onopen = () => {
-          console.log('Connected to friend match WebSocket')
+        this.socket.on('connect', () => {
+          console.log('Connected to friend match via Socket.IO')
           // Authenticate with the match service
           this.send('authenticate', { userId, username })
           resolve()
-        }
+        })
 
-        this.socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            this.handleMessage(data.type || data.event, data.payload || data)
-          } catch (error) {
-            console.error('Error parsing WebSocket message:', error)
-          }
-        }
-
-        this.socket.onclose = () => {
-          console.log('Friend match WebSocket connection closed')
+        this.socket.on('disconnect', () => {
+          console.log('Friend match Socket.IO connection closed')
           this.socket = null
-        }
+        })
 
-        this.socket.onerror = (error) => {
-          console.error('Friend match WebSocket error:', error)
+        this.socket.on('connect_error', (error) => {
+          console.error('Friend match Socket.IO error:', error)
           reject(error)
-        }
+        })
+
+        // Listen for all events and forward to handlers
+        this.socket.onAny((eventName, ...args) => {
+          const data = args[0] || {}
+          this.handleMessage(eventName, data)
+        })
+
       } catch (error) {
         reject(error)
       }
@@ -182,24 +187,24 @@ export class FriendMatchWebSocket {
   }
 
   /**
-   * Disconnect from WebSocket
+   * Disconnect from Socket.IO
    */
   disconnect(): void {
     if (this.socket) {
-      this.socket.close()
+      this.socket.disconnect()
       this.socket = null
     }
     this.eventHandlers.clear()
   }
 
   /**
-   * Send message to server
+   * Send message to server via Socket.IO
    */
   send(type: string, payload: any): void {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type, payload }))
+    if (this.socket && this.socket.connected) {
+      this.socket.emit(type, payload)
     } else {
-      console.warn('Friend match WebSocket not connected')
+      console.warn('Friend match Socket.IO not connected')
     }
   }
 

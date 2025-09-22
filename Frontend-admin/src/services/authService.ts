@@ -50,11 +50,16 @@ export class AuthService {
     try {
       const response = await apiClient.post<ApiResponse<AuthData>>(`${this.endpoint}/login`, credentials);
       
+      console.log('🔍 Login API Response:', response.data);
+      console.log('🔍 User Data from API:', response.data.data.user);
+      
       // Store token and user data in localStorage
       if (response.data.data.token) {
         localStorage.setItem('authToken', response.data.data.token);
         localStorage.setItem('refreshToken', response.data.data.refreshToken);
         localStorage.setItem('user', JSON.stringify(response.data.data.user));
+        
+        console.log('✅ User data stored in localStorage:', JSON.stringify(response.data.data.user));
       }
       
       return response.data.data;
@@ -120,14 +125,19 @@ export class AuthService {
    */
   getCurrentUser(): User | null {
     const userStr = localStorage.getItem('user');
+    console.log('🔍 Raw user string from localStorage:', userStr);
+    
     if (userStr) {
       try {
-        return JSON.parse(userStr);
+        const parsedUser = JSON.parse(userStr);
+        console.log('🔍 Parsed user data:', parsedUser);
+        return parsedUser;
       } catch (error) {
         console.error('Error parsing user data:', error);
         return null;
       }
     }
+    console.log('❌ No user data found in localStorage');
     return null;
   }
 

@@ -29,11 +29,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = () => {
       try {
+        console.log('🔄 Initializing auth...');
         const currentUser = authService.getCurrentUser();
         const isAuth = authService.isAuthenticated();
         
+        console.log('🔍 Auth check - isAuth:', isAuth, 'currentUser:', currentUser);
+        
         if (isAuth && currentUser) {
+          console.log('✅ Setting user in AuthContext:', currentUser);
           setUser(currentUser);
+        } else {
+          console.log('❌ No valid auth data found');
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -52,10 +58,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
       
+      console.log('🔄 Logging in with credentials:', credentials);
       const authData = await authService.login(credentials);
+      console.log('✅ Login successful, authData:', authData);
+      console.log('✅ Setting user in AuthContext from login:', authData.user);
       setUser(authData.user);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+      console.error('❌ Login failed:', errorMessage);
       setError(errorMessage);
       throw error;
     } finally {

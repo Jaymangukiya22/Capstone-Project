@@ -50,7 +50,7 @@ export const connectDatabase = async (): Promise<void> => {
     
     // Sync models in development
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ force: false }); // Recreate tables to fix schema issues
+      await sequelize.sync({ force: true }); // Recreate tables to fix schema issues
       logInfo('Database models synchronized with force: true - tables recreated');
       
       // Run engineering seeder after sync

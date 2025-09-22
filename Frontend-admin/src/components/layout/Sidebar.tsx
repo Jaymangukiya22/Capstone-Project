@@ -8,6 +8,82 @@ import {
   ClipboardList
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/AuthContext"
+
+// Helper function to generate user initials
+function getUserInitials(firstName?: string, lastName?: string, username?: string, email?: string): string {
+  if (firstName && lastName) {
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  }
+  if (firstName) {
+    return firstName.charAt(0).toUpperCase();
+  }
+  if (username) {
+    return username.charAt(0).toUpperCase();
+  }
+  if (email) {
+    return email.charAt(0).toUpperCase();
+  }
+  return 'U'; // Default fallback
+}
+
+// Helper function to get display name
+function getDisplayName(firstName?: string, lastName?: string, username?: string): string {
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  }
+  if (firstName) {
+    return firstName;
+  }
+  if (username) {
+    return username;
+  }
+  return 'User';
+}
+
+// User Profile Component
+function UserProfile() {
+  const { user } = useAuth();
+
+  console.log('🔍 UserProfile component - user data:', user);
+
+  if (!user) {
+    return (
+      <div className="flex items-center space-x-3 px-3 py-2">
+        <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">?</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">Loading...</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Please wait</div>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = getUserInitials(user.firstName, user.lastName, user.username, user.email);
+  const displayName = getDisplayName(user.firstName, user.lastName, user.username);
+
+  console.log('🔍 UserProfile - initials:', initials, 'displayName:', displayName);
+  console.log('🔍 UserProfile - user fields:', {
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+    email: user.email
+  });
+
+  return (
+    <div className="flex items-center space-x-3 px-3 py-2">
+      <div className="h-8 w-8 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
+        <span className="text-xs font-medium text-white">{initials}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
+      </div>
+    </div>
+  );
+}
 
 const navigation = [
   {
@@ -143,15 +219,7 @@ export function Sidebar() {
 
       {/* User Section */}
       <div className="px-4 py-4 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex items-center space-x-3 px-3 py-2">
-          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">AU</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">Admin User</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">admin@quizmaster.com</div>
-          </div>
-        </div>
+        <UserProfile />
       </div>
     </div>
   )

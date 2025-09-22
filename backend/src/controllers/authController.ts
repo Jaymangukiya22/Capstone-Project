@@ -129,7 +129,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const refreshToken = generateRefreshToken(user.id);
 
-    const { passwordHash, ...userWithoutPassword } = user;
+    // Return user without password - same structure as register
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      eloRating: user.eloRating,
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt
+    };
 
     logInfo('User logged in successfully', { userId: user.id, username: user.username });
 
@@ -137,7 +148,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       success: true,
       message: 'Login successful',
       data: {
-        user: userWithoutPassword,
+        user: userResponse,
         token,
         refreshToken
       }

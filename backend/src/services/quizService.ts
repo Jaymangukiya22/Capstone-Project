@@ -1,4 +1,4 @@
-import { Quiz, Category, User, Difficulty, QuestionBankItem, QuizQuestion } from '../models';
+import { Quiz, Category, User, Difficulty, QuestionBankItem, QuizQuestion, QuestionBankOption } from '../models';
 import { logInfo, logError } from '../utils/logger';
 import { Op } from 'sequelize';
 
@@ -208,10 +208,55 @@ export class QuizService {
         throw new Error('Quiz not found');
       }
 
-      // Record quiz access for analytics
-      logInfo('Quiz accessed for play', { quizId: id, userId });
+      // Get questions assigned to this quiz
+      const quizQuestions = await QuizQuestion.findAll({
+        where: { quizId: id },
+        include: [
+          {
+            model: QuestionBankItem,
+            as: 'question',
+            include: [
+              {
+                model: QuestionBankOption,
+                as: 'options'
+              }
+            ]
+          }
+        ],
+        order: [['order', 'ASC']]
+      });
 
-      return quiz;
+      // Transform questions to the expected format
+      const questions = quizQuestions.map(qq => {
+        // Ensure exactly 4 options
+        const options = qq.question.options.slice(0, 4);
+        
+        if (options.length !== 4) {
+          logError('Question does not have exactly 4 options', new Error('Invalid question format'), { 
+            questionId: qq.question.id, 
+            optionCount: options.length 
+          });
+        }
+
+        return {
+          id: qq.question.id,
+          questionText: qq.question.questionText,
+          difficulty: qq.question.difficulty,
+          options: options.map(opt => ({
+            id: opt.id,
+            optionText: opt.optionText,
+            isCorrect: opt.isCorrect
+          }))
+        };
+      });
+
+      // Record quiz access for analytics
+      logInfo('Quiz accessed for play', { quizId: id, userId, questionCount: questions.length });
+
+      return {
+        ...quiz.toJSON(),
+        questions
+      };
     } catch (error) {
       logError('Failed to get quiz for play', error as Error, { quizId: id, userId });
       throw error;

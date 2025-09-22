@@ -18,6 +18,7 @@ import questionBankRoutes from './routes/questionBankRoutes';
 import quizAttemptRoutes from './routes/quizAttemptRoutes';
 import adminRoutes from './routes/adminRoutes';
 import matchRoutes from './routes/matchRoutes';
+import friendMatchRoutes from './routes/friendMatchRoutes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -105,6 +106,7 @@ app.use('/api/question-bank', questionBankRoutes);
 app.use('/api/quiz-attempts', quizAttemptRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/matches', matchRoutes);
+app.use('/api/friend-matches', friendMatchRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

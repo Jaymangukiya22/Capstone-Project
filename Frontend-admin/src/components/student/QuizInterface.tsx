@@ -1,193 +1,196 @@
 import React, { useState, useEffect } from 'react';
-import type { QuizQuestion } from '@/types/quiz';
 import QuizHeader from './quiz-interface/QuizHeader';
 import QuestionCard from './quiz-interface/QuestionCard';
 import QuizNavigation from './quiz-interface/QuizNavigation';
 import QuizSidebar from './quiz-interface/QuizSidebar';
-
-// Mock quiz data - in real app this would come from API
-const mockQuestions: QuizQuestion[] = [
-  {
-    id: 1,
-    question: "What is the primary purpose of React's useState hook?",
-    options: [
-      "To manage component lifecycle methods",
-      "To handle state management in functional components",
-      "To create class-based components",
-      "To optimize component rendering performance"
-    ],
-    correctAnswer: "To handle state management in functional components"
-  },
-  {
-    id: 2,
-    question: "Which of the following is the correct way to pass data from a parent component to a child component in React?",
-    options: [
-      "Using state variables",
-      "Using props",
-      "Using context API only",
-      "Using local storage"
-    ],
-    correctAnswer: "Using props"
-  },
-  {
-    id: 3,
-    question: "What does the useEffect hook do in React?",
-    options: [
-      "Manages component state",
-      "Handles side effects in functional components",
-      "Creates new components",
-      "Optimizes component performance"
-    ],
-    correctAnswer: "Handles side effects in functional components"
-  },
-  {
-    id: 4,
-    question: "Which method is used to update state in a class component?",
-    options: [
-      "updateState()",
-      "changeState()",
-      "setState()",
-      "modifyState()"
-    ],
-    correctAnswer: "setState()"
-  },
-  {
-    id: 5,
-    question: "What is JSX in React?",
-    options: [
-      "A JavaScript library",
-      "A syntax extension for JavaScript",
-      "A CSS framework",
-      "A database query language"
-    ],
-    correctAnswer: "A syntax extension for JavaScript"
-  },
-  {
-    id: 6,
-    question: "Which of the following is used to handle forms in React?",
-    options: [
-      "Controlled components",
-      "Uncontrolled components",
-      "Both controlled and uncontrolled components",
-      "Form libraries only"
-    ],
-    correctAnswer: "Both controlled and uncontrolled components"
-  },
-  {
-    id: 7,
-    question: "What is the virtual DOM in React?",
-    options: [
-      "A copy of the real DOM kept in memory",
-      "A new type of HTML element",
-      "A CSS styling technique",
-      "A JavaScript framework"
-    ],
-    correctAnswer: "A copy of the real DOM kept in memory"
-  },
-  {
-    id: 8,
-    question: "Which hook is used to perform cleanup in React functional components?",
-    options: [
-      "useCleanup()",
-      "useDestroy()",
-      "useEffect() with return function",
-      "useUnmount()"
-    ],
-    correctAnswer: "useEffect() with return function"
-  },
-  {
-    id: 9,
-    question: "What is the purpose of React Router?",
-    options: [
-      "To manage component state",
-      "To handle navigation in single-page applications",
-      "To optimize component rendering",
-      "To manage API calls"
-    ],
-    correctAnswer: "To handle navigation in single-page applications"
-  },
-  {
-    id: 10,
-    question: "Which of the following is the correct way to conditionally render elements in React?",
-    options: [
-      "Using if-else statements only",
-      "Using ternary operators and logical AND operators",
-      "Using switch statements only",
-      "Using for loops"
-    ],
-    correctAnswer: "Using ternary operators and logical AND operators"
-  }
-];
+import { quizAttemptService, type QuizQuestion as BackendQuizQuestion } from '@/services/quizAttemptService';
+import { toast } from '@/lib/toast';
 
 const QuizInterface: React.FC = () => {
   
   // Quiz state management
   const [currentQuestion, setCurrentQuestion] = useState(1);
-  const [answers, setAnswers] = useState(new Map<number, string>());
-  const [timeRemaining, setTimeRemaining] = useState(1800); // 30 minutes
+  const [answers, setAnswers] = useState(new Map<number, number[]>());
+  const [questions, setQuestions] = useState<BackendQuizQuestion[]>([]);
+  const [attemptId, setAttemptId] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState(1800); // Will be set from backend
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [startTime] = useState(Date.now());
-  const [questionTimeRemaining, setQuestionTimeRemaining] = useState(30); // 30 seconds per question
+  const [questionTimeRemaining, setQuestionTimeRemaining] = useState(30); // Will be set from backend
+  const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+  const [quizTitle, setQuizTitle] = useState('Quiz');
 
   // Get answered questions set for progress tracking
   const answeredQuestions = new Set(answers.keys());
 
+  // Initialize quiz from sessionStorage
+  useEffect(() => {
+    const initializeQuiz = async () => {
+      try {
+        const quizInfo = sessionStorage.getItem('currentQuiz');
+        if (!quizInfo) {
+          toast({
+            title: "Error",
+            description: "No quiz information found. Please start a quiz from the quiz selection page.",
+            variant: "destructive"
+          });
+          window.location.pathname = '/student-quiz';
+          return;
+        }
+
+        const { quizId, quizName } = JSON.parse(quizInfo);
+        setQuizTitle(quizName || 'Quiz');
+
+        // Start quiz attempt
+        const startResponse = await quizAttemptService.startQuizAttempt(parseInt(quizId));
+        if (!startResponse) {
+          toast({
+            title: "Error",
+            description: "Failed to start quiz. Please try again.",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        if (startResponse.totalQuestions === 0) {
+          toast({
+            title: "No Questions Found",
+            description: "This quiz doesn't have any questions assigned to it. Please contact your instructor.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        setAttemptId(startResponse.attemptId);
+        setQuestions(startResponse.questions);
+        setTimeRemaining(startResponse.timeLimit * startResponse.totalQuestions); // Total quiz time
+        setQuestionTimeRemaining(startResponse.timeLimit); // Per question time
+        setQuestionStartTime(Date.now());
+        setIsLoading(false);
+
+        toast({
+          title: "Quiz Started!",
+          description: `Good luck with your ${quizName} quiz! (${startResponse.totalQuestions} questions)`,
+        });
+
+      } catch (error) {
+        console.error('Error initializing quiz:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load quiz. Please try again.",
+          variant: "destructive"
+        });
+      }
+    };
+
+    initializeQuiz();
+  }, []);
+
   // Handle answer selection
   const handleAnswerSelect = (answer: string) => {
-    setAnswers(prev => new Map(prev.set(currentQuestion, answer)));
+    const currentQuestionData = questions[currentQuestion - 1];
+    if (!currentQuestionData) return;
+
+    // Find the selected option ID
+    const selectedOption = currentQuestionData.options.find(opt => opt.optionText === answer);
+    if (!selectedOption) return;
+
+    setAnswers(prev => new Map(prev.set(currentQuestion, [selectedOption.id])));
+  };
+
+  // Submit current answer to backend
+  const submitCurrentAnswer = async () => {
+    if (!attemptId) return;
+
+    const currentQuestionData = questions[currentQuestion - 1];
+    const selectedOptions = answers.get(currentQuestion) || [];
+    const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
+
+    if (selectedOptions.length > 0) {
+      await quizAttemptService.submitAnswer(
+        attemptId,
+        currentQuestionData.id,
+        selectedOptions,
+        timeSpent
+      );
+    }
   };
 
   // Navigation handlers
-  const handleNext = () => {
-    if (currentQuestion < mockQuestions.length) {
+  const handleNext = async () => {
+    // Submit current answer
+    await submitCurrentAnswer();
+
+    if (currentQuestion < questions.length) {
       setCurrentQuestion(prev => prev + 1);
       setQuestionTimeRemaining(30); // Reset question timer
+      setQuestionStartTime(Date.now());
     }
   };
 
   // Auto-advance to next question when time runs out
-  const handleQuestionTimeUp = () => {
-    if (currentQuestion < mockQuestions.length) {
+  const handleQuestionTimeUp = async () => {
+    // Submit current answer (even if empty)
+    await submitCurrentAnswer();
+
+    if (currentQuestion < questions.length) {
       setCurrentQuestion(prev => prev + 1);
       setQuestionTimeRemaining(30);
+      setQuestionStartTime(Date.now());
     } else {
+      // Last question - submit quiz
       handleSubmit();
     }
   };
 
   // Quiz submission
   const handleSubmit = async () => {
+    if (!attemptId) return;
+
     setIsSubmitting(true);
     
-    // Simulate submission delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Calculate results
-    let correctCount = 0;
-    
-    mockQuestions.forEach((question, index) => {
-      const questionNumber = index + 1;
-      const userAnswer = answers.get(questionNumber);
-      const isCorrect = userAnswer === question.correctAnswer;
-      
-      if (isCorrect) correctCount++;
-    });
+    try {
+      // Submit current answer if not already submitted
+      await submitCurrentAnswer();
 
-    const totalTimeSpent = Math.floor((Date.now() - startTime) / 1000);
-    
-    // Store results in sessionStorage for results page
-    const quizResults = {
-      score: correctCount,
-      totalQuestions: mockQuestions.length,
-      timeSpent: totalTimeSpent,
-      completedAt: new Date().toISOString(),
-      studentName: "Current Student"
-    };
-    
-    sessionStorage.setItem('quizResults', JSON.stringify(quizResults));
-    
-    // Navigate to quiz results page
-    window.location.pathname = '/quiz-results';
+      // Complete the quiz attempt
+      const completedAttempt = await quizAttemptService.completeQuizAttempt(attemptId);
+      
+      if (completedAttempt) {
+        // Store results in sessionStorage for results page
+        const quizResults = {
+          score: completedAttempt.correctAnswers,
+          totalQuestions: completedAttempt.totalQuestions,
+          timeSpent: completedAttempt.timeSpent || Math.floor((Date.now() - startTime) / 1000),
+          completedAt: completedAttempt.completedAt || new Date().toISOString(),
+          studentName: "Current Student",
+          attemptId: completedAttempt.id
+        };
+        
+        sessionStorage.setItem('quizResults', JSON.stringify(quizResults));
+        
+        toast({
+          title: "Quiz Completed!",
+          description: `You scored ${completedAttempt.correctAnswers}/${completedAttempt.totalQuestions}`,
+        });
+        
+        // Navigate to quiz results page
+        window.location.pathname = '/quiz-results';
+      } else {
+        throw new Error('Failed to complete quiz attempt');
+      }
+    } catch (error) {
+      console.error('Error submitting quiz:', error);
+      toast({
+        title: "Error",
+        description: "Failed to submit quiz. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle time up
@@ -229,7 +232,7 @@ const QuizInterface: React.FC = () => {
 
   // Timer countdown effect for individual questions
   useEffect(() => {
-    if (questionTimeRemaining <= 0) return;
+    if (questionTimeRemaining <= 0 || isLoading) return;
 
     const questionTimer = setInterval(() => {
       setQuestionTimeRemaining(prev => {
@@ -242,16 +245,63 @@ const QuizInterface: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(questionTimer);
-  }, [questionTimeRemaining, currentQuestion]);
+  }, [questionTimeRemaining, currentQuestion, isLoading]);
 
   // Reset question timer when question changes
   useEffect(() => {
-    setQuestionTimeRemaining(30);
-  }, [currentQuestion]);
+    if (!isLoading && questions.length > 0) {
+      // Get time limit from quiz data or use default
+      const timeLimit = questions[0] ? 30 : 30; // You can get this from quiz settings
+      setQuestionTimeRemaining(timeLimit);
+    }
+  }, [currentQuestion, isLoading, questions]);
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading quiz...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if no questions
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">No questions found for this quiz.</p>
+          <button 
+            onClick={() => window.location.pathname = '/student-quiz'}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Back to Quiz Selection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Get current question data
-  const currentQuestionData = mockQuestions[currentQuestion - 1];
-  const currentAnswer = answers.get(currentQuestion);
+  const currentQuestionData = questions[currentQuestion - 1];
+  const currentAnswerIds = answers.get(currentQuestion) || [];
+  
+  // Convert backend question to frontend format for compatibility
+  const currentQuestionFormatted = currentQuestionData ? {
+    id: currentQuestionData.id,
+    question: currentQuestionData.questionText,
+    options: currentQuestionData.options.slice(0, 4).map(opt => opt.optionText), // Ensure exactly 4 options
+    correctAnswer: currentQuestionData.options.find(opt => opt.isCorrect)?.optionText || ''
+  } : null;
+
+
+  // Get current answer as string for compatibility
+  const currentAnswer = currentAnswerIds.length > 0 
+    ? currentQuestionData?.options.find(opt => opt.id === currentAnswerIds[0])?.optionText 
+    : undefined;
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -266,18 +316,23 @@ const QuizInterface: React.FC = () => {
         {/* Quiz Header */}
         <QuizHeader
           currentQuestion={currentQuestion}
-          totalQuestions={mockQuestions.length}
+          totalQuestions={questions.length}
           timeRemaining={timeRemaining}
           questionTimeRemaining={questionTimeRemaining}
           onTimeUp={handleTimeUp}
-          quizTitle="React Fundamentals Assessment"
+          quizTitle={quizTitle}
         />
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           {/* Quiz Sidebar */}
           <div className="xl:col-span-1">
             <QuizSidebar
-              questions={mockQuestions}
+              questions={questions.map(q => ({
+                id: q.id,
+                question: q.questionText,
+                options: q.options.slice(0, 4).map(opt => opt.optionText), // Ensure exactly 4 options
+                correctAnswer: q.options.find(opt => opt.isCorrect)?.optionText || ''
+              }))}
               currentQuestion={currentQuestion}
               answeredQuestions={answeredQuestions}
             />
@@ -286,18 +341,20 @@ const QuizInterface: React.FC = () => {
           {/* Main Quiz Content */}
           <div className="xl:col-span-3 space-y-6">
             {/* Question Card */}
-            <QuestionCard
-              question={currentQuestionData}
-              selectedAnswer={currentAnswer}
-              onAnswerSelect={handleAnswerSelect}
-              questionNumber={currentQuestion}
-              totalQuestions={mockQuestions.length}
-            />
+            {currentQuestionFormatted && (
+              <QuestionCard
+                question={currentQuestionFormatted}
+                selectedAnswer={currentAnswer}
+                onAnswerSelect={handleAnswerSelect}
+                questionNumber={currentQuestion}
+                totalQuestions={questions.length}
+              />
+            )}
 
             {/* Navigation */}
             <QuizNavigation
               currentQuestion={currentQuestion}
-              totalQuestions={mockQuestions.length}
+              totalQuestions={questions.length}
               hasAnswer={!!currentAnswer}
               onNext={handleNext}
               onSubmit={handleSubmit}

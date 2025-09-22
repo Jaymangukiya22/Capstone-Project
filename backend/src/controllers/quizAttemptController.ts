@@ -6,7 +6,22 @@ import { logError } from '../utils/logger';
 export const startQuizAttempt = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { quizId } = req.body;
-    const userId = req.user?.id || 1; // Default to user ID 1 for testing
+    let userId = req.user?.id;
+    
+    // If no authenticated user, find the first available user for testing
+    if (!userId) {
+      const { User } = await import('../models');
+      const firstUser = await User.findOne();
+      if (!firstUser) {
+        res.status(400).json({
+          success: false,
+          error: 'No users found',
+          message: 'Please ensure the database is properly seeded with users'
+        });
+        return;
+      }
+      userId = firstUser.id;
+    }
 
     const attempt = await quizAttemptService.startQuizAttempt({
       userId,
@@ -67,7 +82,22 @@ export const submitAnswer = async (req: AuthenticatedRequest, res: Response): Pr
 export const completeQuizAttempt = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const attemptId = parseInt(req.params.attemptId);
-    const userId = req.user?.id || 1; // Default to user ID 1 for testing
+    let userId = req.user?.id;
+    
+    // If no authenticated user, find the first available user for testing
+    if (!userId) {
+      const { User } = await import('../models');
+      const firstUser = await User.findOne();
+      if (!firstUser) {
+        res.status(400).json({
+          success: false,
+          error: 'No users found',
+          message: 'Please ensure the database is properly seeded with users'
+        });
+        return;
+      }
+      userId = firstUser.id;
+    }
 
     if (isNaN(attemptId)) {
       res.status(400).json({

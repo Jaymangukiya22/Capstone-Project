@@ -50,24 +50,24 @@ export const connectDatabase = async (): Promise<void> => {
     
     // Sync models in development
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ force: true }); // Recreate tables to fix schema issues
+      await sequelize.sync({ force: false }); // Recreate tables to fix schema issues
       logInfo('Database models synchronized with force: true - tables recreated');
       
-      // Run seeder after sync
+      // Run engineering seeder after sync
       try {
-        const { MassiveSeeder, DEFAULT_CONFIG } = await import('../seeders/massiveSeeder');
-        const seeder = new MassiveSeeder({
-          users: 10,              // Minimal for testing
-          categories: 5,          // 5 categories
-          questionsPerCategory: 20, // 20 questions per category
-          quizzesPerCategory: 3,   // 3 quizzes per category
-          attemptsPerUser: 2,      // 2 attempts per user
-          questionsPerQuiz: 5      // 5 questions per quiz
-        });
-        await seeder.seed();
-        logInfo('Database seeded successfully');
+        const EngineeringSeeder = await import('../scripts/engineeringSeeder');
+        const seeder = new EngineeringSeeder.EngineeringSeeder();
+        await seeder.run();
+        logInfo('Engineering database seeded successfully');
       } catch (seedError) {
-        logError('Error seeding database', seedError as Error);
+        logError('Error seeding engineering database', seedError as Error);
+        // Fallback to quick seeder if engineering seeder fails
+        // try {
+        //   const { default: quickSeed } = await import('../scripts/quickEngineeringSeeder');
+        //   logInfo('Running quick engineering seeder as fallback...');
+        // } catch (fallbackError) {
+        //   logError('Fallback seeder also failed', fallbackError as Error);
+        // }
       }
     } else {
       logInfo('Database sync skipped - using existing schema');

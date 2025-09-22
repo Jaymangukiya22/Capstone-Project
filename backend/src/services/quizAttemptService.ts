@@ -71,7 +71,8 @@ export class QuizAttemptService {
         attemptId: data.attemptId,
         questionId: data.questionId,
         selectedOptions: data.selectedOptions,
-        isCorrect: false, // Will be calculated based on correct answers
+        timeSpent: data.timeSpent || 0,
+        isCorrect: false, // Will be calculated when quiz is completed
         submittedAt: new Date()
       });
 
@@ -89,14 +90,30 @@ export class QuizAttemptService {
 
   async completeQuizAttempt(data: CompleteQuizAttemptData) {
     try {
-      // Get attempt with answers
+      // Get attempt with answers and quiz questions
       const attempt = await QuizAttempt.findOne({
         where: { 
           id: data.attemptId, 
           userId: data.userId 
         },
         include: [
-          { model: QuizAttemptAnswer, as: 'answers' }
+          { 
+            model: QuizAttemptAnswer, 
+            as: 'answers',
+            include: [
+              {
+                model: QuestionBankItem,
+                as: 'question',
+                include: [
+                  {
+                    model: QuestionBankOption,
+                    as: 'options'
+                  }
+                ]
+              }
+            ]
+          },
+          { model: Quiz, as: 'quiz' }
         ]
       });
 
@@ -104,27 +121,70 @@ export class QuizAttemptService {
         throw new Error('Attempt not found');
       }
 
-      // Calculate score (simplified)
-      const totalQuestions = attempt.totalQuestions || 0;
-      const correctAnswers = 0; // TODO: Calculate based on correct answers
-      const score = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
+      // Calculate correct answers
+      let correctAnswers = 0;
+      let totalQuestions = 0;
+      let totalTimeSpent = 0;
 
-      // Update attempt
+      for (const answer of attempt.answers) {
+        totalQuestions++;
+        
+        // Get correct option IDs for this question
+        const correctOptionIds = answer.question.options
+          .filter(opt => opt.isCorrect)
+          .map(opt => opt.id);
+
+        // Check if user's selected options match correct options
+        const userSelectedIds = answer.selectedOptions || [];
+        const isCorrect = correctOptionIds.length === userSelectedIds.length &&
+          correctOptionIds.every(id => userSelectedIds.includes(id));
+
+        if (isCorrect) {
+          correctAnswers++;
+        }
+
+        // Update the answer record with correct/incorrect flag
+        await QuizAttemptAnswer.update({
+          isCorrect
+        }, {
+          where: { id: answer.id }
+        });
+
+        // Add time spent (if available)
+        totalTimeSpent += answer.timeSpent || 0;
+      }
+
+      const score = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+
+      // Update attempt with final results
       await QuizAttempt.update({
         status: AttemptStatus.COMPLETED,
         completedAt: new Date(),
         score,
-        correctAnswers
+        correctAnswers,
+        totalQuestions,
+        timeSpent: totalTimeSpent
       }, {
         where: { id: data.attemptId }
       });
 
       logInfo('Quiz attempt completed', { 
         attemptId: data.attemptId, 
-        score 
+        score,
+        correctAnswers,
+        totalQuestions,
+        timeSpent: totalTimeSpent
       });
 
-      return { score, correctAnswers, totalQuestions };
+      // Return the updated attempt data
+      const completedAttempt = await QuizAttempt.findByPk(data.attemptId, {
+        include: [
+          { model: Quiz, as: 'quiz' },
+          { model: QuizAttemptAnswer, as: 'answers' }
+        ]
+      });
+
+      return completedAttempt;
     } catch (error) {
       logError('Failed to complete quiz attempt', error as Error);
       throw error;

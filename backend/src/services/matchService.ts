@@ -1,6 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import { Match, MatchPlayer as MatchPlayerModel, User, Quiz, MatchStatus, MatchType, PlayerStatus } from '../models';
+import { Match, MatchPlayer as MatchPlayerModel, User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, MatchStatus, MatchType, PlayerStatus } from '../models';
 import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
 import { logInfo, logError } from '../utils/logger';
@@ -40,12 +40,15 @@ export interface MatchRoom {
   timeLimit: number;
   questions: any[];
   createdAt: Date;
+  joinCode: string; // 6-character join code
+  matchType: 'SOLO' | 'MULTIPLAYER' | 'FRIEND_1V1'; // Match type
 }
 
 export class MatchService {
   private io: SocketIOServer;
   private matches: Map<string, MatchRoom> = new Map();
   private userToMatch: Map<number, string> = new Map();
+  private joinCodeToMatch: Map<string, string> = new Map(); // Global join code mapping
 
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
@@ -60,6 +63,58 @@ export class MatchService {
 
     this.setupSocketHandlers();
     this.startMatchCleanup();
+  }
+
+  /**
+   * Generate a unique 6-character join code
+   */
+  private generateJoinCode(): string {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    
+    // Keep generating until we get a unique code
+    do {
+      result = '';
+      for (let i = 0; i < 6; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+      }
+    } while (this.joinCodeToMatch.has(result));
+    
+    return result;
+  }
+
+  /**
+   * Load questions for a quiz from the database
+   */
+  private async loadQuizQuestions(quizId: number): Promise<any[]> {
+    try {
+      const quizQuestions = await QuizQuestion.findAll({
+        where: { quizId },
+        include: [{
+          model: QuestionBankItem,
+          as: 'question',
+          include: [{
+            model: QuestionBankOption,
+            as: 'options'
+          }]
+        }],
+        order: [['order', 'ASC']]
+      });
+
+      return quizQuestions.map(qq => ({
+        id: qq.question.id,
+        questionText: qq.question.questionText,
+        difficulty: qq.question.difficulty,
+        options: qq.question.options.map((opt: any) => ({
+          id: opt.id,
+          optionText: opt.optionText,
+          isCorrect: opt.isCorrect
+        }))
+      }));
+    } catch (error) {
+      logError('Failed to load quiz questions', error as Error);
+      return [];
+    }
   }
 
   private setupSocketHandlers() {
@@ -90,7 +145,7 @@ export class MatchService {
         }
       });
 
-      // Create match
+      // Create match (regular multiplayer)
       socket.on('create_match', async (data: { quizId: number; maxPlayers?: number }) => {
         try {
           if (!socket.data.userId) {
@@ -98,9 +153,9 @@ export class MatchService {
             return;
           }
 
-          const matchId = await this.createMatch(data.quizId, socket.data.userId, data.maxPlayers);
+          const { matchId, joinCode } = await this.createMatch(data.quizId, socket.data.userId, data.maxPlayers);
           socket.join(matchId);
-          socket.emit('match_created', { matchId: matchId, matchCode: matchId.slice(-6).toUpperCase() });
+          socket.emit('match_created', { matchId, joinCode });
 
           logInfo('Match created', { matchId: matchId, userId: socket.data.userId });
         } catch (error) {
@@ -109,17 +164,36 @@ export class MatchService {
         }
       });
 
-      // Join match
-      socket.on('join_match', async (data: { matchCode: string }) => {
+      // Create friend match (1v1 with join code)
+      socket.on('create_friend_match', async (data: { quizId: number }) => {
         try {
           if (!socket.data.userId) {
             socket.emit('error', { message: 'Not authenticated' });
             return;
           }
 
-          const matchId = await this.findMatchByCode(data.matchCode);
+          const { matchId, joinCode } = await this.createFriendMatch(data.quizId, socket.data.userId);
+          socket.join(matchId);
+          socket.emit('friend_match_created', { matchId, joinCode });
+
+          logInfo('Friend match created', { matchId, joinCode, userId: socket.data.userId });
+        } catch (error) {
+          socket.emit('error', { message: 'Failed to create friend match' });
+          logError('Create friend match error', error as Error);
+        }
+      });
+
+      // Join match by code
+      socket.on('join_match', async (data: { joinCode: string }) => {
+        try {
+          if (!socket.data.userId) {
+            socket.emit('error', { message: 'Not authenticated' });
+            return;
+          }
+
+          const matchId = this.joinCodeToMatch.get(data.joinCode.toUpperCase());
           if (!matchId) {
-            socket.emit('error', { message: 'Match not found' });
+            socket.emit('error', { message: 'Match not found with code: ' + data.joinCode });
             return;
           }
 
@@ -179,7 +253,9 @@ export class MatchService {
 
             // Check if all players are ready
             const allReady = Array.from(match.players.values()).every(p => p.isReady);
-            if (allReady && match.players.size >= 2) {
+            const minPlayers = match.matchType === 'FRIEND_1V1' ? 2 : 2; // Require at least 2 players
+            
+            if (allReady && match.players.size >= minPlayers) {
               await this.startMatch(matchId);
             }
           }
@@ -216,7 +292,7 @@ export class MatchService {
     });
   }
 
-  public async createMatch(quizId: number, userId: number, maxPlayers = 10): Promise<string> {
+  public async createMatch(quizId: number, userId: number, maxPlayers = 10): Promise<{ matchId: string; joinCode: string }> {
     // Get quiz (simplified for now - will need to add question loading later)
     const quiz = await Quiz.findOne({
       where: { id: quizId, isActive: true }
@@ -227,8 +303,8 @@ export class MatchService {
     }
 
     const matchId = uuidv4();
-    // TODO: Load questions from QuizQuestion model
-    const questions: any[] = []; // Simplified for now
+    const joinCode = this.generateJoinCode();
+    const questions = await this.loadQuizQuestions(quizId);
 
     const match: MatchRoom = {
       id: matchId,
@@ -243,9 +319,11 @@ export class MatchService {
       currentQuestionIndex: 0,
       questionStartTime: 0,
       maxPlayers,
-      timeLimit: quiz.timeLimit || 30, // seconds per question
+      timeLimit: quiz.timeLimit || 30,
       questions,
-      createdAt: new Date()
+      createdAt: new Date(),
+      joinCode,
+      matchType: 'MULTIPLAYER'
     };
 
     // Add creator as first player
@@ -263,26 +341,85 @@ export class MatchService {
     match.players.set(userId, creator);
     this.matches.set(matchId, match);
     this.userToMatch.set(userId, matchId);
+    this.joinCodeToMatch.set(joinCode, matchId);
 
     // Store match in Redis for persistence
     await redis.setEx(`match:${matchId}`, 3600, JSON.stringify({
       id: matchId,
       quizId,
+      joinCode,
       status: match.status,
       createdAt: match.createdAt
     }));
 
-    return matchId;
+    return { matchId, joinCode };
   }
 
-  private async findMatchByCode(code: string): Promise<string | null> {
-    // Find match by last 6 characters of ID
-    for (const [matchId, match] of this.matches) {
-      if (matchId.slice(-6).toUpperCase() === code.toUpperCase()) {
-        return matchId;
-      }
+  /**
+   * Create a friend match (1v1 with join code)
+   */
+  public async createFriendMatch(quizId: number, userId: number): Promise<{ matchId: string; joinCode: string }> {
+    const quiz = await Quiz.findOne({
+      where: { id: quizId, isActive: true }
+    });
+
+    if (!quiz) {
+      throw new Error('Quiz not found');
     }
-    return null;
+
+    const matchId = uuidv4();
+    const joinCode = this.generateJoinCode();
+    const questions = await this.loadQuizQuestions(quizId);
+
+    const match: MatchRoom = {
+      id: matchId,
+      quizId,
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        timeLimit: quiz.timeLimit
+      },
+      players: new Map(),
+      status: 'WAITING',
+      currentQuestionIndex: 0,
+      questionStartTime: 0,
+      maxPlayers: 2, // 1v1 match
+      timeLimit: quiz.timeLimit || 30,
+      questions,
+      createdAt: new Date(),
+      joinCode,
+      matchType: 'FRIEND_1V1'
+    };
+
+    // Add creator as first player
+    const creator: MatchPlayer = {
+      userId,
+      username: '', // Will be set when socket connects
+      socketId: '',
+      score: 0,
+      currentQuestionIndex: 0,
+      isReady: false,
+      isAI: false,
+      answers: []
+    };
+
+    match.players.set(userId, creator);
+    this.matches.set(matchId, match);
+    this.userToMatch.set(userId, matchId);
+    this.joinCodeToMatch.set(joinCode, matchId);
+
+    // Store match in Redis for persistence
+    await redis.setEx(`match:${matchId}`, 3600, JSON.stringify({
+      id: matchId,
+      quizId,
+      joinCode,
+      matchType: 'FRIEND_1V1',
+      status: match.status,
+      createdAt: match.createdAt
+    }));
+
+    logInfo('Friend match created', { matchId, joinCode, quizId });
+    return { matchId, joinCode };
   }
 
   public async joinMatch(matchId: string, userId: number, socketId: string): Promise<boolean> {

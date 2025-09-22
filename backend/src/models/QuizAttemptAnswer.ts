@@ -35,9 +35,8 @@ export class QuizAttemptAnswer extends Model {
   @Column(DataType.INTEGER)
   questionId!: number;
 
-  @ForeignKey(() => QuestionBankOption)
-  @Column(DataType.INTEGER)
-  selectedOptionId?: number;
+  @Column(DataType.JSON)
+  selectedOptions!: number[];
 
   @Default(false)
   @Column(DataType.BOOLEAN)
@@ -56,6 +55,5 @@ export class QuizAttemptAnswer extends Model {
   @BelongsTo(() => QuestionBankItem, 'questionId')
   question!: QuestionBankItem;
 
-  @BelongsTo(() => QuestionBankOption, 'selectedOptionId')
-  selectedOption?: QuestionBankOption;
+  // selectedOptions is stored as JSON array of option IDs
 }

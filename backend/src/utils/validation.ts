@@ -178,7 +178,8 @@ export const submitAnswerSchema = Joi.object({
 });
 
 export const completeQuizSchema = Joi.object({
-  attemptId: Joi.number().integer().positive().required()
+  // attemptId is passed as URL parameter, not in body
+  // No body validation needed for complete quiz
 });
 
 // Match schemas

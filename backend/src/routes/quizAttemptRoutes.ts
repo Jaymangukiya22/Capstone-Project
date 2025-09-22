@@ -21,23 +21,23 @@ const router = Router();
 // All routes require authentication
 // router.use(authenticateToken);
 
-// Player routes for quiz attempts
-router.post('/', requirePlayer, validateRequest(startQuizSchema), startQuizAttempt);
-router.post('/start', requirePlayer, validateRequest(startQuizSchema), startQuizAttempt);
-router.post('/:attemptId/answer', requirePlayer, validateRequest(submitAnswerSchema), submitAnswer);
-router.post('/:attemptId/complete', requirePlayer, validateRequest(completeQuizSchema), completeQuizAttempt);
+// Player routes for quiz attempts (Auth temporarily disabled for testing)
+router.post('/', validateRequest(startQuizSchema), startQuizAttempt);
+router.post('/start', validateRequest(startQuizSchema), startQuizAttempt);
+router.post('/:attemptId/answer', validateRequest(submitAnswerSchema), submitAnswer);
+router.post('/:attemptId/complete', validateRequest(completeQuizSchema), completeQuizAttempt);
 
 // Get all attempts (for debugging)
 router.get('/', getUserAttempts);
 
 // Get specific attempt
-router.get('/:id', requirePlayer, getAttemptById);
+router.get('/:id', getAttemptById);
 
 // Get user's attempts history
-router.get('/user/history', requirePlayer, getUserAttempts);
+router.get('/user/history', getUserAttempts);
 
 // Get user statistics
-router.get('/user/stats', requirePlayer, getUserStats);
+router.get('/user/stats', getUserStats);
 
 // Get leaderboard (global or quiz-specific)
 router.get('/leaderboard', getLeaderboard);

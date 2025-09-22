@@ -11,3 +11,4 @@ logs
 backend/logs/app.log
 backend/logs/combined.log
 backend/logs/error.log
+backend/logs/error.log

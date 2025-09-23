@@ -19,6 +19,7 @@ interface TreeNodeProps {
   onSelectItem: (type: 'category' | 'subcategory' | 'quiz' | 'global', id: string) => void
   expandedNodes: Set<string>
   onToggleNode: (nodeId: string) => void
+  allCategories: ApiCategory[]
 }
 
 function TreeNode({ 
@@ -28,12 +29,24 @@ function TreeNode({
   selectedItem, 
   onSelectItem, 
   expandedNodes, 
-  onToggleNode 
+  onToggleNode,
+  allCategories 
 }: TreeNodeProps) {
   const nodeId = `category-${category.id}`
   const isExpanded = expandedNodes.has(nodeId)
-  const hasChildren = category.children && category.children.length > 0
+  
+  // Get subcategories from flat array
+  const subcategories = allCategories.filter(cat => cat.parentId === category.id)
   const categoryQuizzes = quizzes.filter(quiz => quiz.categoryId === category.id)
+  const hasChildren = subcategories.length > 0 || categoryQuizzes.length > 0
+  
+  // Debug logging for this category
+  console.log(`📂 Category "${category.name}" (ID: ${category.id}):`, {
+    subcategories: subcategories.length,
+    quizzes: categoryQuizzes.length,
+    hasChildren,
+    level
+  })
   
   const isSelected = selectedItem?.type === 'category' && selectedItem.id === category.id.toString()
 
@@ -62,14 +75,14 @@ function TreeNode({
         <Button
           variant="ghost"
           size="sm"
-          className="h-4 w-4 p-0 hover:bg-transparent"
+          className="h-4 w-4 p-0 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           onClick={handleToggle}
         >
-          {hasChildren || categoryQuizzes.length > 0 ? (
+          {hasChildren ? (
             isExpanded ? (
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="h-3 w-3 text-gray-500" />
             ) : (
-              <ChevronRight className="h-3 w-3" />
+              <ChevronRight className="h-3 w-3 text-gray-500" />
             )
           ) : (
             <div className="h-3 w-3" />
@@ -84,17 +97,26 @@ function TreeNode({
         
         <span className="text-sm font-medium truncate">{category.name}</span>
         
-        {/* Question count badge */}
-        <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
-          {categoryQuizzes.length}
-        </span>
+        {/* Count badges */}
+        <div className="ml-auto flex items-center space-x-1">
+          {subcategories.length > 0 && (
+            <span className="text-xs bg-blue-100 dark:bg-blue-700 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded">
+              {subcategories.length} sub
+            </span>
+          )}
+          {categoryQuizzes.length > 0 && (
+            <span className="text-xs bg-green-100 dark:bg-green-700 text-green-600 dark:text-green-300 px-1.5 py-0.5 rounded">
+              {categoryQuizzes.length} quiz
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Children */}
       {isExpanded && (
         <div>
           {/* Subcategories */}
-          {category.children?.map((child) => (
+          {subcategories.map((child) => (
             <TreeNode
               key={child.id}
               category={child}
@@ -104,6 +126,7 @@ function TreeNode({
               onSelectItem={onSelectItem}
               expandedNodes={expandedNodes}
               onToggleNode={onToggleNode}
+              allCategories={allCategories}
             />
           ))}
           
@@ -165,8 +188,13 @@ export function QuestionBankTree({ categories, quizzes, selectedItem, onSelectIt
     setExpandedNodes(newExpanded)
   }
 
+  // Debug logging
+  console.log('🏗️ QuestionBankTree - Categories:', categories)
+  console.log('🎯 QuestionBankTree - Quizzes:', quizzes)
+
   // Filter to get only root categories (no parent)
   const rootCategories = categories.filter(cat => cat.parentId === null)
+  console.log('📁 Root categories:', rootCategories)
 
   return (
     <div className="space-y-1">
@@ -199,6 +227,7 @@ export function QuestionBankTree({ categories, quizzes, selectedItem, onSelectIt
             onSelectItem={onSelectItem}
             expandedNodes={expandedNodes}
             onToggleNode={handleToggleNode}
+            allCategories={categories}
           />
         ))
       )}

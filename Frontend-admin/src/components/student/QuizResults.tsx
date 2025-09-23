@@ -28,6 +28,7 @@ export function QuizResults() {
     const friendMatchResults = sessionStorage.getItem('friendMatchResults');
     if (friendMatchResults) {
       const results = JSON.parse(friendMatchResults);
+      console.log('🔍 QuizResults: Friend match data loaded from session:', results);
       setFriendMatchData(results);
       setIsFriendMatch(true);
       setIsLoading(false);
@@ -153,11 +154,17 @@ export function QuizResults() {
             {isFriendMatch && friendMatchData ? (
               <FriendMatchLeaderboard
                 rankings={(() => {
+                  console.log('🔍 Processing friendMatchData for rankings:', friendMatchData);
+                  
                   // Handle different data structures
-                  if (friendMatchData.rankings) return friendMatchData.rankings;
+                  if (friendMatchData.rankings) {
+                    console.log('✅ Using direct rankings:', friendMatchData.rankings);
+                    return friendMatchData.rankings;
+                  }
+                  
                   if (friendMatchData.results && Array.isArray(friendMatchData.results)) {
                     // Transform results to rankings format
-                    return friendMatchData.results.map((result: any, index: number) => ({
+                    const transformedRankings = friendMatchData.results.map((result: any, index: number) => ({
                       rank: index + 1,
                       userId: result.userId || result.id || index + 1,
                       username: result.username || `Player ${index + 1}`,
@@ -165,7 +172,26 @@ export function QuizResults() {
                       correctAnswers: result.correctAnswers || result.correct || 0,
                       totalAnswers: result.totalAnswers || result.total || result.answers?.length || 2
                     }));
+                    console.log('🔄 Transformed rankings from results:', transformedRankings);
+                    return transformedRankings;
                   }
+                  
+                  // Fallback: Create rankings from playerResults for individual completions
+                  if (friendMatchData.playerResults) {
+                    const currentUser = getCurrentUsername();
+                    const fallbackRanking = [{
+                      rank: 1,
+                      userId: 1,
+                      username: currentUser,
+                      score: friendMatchData.playerResults.score || 0,
+                      correctAnswers: friendMatchData.playerResults.score || 0,
+                      totalAnswers: friendMatchData.playerResults.answers?.length || 2
+                    }];
+                    console.log('📝 Created fallback ranking for individual completion:', fallbackRanking);
+                    return fallbackRanking;
+                  }
+                  
+                  console.log('❌ No valid data found, returning empty array');
                   return [];
                 })()}
                 winner={friendMatchData.winner}

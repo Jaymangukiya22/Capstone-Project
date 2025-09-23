@@ -77,6 +77,25 @@ export function QuestionBank() {
     }
   }
 
+  // Helper function to get all descendant category IDs
+  const getAllDescendantCategoryIds = (categoryId: number, categories: any[]): number[] => {
+    const descendants = [categoryId] // Include the category itself
+    
+    // Find direct children
+    const children = categories.filter(cat => cat.parentId === categoryId)
+    console.log(`🔍 Category ${categoryId} has ${children.length} direct children:`, children.map(c => `${c.name} (${c.id})`))
+    
+    // Recursively get descendants of children
+    children.forEach(child => {
+      const childDescendants = getAllDescendantCategoryIds(child.id, categories)
+      descendants.push(...childDescendants)
+      console.log(`📂 Added descendants for ${child.name} (${child.id}):`, childDescendants)
+    })
+    
+    console.log(`🎯 Final descendant IDs for category ${categoryId}:`, descendants)
+    return descendants
+  }
+
   const loadQuestionsForSelection = async () => {
     if (!selectedItem) {
       await loadAllQuestions()
@@ -98,32 +117,88 @@ export function QuestionBank() {
         console.log('📋 Global questions found:', globalQuestions.length)
         setQuestions(globalQuestions)
       } else if (selectedItem.type === 'category' || selectedItem.type === 'subcategory') {
-        // Get all questions for this category and all its children
+        // Get all questions for this category and all its children (HIERARCHICAL LOADING)
         const categoryId = parseInt(selectedItem.id)
         console.log('📁 Loading questions for category:', categoryId)
         
-        // Get direct questions for this category
-        const directQuestions = await questionBankService.getQuestionsByCategory(categoryId)
-        console.log('📋 Direct questions API response:', directQuestions)
+        // Get all descendant category IDs (including the selected category itself)
+        const allCategoryIds = getAllDescendantCategoryIds(categoryId, apiCategories)
+        console.log('📁 All category IDs to search:', allCategoryIds)
         
-        // The service now returns QuestionBankItem[] directly
-        const questionsArray = Array.isArray(directQuestions) ? directQuestions : []
+        // Load questions from all descendant categories
+        const questionPromises = allCategoryIds.map(catId => {
+          console.log(`🔄 Loading questions for category ID: ${catId}`)
+          return questionBankService.getQuestionsByCategory(catId)
+        })
         
-        console.log('📋 Processed questions array:', questionsArray.length, questionsArray)
-        setQuestions(questionsArray)
+        const allResponses = await Promise.all(questionPromises)
+        console.log('📥 All API responses received:', allResponses.length)
+        
+        let allQuestions: QuestionBankItem[] = []
+        
+        // Flatten and combine all questions
+        allResponses.forEach((response, index) => {
+          const questionsArray = Array.isArray(response) ? response : []
+          console.log(`📊 Category ${allCategoryIds[index]} returned ${questionsArray.length} questions`)
+          allQuestions.push(...questionsArray)
+        })
+        
+        console.log('📋 Total questions before deduplication:', allQuestions.length)
+        
+        // Remove duplicates (in case a question appears in multiple responses)
+        const uniqueQuestions = allQuestions.filter((question, index, self) => 
+          index === self.findIndex(q => q.id === question.id)
+        )
+        
+        console.log('✅ Final unique questions:', uniqueQuestions.length)
+        console.log('📝 Questions sample:', uniqueQuestions.slice(0, 3).map(q => `"${q.questionText}" (ID: ${q.id})`))
+        
+        // If no questions found in hierarchical search, try a broader search
+        if (uniqueQuestions.length === 0) {
+          console.log('⚠️ No questions found in hierarchical search, trying global search fallback...')
+          try {
+            const globalResponse = await questionBankService.getAllQuestions()
+            const allGlobalQuestions = Array.isArray(globalResponse.questions) ? globalResponse.questions : []
+            const categoryRelatedQuestions = allGlobalQuestions.filter(q => 
+              allCategoryIds.includes(q.categoryId || 0)
+            )
+            console.log(`🔄 Found ${categoryRelatedQuestions.length} questions in global search related to categories: ${allCategoryIds}`)
+            setQuestions(categoryRelatedQuestions)
+          } catch (fallbackError) {
+            console.error('❌ Fallback search also failed:', fallbackError)
+            setQuestions(uniqueQuestions) // Use empty array
+          }
+        } else {
+          setQuestions(uniqueQuestions)
+        }
         
       } else if (selectedItem.type === 'quiz') {
-        // Get questions specifically assigned to this quiz
+        // Get questions specifically assigned to this quiz (including its category hierarchy)
         const quiz = quizzes?.find(q => q.id.toString() === selectedItem.id)
         console.log('🎯 Loading questions for quiz:', quiz?.title, 'categoryId:', quiz?.categoryId)
         if (quiz?.categoryId) {
-          const categoryQuestions = await questionBankService.getQuestionsByCategory(quiz.categoryId)
+          const allCategoryIds = getAllDescendantCategoryIds(quiz.categoryId, apiCategories)
+          console.log('🎯 Quiz category IDs to search:', allCategoryIds)
           
-          // The service now returns QuestionBankItem[] directly
-          const questionsArray = Array.isArray(categoryQuestions) ? categoryQuestions : []
+          const questionPromises = allCategoryIds.map(catId => 
+            questionBankService.getQuestionsByCategory(catId)
+          )
           
-          console.log('📋 Quiz questions found:', questionsArray.length)
-          setQuestions(questionsArray)
+          const allResponses = await Promise.all(questionPromises)
+          
+          let allQuestions: QuestionBankItem[] = []
+          allResponses.forEach(response => {
+            const questionsArray = Array.isArray(response) ? response : []
+            allQuestions.push(...questionsArray)
+          })
+          
+          // Remove duplicates
+          const uniqueQuestions = allQuestions.filter((question, index, self) => 
+            index === self.findIndex(q => q.id === question.id)
+          )
+          
+          console.log('📋 Quiz questions found (hierarchical):', uniqueQuestions.length)
+          setQuestions(uniqueQuestions)
         } else {
           console.log('❌ Quiz has no category')
           setQuestions([])

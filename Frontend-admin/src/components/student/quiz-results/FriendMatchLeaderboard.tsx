@@ -12,19 +12,21 @@ interface FriendMatchPlayer {
 
 interface FriendMatchLeaderboardProps {
   rankings: FriendMatchPlayer[];
-  winner: FriendMatchPlayer;
+  winner?: FriendMatchPlayer;
   matchId: string;
 }
 
 const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({ 
-  rankings, 
+  rankings = [], 
   winner, 
   matchId 
 }) => {
-  const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  // Debug logging
+  console.log('FriendMatchLeaderboard received:', { rankings, winner, matchId });
+  
+  const getPercentage = (correct: number, total: number) => {
+    if (total === 0) return 0; // Prevent division by zero
+    return Math.round((correct / total) * 100);
   };
 
   const getRankIcon = (rank: number) => {
@@ -38,9 +40,7 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
     }
   };
 
-  const getPercentage = (correct: number, total: number) => 
-    Math.round((correct / total) * 100);
-
+  
   return (
     <div className="bg-card rounded-lg shadow-sm border p-6">
       <div className="mb-6">
@@ -56,30 +56,32 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
         </div>
         
         {/* Winner announcement */}
-        <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-center">
-            <Trophy size={24} className="text-yellow-600 mr-3" />
-            <div className="text-center">
-              <p className="text-yellow-800 dark:text-yellow-200 font-semibold text-lg">
-                🎉 {winner.username} Wins! 🎉
-              </p>
-              <p className="text-yellow-700 dark:text-yellow-300 text-sm">
-                {winner.score} points • {winner.correctAnswers}/{winner.totalAnswers} correct
-              </p>
+        {winner && (
+          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-center">
+              <Trophy size={24} className="text-yellow-600 mr-3" />
+              <div className="text-center">
+                <p className="text-yellow-800 dark:text-yellow-200 font-semibold text-lg">
+                  🎉 {winner.username} Wins! 🎉
+                </p>
+                <p className="text-yellow-700 dark:text-yellow-300 text-sm">
+                  {winner.score} points • {winner.correctAnswers}/{winner.totalAnswers} correct
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
       
       <div className="space-y-4">
-        {rankings.map((player, index) => {
-          const rank = player.rank;
-          const percentage = getPercentage(player.correctAnswers, player.totalAnswers);
+        {rankings && Array.isArray(rankings) && rankings.length > 0 ? rankings.map((player, index) => {
+          const rank = player?.rank || (index + 1);
+          const percentage = getPercentage(player?.correctAnswers || 0, player?.totalAnswers || 1);
           const isWinner = rank === 1;
           
           return (
             <div
-              key={player.userId}
+              key={player?.userId || index}
               className={`
                 flex items-center justify-between p-6 rounded-lg border-2 transition-all duration-200
                 ${isWinner 
@@ -96,7 +98,7 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
                 <div>
                   <div className="flex items-center space-x-3">
                     <h3 className={`text-xl font-bold ${isWinner ? 'text-yellow-700 dark:text-yellow-300' : 'text-foreground'}`}>
-                      {player.username}
+                      {player?.username || `Player ${index + 1}`}
                     </h3>
                     {isWinner && (
                       <div className="flex items-center space-x-1">
@@ -108,7 +110,7 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
                     )}
                   </div>
                   <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                    <span>{player.correctAnswers}/{player.totalAnswers} correct</span>
+                    <span>{player?.correctAnswers || 0}/{player?.totalAnswers || 1} correct</span>
                     <span>•</span>
                     <span>{percentage}% accuracy</span>
                   </div>
@@ -119,7 +121,7 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
                 <div className="flex items-center space-x-3">
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${isWinner ? 'text-yellow-600' : 'text-foreground'}`}>
-                      {player.score}
+                      {player?.score || 0}
                     </div>
                     <div className="text-xs text-muted-foreground">points</div>
                   </div>
@@ -131,20 +133,24 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
               </div>
             </div>
           );
-        })}
+        }) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No ranking data available</p>
+          </div>
+        )}
       </div>
       
       {/* Match statistics */}
       <div className="mt-8 pt-6 border-t border-border">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
           <div className="bg-muted/50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-foreground">{rankings.length}</div>
+            <div className="text-2xl font-bold text-foreground">{rankings?.length || 0}</div>
             <div className="text-sm text-muted-foreground">Players</div>
           </div>
           
           <div className="bg-muted/50 rounded-lg p-4">
             <div className="text-2xl font-bold text-foreground">
-              {rankings[0]?.totalAnswers || 0}
+              {rankings?.[0]?.totalAnswers || 0}
             </div>
             <div className="text-sm text-muted-foreground">Questions</div>
           </div>

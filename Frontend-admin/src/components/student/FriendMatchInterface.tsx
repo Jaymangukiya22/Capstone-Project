@@ -7,6 +7,7 @@ import { gameWebSocket } from '@/services/matchService';
 import { toast } from '@/lib/toast';
 import { Users, Wifi, WifiOff } from 'lucide-react';
 
+const NET_IP=import.meta.env.VITE_NETWORK_IP
 interface FriendMatchQuestion {
   id: number;
   questionText: string;
@@ -171,27 +172,13 @@ const FriendMatchInterface: React.FC = () => {
         console.log('🎯 Authenticated! Now joining match with code:', joinCode);
         gameWebSocket.joinMatchByCode(joinCode);
       } else if (joinCode && !matchId) {
-        // Check if this user created the match by looking at localStorage
-        const userData = localStorage.getItem('user');
-        let isCreator = false;
-        
-        if (userData) {
-          try {
-            const user = JSON.parse(userData);
-            // Check if this is the creator by checking if they have the same user ID as stored
-            const creatorInfo = sessionStorage.getItem('matchCreator');
-            if (creatorInfo) {
-              const creator = JSON.parse(creatorInfo);
-              isCreator = creator.userId === user.id;
-            }
-          } catch (e) {}
-        }
+        // Simple fix: treat based on mode
         
         // Simple fix: If mode is 'create', treat as creator, otherwise join
         if (mode === 'create') {
           console.log('🔧 USER IS CREATOR - Finding match by code first');
           // For creators, we need to get the match ID first, then connect
-          fetch(`http://192.168.1.8:3000/api/friend-matches/code/${joinCode}`)
+          fetch(`http://${NET_IP}:3000/api/friend-matches/code/${joinCode}`)
             .then(response => response.json())
             .then(data => {
               if (data.success && data.data.match) {
@@ -343,7 +330,12 @@ const FriendMatchInterface: React.FC = () => {
       setIsLoading(false);
       setCurrentQuestionData(data.question);
       setCurrentQuestion(1);
-      setTotalQuestions(data.totalQuestions);
+      
+      // Set totalQuestions with fallback
+      const totalQs = data.totalQuestions || data.questions?.length || 10;
+      setTotalQuestions(totalQs);
+      console.log('📊 Total questions set to:', totalQs);
+      
       setQuestionTimeRemaining(data.question.timeLimit || 30);
       setQuestionStartTime(Date.now());
       
@@ -364,7 +356,12 @@ const FriendMatchInterface: React.FC = () => {
       setQuestionStartTime(Date.now());
       setIsSubmitting(false);
       
-      console.log(`📝 Moving to question ${data.questionIndex + 1} of ${totalQuestions}`);
+      // Update totalQuestions if provided in the event
+      if (data.totalQuestions) {
+        setTotalQuestions(data.totalQuestions);
+      }
+      
+      console.log(`📝 Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
     });
 
     // Individual player progression (for independent advancement)
@@ -382,7 +379,13 @@ const FriendMatchInterface: React.FC = () => {
             setQuestionTimeRemaining(data.question.timeLimit || 30);
             setQuestionStartTime(Date.now());
             setIsSubmitting(false);
-            console.log(`📝 Individual progression to question ${data.questionIndex + 1}`);
+            
+            // Update totalQuestions if provided
+            if (data.totalQuestions) {
+              setTotalQuestions(data.totalQuestions);
+            }
+            
+            console.log(`📝 Individual next question: ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
           }
         } catch (e) {}
       }
@@ -478,11 +481,16 @@ const FriendMatchInterface: React.FC = () => {
     // Player disconnected
     gameWebSocket.on('player_disconnected', (data: any) => {
       console.log('Player disconnected:', data);
-      toast({
-        title: "Player Disconnected",
-        description: `${data.username} left the match`,
-        variant: "destructive"
-      });
+      
+      // Only show disconnection toast if the match is still active
+      // Don't show if quiz is completing or already completed
+      if (!isSubmitting && currentQuestionData) {
+        toast({
+          title: "Player Disconnected",
+          description: `${data.username || 'A player'} left the match`,
+          variant: "destructive"
+        });
+      }
     });
 
     // Error handling
@@ -509,13 +517,35 @@ const FriendMatchInterface: React.FC = () => {
 
   // Submit current answer
   const submitCurrentAnswer = () => {
-    if (!currentQuestionData) return;
+    if (!currentQuestionData) {
+      console.log('❌ No current question data to submit');
+      return;
+    }
 
     const selectedOptions = answers.get(currentQuestion) || [];
     const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
 
-    if (selectedOptions.length > 0) {
-      gameWebSocket.submitAnswer(currentQuestionData.id, selectedOptions, timeSpent);
+    console.log('📤 Submitting answer:', {
+      questionId: currentQuestionData.id,
+      selectedOptions,
+      timeSpent,
+      currentQuestion
+    });
+
+    try {
+      if (selectedOptions.length > 0) {
+        gameWebSocket.submitAnswer(currentQuestionData.id, selectedOptions, timeSpent);
+      } else {
+        console.log('⚠️ No options selected, submitting empty answer');
+        gameWebSocket.submitAnswer(currentQuestionData.id, [], timeSpent);
+      }
+    } catch (error) {
+      console.error('❌ Error submitting answer:', error);
+      toast({
+        title: "Submission Error",
+        description: "Failed to submit answer. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 

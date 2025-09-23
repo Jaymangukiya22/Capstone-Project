@@ -152,9 +152,24 @@ export function QuizResults() {
           <div className="animate-in slide-in-from-bottom duration-600 delay-400">
             {isFriendMatch && friendMatchData ? (
               <FriendMatchLeaderboard
-                rankings={friendMatchData.rankings}
+                rankings={(() => {
+                  // Handle different data structures
+                  if (friendMatchData.rankings) return friendMatchData.rankings;
+                  if (friendMatchData.results && Array.isArray(friendMatchData.results)) {
+                    // Transform results to rankings format
+                    return friendMatchData.results.map((result: any, index: number) => ({
+                      rank: index + 1,
+                      userId: result.userId || result.id || index + 1,
+                      username: result.username || `Player ${index + 1}`,
+                      score: result.score || 0,
+                      correctAnswers: result.correctAnswers || result.correct || 0,
+                      totalAnswers: result.totalAnswers || result.total || result.answers?.length || 2
+                    }));
+                  }
+                  return [];
+                })()}
                 winner={friendMatchData.winner}
-                matchId={friendMatchData.matchId}
+                matchId={friendMatchData.matchId || 'unknown'}
               />
             ) : (
               <Leaderboard

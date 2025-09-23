@@ -5,6 +5,8 @@ import type { LeaderboardEntry } from '@/types/quiz';
 interface LeaderboardProps {
   currentScore: number;
   totalQuestions: number;
+  entries?: LeaderboardEntry[]; 
+
 }
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, totalQuestions }) => {

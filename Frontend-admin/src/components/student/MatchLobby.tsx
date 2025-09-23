@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Users, Check, X, Copy, User } from 'lucide-react';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from '@/lib/toast';
 
 interface Player {
   userId: number;
@@ -146,8 +146,6 @@ export function MatchLobby({
     return player.username || `Player ${player.userId}`;
   };
 
-  const currentPlayer = players.find(p => p.userId === currentUserId);
-  const isHost = currentPlayer?.isHost || players[0]?.userId === currentUserId;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">

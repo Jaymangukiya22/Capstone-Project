@@ -15,6 +15,7 @@ import {
 } from 'sequelize-typescript';
 import { Category } from './Category';
 import { User } from './User';
+import { QuizQuestion } from './QuizQuestion';
 import { Difficulty } from '../types/enums';
 
 @Table({
@@ -74,4 +75,8 @@ export class Quiz extends Model {
 
   @BelongsTo(() => User, 'createdById')
   createdBy!: User;
+
+  // Quiz questions association (many-to-many through QuizQuestion)
+  @HasMany(() => QuizQuestion, 'quizId')
+  quizQuestions!: QuizQuestion[];
 }

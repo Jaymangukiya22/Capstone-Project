@@ -1,2 +1,22 @@
 *node_modules
+<<<<<<< Updated upstream
 *.env
+=======
+*.env
+/backend/logs
+backend/logs/combined.log
+backend/logs/app.log
+backend/logs/error.log
+
+# Ignore all logs
+logs
+
+backend/logs/app.log
+backend/logs/combined.log
+backend/logs/error.log
+backend/logs/error.log
+backend/logs.zip
+backend/logs/error.log
+backend/src/server.ts
+/backend/logs
+>>>>>>> Stashed changes

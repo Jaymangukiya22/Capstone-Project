@@ -84,17 +84,21 @@ export class CategoryService {
       }
 
       // Build include clause for hierarchical data
-      const includeClause = [];
+      const includeClause: any[] = [];
       
       if (includeChildren && depth > 0) {
-        includeClause.push(this.buildChildrenInclude(depth, false));
+        const childrenInclude = this.buildChildrenInclude(depth, false);
+        if (childrenInclude) {
+          includeClause.push(childrenInclude);
+        }
       }
       
       // Always include parent for context
       includeClause.push({
         model: Category,
         as: 'parent',
-        attributes: ['id', 'name', 'parentId']
+        attributes: ['id', 'name', 'parentId'],
+        required: false
       });
 
       const { count, rows: categories } = await Category.findAndCountAll({
@@ -130,16 +134,20 @@ export class CategoryService {
 
   async getCategoryById(id: number, includeChildren: boolean = false, depth: number = 1): Promise<any | null> {
     try {
-      const includeClause = [
+      const includeClause: any[] = [
         {
           model: Category,
           as: 'parent',
-          attributes: ['id', 'name', 'parentId']
+          attributes: ['id', 'name', 'parentId'],
+          required: false
         }
       ];
 
       if (includeChildren && depth > 0) {
-        includeClause.push(this.buildChildrenInclude(depth, false));
+        const childrenInclude = this.buildChildrenInclude(depth, false);
+        if (childrenInclude) {
+          includeClause.push(childrenInclude);
+        }
       }
 
       const category = await Category.findByPk(id, {
@@ -162,7 +170,15 @@ export class CategoryService {
   async getCategoryHierarchy(maxDepth: number = 5, includeQuizzes: boolean = false): Promise<any[]> {
     try {
       // Get root categories (no parent) with full hierarchy
-      const includeClause = [this.buildChildrenInclude(maxDepth, includeQuizzes)];
+      const includeClause: any[] = [];
+      
+      // Add children include if maxDepth > 0
+      if (maxDepth > 0) {
+        const childrenInclude = this.buildChildrenInclude(maxDepth, includeQuizzes);
+        if (childrenInclude) {
+          includeClause.push(childrenInclude);
+        }
+      }
       
       // Add quizzes to root categories if requested
       if (includeQuizzes) {
@@ -232,7 +248,14 @@ export class CategoryService {
 
   async getSubcategories(parentId: number, depth: number = 1): Promise<any[]> {
     try {
-      const includeClause = depth > 1 ? [this.buildChildrenInclude(depth - 1, false)] : [];
+      const includeClause: any[] = [];
+      
+      if (depth > 1) {
+        const childrenInclude = this.buildChildrenInclude(depth - 1, false);
+        if (childrenInclude) {
+          includeClause.push(childrenInclude);
+        }
+      }
 
       const subcategories = await Category.findAll({
         where: {
@@ -369,16 +392,20 @@ export class CategoryService {
         ]
       };
 
-      const includeClause = [
+      const includeClause: any[] = [
         {
           model: Category,
           as: 'parent',
-          attributes: ['id', 'name', 'parentId']
+          attributes: ['id', 'name', 'parentId'],
+          required: false
         }
       ];
 
       if (includeChildren && depth > 0) {
-        includeClause.push(this.buildChildrenInclude(depth, false));
+        const childrenInclude = this.buildChildrenInclude(depth, false);
+        if (childrenInclude) {
+          includeClause.push(childrenInclude);
+        }
       }
 
       const { count, rows: categories } = await Category.findAndCountAll({
@@ -402,11 +429,14 @@ export class CategoryService {
   private buildChildrenInclude(depth: number, includeQuizzes: boolean = false): any {
     if (depth <= 0) return null;
 
-    const includeClause = [];
+    const includeClause: any[] = [];
     
     // Add nested children if depth allows
     if (depth > 1) {
-      includeClause.push(this.buildChildrenInclude(depth - 1, includeQuizzes));
+      const nestedInclude = this.buildChildrenInclude(depth - 1, includeQuizzes);
+      if (nestedInclude) {
+        includeClause.push(nestedInclude);
+      }
     }
     
     // Add quizzes if requested
@@ -425,9 +455,13 @@ export class CategoryService {
       as: 'children',
       where: { isActive: true },
       required: false,
-      order: [['name', 'ASC']],
-      include: includeClause.length > 0 ? includeClause : undefined
+      order: [['name', 'ASC']]
     };
+
+    // Only add include if we have valid includes
+    if (includeClause.length > 0) {
+      include.include = includeClause;
+    }
 
     return include;
   }

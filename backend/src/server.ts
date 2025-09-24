@@ -54,7 +54,8 @@ const allowedOrigins = [
   `http://${IP_ADD}:3001`,
   'http://localhost:5173',
   'http://localhost:5174',
-  'http://localhost:3001'
+  'http://localhost:3001',
+  'http://10.80.5.18'
 ];
  
 app.use(cors({

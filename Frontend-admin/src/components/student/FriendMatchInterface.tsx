@@ -208,14 +208,21 @@ const FriendMatchInterface: React.FC = () => {
     gameWebSocket.on('match_connected', (data: any) => {
       console.log('🔗 Connected to match:', data);
       setJoinCode(data.joinCode);
+
+      // Store matchId in state if not already set
+      if (!matchId && data.matchId) {
+        console.log('💾 Setting matchId from match_connected:', data.matchId);
+        setMatchId(data.matchId);
+      }
+
       const initialPlayers = data.players || [];
       console.log('📋 Creator connected, setting players:', initialPlayers);
       setPlayers([...initialPlayers]);
-      
+
       // AUTO-START: If we have 2 players when creator connects, auto-start
       const autoStartKey = `autostart_${data.matchId}`;
       const hasAlreadyAutoStarted = sessionStorage.getItem(autoStartKey);
-      
+
       if (initialPlayers.length === 2 && !hasAlreadyAutoStarted) {
         console.log('🚀 AUTO-STARTING: 2 players detected on creator connect');
         sessionStorage.setItem(autoStartKey, 'true');
@@ -223,7 +230,7 @@ const FriendMatchInterface: React.FC = () => {
           gameWebSocket.setReady(true);
         }, 1000);
       }
-      
+
       toast({
         title: "Connected to Match!",
         description: `Share code ${data.joinCode} with your friend`,
@@ -317,28 +324,29 @@ const FriendMatchInterface: React.FC = () => {
       // Prevent duplicate processing with unique timestamp
       const matchStartKey = `started_${matchId}_${Date.now()}`;
       const existingKeys = Object.keys(sessionStorage).filter(key => key.startsWith(`started_${matchId}_`));
-      
+
       if (existingKeys.length > 0) {
         console.log('🚫 Match already started, ignoring duplicate event');
         return;
       }
-      
+
       console.log('🚀 MATCH STARTED EVENT RECEIVED!', data);
+      console.log('Current matchId when match started:', matchId);
       sessionStorage.setItem(matchStartKey, 'true');
-      
+
       setIsWaitingForPlayers(false);
       setIsLoading(false);
       setCurrentQuestionData(data.question);
       setCurrentQuestion(1);
-      
+
       // Set totalQuestions with fallback
       const totalQs = data.totalQuestions || data.questions?.length || 10;
       setTotalQuestions(totalQs);
       console.log('📊 Total questions set to:', totalQs);
-      
+
       setQuestionTimeRemaining(data.question.timeLimit || 30);
       setQuestionStartTime(Date.now());
-      
+
       toast({
         title: "Match Started!",
         description: "Good luck!",
@@ -413,70 +421,63 @@ const FriendMatchInterface: React.FC = () => {
       });
     });
 
-    // Match completed
+    // Match completed - ONLY handler for match completion
     gameWebSocket.on('match_completed', (data: any) => {
-      console.log('Match completed:', data);
-      
-      // Store results for the results page
+      console.log('🎯 MATCH COMPLETED EVENT RECEIVED!');
+      console.log('Raw match completion data:', JSON.stringify(data, null, 2));
+
+      // Get current user info for debugging
+      const userData = localStorage.getItem('user');
+      let currentUser = 'unknown';
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          currentUser = user.email || user.username;
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+
+      console.log('Current user receiving results:', currentUser);
+
+      // Use the matchId from the server data directly
+      const finalMatchId = data.matchId || 'unknown';
+
+      // Store the complete results exactly as received from server
       const results = {
-        matchId: data.matchId,
-        results: data.results,
-        winner: data.winner,
-        completedAt: new Date().toISOString(),
-        isFriendMatch: true
+        matchId: finalMatchId,
+        results: data.results || [],
+        winner: data.winner || null,
+        completedAt: data.completedAt || new Date().toISOString(),
+        isFriendMatch: true,
+        // Remove individual completion flag - this is the FINAL results
+        isIndividualCompletion: false
       };
+
+      console.log('📊 Storing FINAL match results for both players:', JSON.stringify(results, null, 2));
+
+      // Clear any previous individual completion data
+      sessionStorage.removeItem('friendMatchResults');
       
+      // Store the final results
       sessionStorage.setItem('friendMatchResults', JSON.stringify(results));
-      sessionStorage.setItem('quizResults', JSON.stringify(results)); // For QuizResults component
-      
+      sessionStorage.setItem('quizResults', JSON.stringify(results));
+
       toast({
         title: "Match Complete!",
-        description: `Winner: ${data.winner.username}`,
+        description: `Winner: ${data.winner?.username || 'Unknown'}`,
       });
-      
-      // Navigate to results page after a short delay
+
+      // Navigate to results page
       setTimeout(() => {
-        console.log('🏁 Match completed - navigating to results page');
+        console.log('🏁 Match completed - navigating to final results page');
         window.location.pathname = '/quiz-results';
       }, 2000);
     });
 
-    // Individual player completed (when one player finishes before the other)
-    gameWebSocket.on('player_completed', (data: any) => {
-      console.log('Player completed individually:', data);
-      
-      // Check if this is the current player
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          if (data.userId === user.id) {
-            // Store individual results
-            const results = {
-              matchId: data.matchId,
-              playerResults: data.playerResults,
-              completedAt: new Date().toISOString(),
-              isFriendMatch: true,
-              isIndividualCompletion: true
-            };
-            
-            sessionStorage.setItem('friendMatchResults', JSON.stringify(results));
-            sessionStorage.setItem('quizResults', JSON.stringify(results));
-            
-            toast({
-              title: "Quiz Complete!",
-              description: "Waiting for other player to finish...",
-            });
-            
-            // Navigate to results page
-            setTimeout(() => {
-              console.log('🏁 Individual completion - navigating to results page');
-              window.location.pathname = '/quiz-results';
-            }, 1500);
-          }
-        } catch (e) {}
-      }
-    });
+    // Remove individual completion handler that was causing premature endings
+    // Individual player completed events are not needed - we only handle full match completion
+    // gameWebSocket.on('player_completed', ...) - REMOVED TO PREVENT PREMATURE RESULTS
 
     // Player disconnected
     gameWebSocket.on('player_disconnected', (data: any) => {
@@ -554,48 +555,19 @@ const FriendMatchInterface: React.FC = () => {
     submitCurrentAnswer();
   };
 
-  // Quiz submission
+  // Quiz submission - DISABLE individual completion to wait for both players
   const handleSubmit = () => {
     submitCurrentAnswer();
     setIsSubmitting(true);
     
-    // Check if this is the last question
-    if (currentQuestion >= totalQuestions) {
-      console.log('🏁 Last question submitted - quiz should complete');
-      
-      // Navigate to results page immediately for better UX
-      setTimeout(() => {
-        console.log('🏁 Individual completion - navigating to results page');
-        
-        // Create individual results data
-        const individualResults = {
-          matchId: matchId,
-          playerResults: {
-            score: Array.from(answers.values()).reduce((total, answer) => total + (answer.length > 0 ? 1 : 0), 0),
-            answers: Array.from(answers.entries()).map(([questionId, selectedOptions]) => ({
-              questionId,
-              selectedOptions,
-              isCorrect: selectedOptions.length > 0 // Simplified - actual correctness would come from backend
-            }))
-          },
-          completedAt: new Date().toISOString(),
-          isFriendMatch: true,
-          isIndividualCompletion: true
-        };
-        
-        sessionStorage.setItem('friendMatchResults', JSON.stringify(individualResults));
-        sessionStorage.setItem('quizResults', JSON.stringify(individualResults));
-        
-        window.location.pathname = '/quiz-results';
-      }, 1000);
-    } else {
-      console.log(`📝 Question ${currentQuestion} submitted - waiting for next question`);
-      
-      // For better UX, show a brief "submitted" state then wait for backend
-      setTimeout(() => {
-        setIsSubmitting(false);
-      }, 1000);
-    }
+    // Just submit the answer and wait for the backend to handle match completion
+    // DO NOT navigate to results page individually
+    console.log(`📝 Question ${currentQuestion} submitted - waiting for match completion from server`);
+    
+    // Show submitted state
+    setTimeout(() => {
+      setIsSubmitting(false);
+    }, 1000);
   };
 
   // Handle time up

@@ -1,5 +1,7 @@
 import { apiClient, WEBSOCKET_URL } from './api'
 import { io, Socket } from 'socket.io-client'
+import { sessionManager } from '../utils/sessionManager'
+import type { MatchState } from '../utils/sessionManager'
 
 // Types for AI Opponents
 export interface AIOpponent {
@@ -327,11 +329,18 @@ export class GameWebSocket {
   private eventHandlers: Map<string, Function[]> = new Map()
 
   /**
-   * Connect to match WebSocket using Socket.IO
+   * Connect to match WebSocket using Socket.IO with session management
    */
   connect(websocketUrl: string, userId?: number, username?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        // Check for existing session and reconnection data
+        const reconnectionData = sessionManager.getReconnectionData();
+        if (reconnectionData) {
+          console.log('Found reconnection data:', reconnectionData);
+          this.matchId = reconnectionData.matchId;
+        }
+
         // Extract base URL from websocketUrl (remove ws:// and path)
         const baseUrl = websocketUrl.replace('ws://', 'http://').replace('wss://', 'https://')
         
@@ -342,6 +351,13 @@ export class GameWebSocket {
 
         this.socket.on('connect', () => {
           console.log('Connected to match WebSocket via Socket.IO')
+          
+          // Update session with connection info
+          sessionManager.updateMatchState({
+            connectedAt: Date.now(),
+            lastActivity: Date.now()
+          });
+
           // Authenticate if userId and username are provided
           if (userId && username) {
             // Get user data from localStorage for firstName/lastName
@@ -480,15 +496,146 @@ export class GameWebSocket {
   }
 
   /**
-   * Submit answer for current question
+   * Submit answer for current question with session tracking
    */
   submitAnswer(questionId: number, selectedOptions: number[], timeSpent?: number): void {
-    this.send('submit_answer', {
+    const answerData = {
       questionId,
       selectedOptions,
       timeSpent: timeSpent || 0,
       timestamp: Date.now()
-    })
+    };
+
+    // Update session with answer data
+    const currentState = sessionManager.getMatchState();
+    const currentGameState = currentState?.gameState;
+    sessionManager.updateMatchState({
+      gameState: {
+        currentQuestionIndex: currentGameState?.currentQuestionIndex || 0,
+        score: currentGameState?.score || 0,
+        timeRemaining: currentGameState?.timeRemaining,
+        answers: [
+          ...(currentGameState?.answers || []),
+          {
+            questionId,
+            selectedOptionId: selectedOptions[0], // Take first option for now
+            timeSpent: timeSpent || 0,
+            timestamp: Date.now()
+          }
+        ]
+      },
+      lastActivity: Date.now()
+    });
+
+    this.send('submit_answer', answerData)
+  }
+
+  /**
+   * Start match with session tracking
+   */
+  startMatch(matchId: string, quizId: number, mode: 'solo' | '1v1' | 'multiplayer' | 'friend'): void {
+    this.matchId = matchId;
+    
+    // Get user data from localStorage
+    const userData = localStorage.getItem('user');
+    let playerData = undefined;
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        playerData = {
+          userId: user.id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName
+        };
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+      }
+    }
+
+    // Save match state to session
+    const matchState: MatchState = {
+      matchId,
+      quizId,
+      playerData,
+      mode,
+      status: 'waiting',
+      connectedAt: Date.now(),
+      lastActivity: Date.now(),
+      gameState: {
+        currentQuestionIndex: 0,
+        score: 0,
+        answers: []
+      }
+    };
+
+    sessionManager.saveMatchState(matchState);
+    console.log('Match session saved:', matchState);
+  }
+
+  /**
+   * Update match progress in session
+   */
+  updateMatchProgress(questionIndex: number, score: number, timeRemaining?: number): void {
+    const currentState = sessionManager.getMatchState();
+    const currentGameState = currentState?.gameState;
+    sessionManager.updateMatchState({
+      gameState: {
+        currentQuestionIndex: questionIndex,
+        score,
+        timeRemaining,
+        answers: currentGameState?.answers || []
+      },
+      lastActivity: Date.now()
+    });
+  }
+
+  /**
+   * Handle reconnection if session exists
+   */
+  attemptReconnection(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const reconnectionData = sessionManager.getReconnectionData();
+      if (!reconnectionData) {
+        resolve(false);
+        return;
+      }
+
+      console.log('Attempting to reconnect to match:', reconnectionData.matchId);
+      
+      // Try to reconnect to the existing match
+      this.send('reconnect_to_match', {
+        matchId: reconnectionData.matchId,
+        gameState: reconnectionData.gameState
+      });
+
+      // Set timeout for reconnection attempt
+      setTimeout(() => {
+        resolve(true); // Return true to indicate attempt was made
+      }, 2000);
+    });
+  }
+
+  /**
+   * Clear session when match ends
+   */
+  endMatch(): void {
+    sessionManager.updateMatchState({
+      status: 'finished',
+      lastActivity: Date.now()
+    });
+    
+    // Clear session after a delay to allow for result viewing
+    setTimeout(() => {
+      sessionManager.clearMatchState();
+    }, 30000); // Clear after 30 seconds
+  }
+
+  /**
+   * Handle match completion results
+   */
+  onMatchCompleted(callback: (data: { results: any[], winner: any, matchId: string, playerResult?: any }) => void): void {
+    this.on('match_completed', callback);
   }
 
   /**

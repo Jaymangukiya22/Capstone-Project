@@ -60,6 +60,33 @@ export function QuizManagement() {
     }
   }
 
+  const handleEditQuiz = (quiz: Quiz) => {
+    // Store quiz data in localStorage for QuizBuilder to use
+    localStorage.setItem('editingQuiz', JSON.stringify({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      difficulty: quiz.difficulty,
+      timeLimit: quiz.timeLimit,
+      categoryId: quiz.categoryId
+    }));
+    
+    // Navigate to quiz builder
+    window.location.href = '/quiz-builder'
+  }
+
+  const handleViewQuiz = (quiz: Quiz) => {
+    // Store quiz ID and navigate to student view
+    localStorage.setItem('selectedQuizId', quiz.id.toString())
+    window.location.href = '/quiz-interface'
+  }
+
+  const handlePlayQuiz = (quiz: Quiz) => {
+    // Store quiz ID and navigate to countdown
+    localStorage.setItem('selectedQuizId', quiz.id.toString())
+    window.location.href = '/quiz-countdown'
+  }
+
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'EASY': return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
@@ -242,13 +269,28 @@ export function QuizManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm" title="View Quiz">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        title="View Quiz"
+                        onClick={() => handleViewQuiz(quiz)}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" title="Edit Quiz">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        title="Edit Quiz"
+                        onClick={() => handleEditQuiz(quiz)}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" title="Play Quiz">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        title="Play Quiz"
+                        onClick={() => handlePlayQuiz(quiz)}
+                      >
                         <Play className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" title="View Stats">

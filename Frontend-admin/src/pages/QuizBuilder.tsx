@@ -67,6 +67,35 @@ export function QuizBuilder() {
     loadCategories()
   }, [])
 
+  // Check for editing quiz data from localStorage
+  useEffect(() => {
+    const editingQuizData = localStorage.getItem('editingQuiz')
+    if (editingQuizData) {
+      try {
+        const quizData = JSON.parse(editingQuizData)
+        setFormData({
+          title: quizData.title || "",
+          description: quizData.description || "",
+          tags: "",
+          categoryId: quizData.categoryId?.toString() || "",
+          subcategoryId: "",
+        })
+        
+        // Update quiz settings with quiz data
+        setQuizSettings(prev => ({
+          ...prev,
+          difficulty: quizData.difficulty || 'MEDIUM',
+          timeLimit: quizData.timeLimit || 30,
+        }))
+        
+        // Clear the editing data after loading
+        localStorage.removeItem('editingQuiz')
+      } catch (error) {
+        console.error('Error loading editing quiz data:', error)
+      }
+    }
+  }, [])
+
   const loadCategories = async () => {
     try {
       setLoading(true)

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, BookOpen, Loader2, Upload, Download, Trash2 } from 'lucide-react'
+import { Plus, Search, BookOpen, Loader2, Upload, Download, Trash2, Target } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, BreadcrumbPage } from '../components/ui/breadcrumb'
 import { QuestionBankTree } from '../components/question-bank/QuestionBankTree'
 import { AddEditQuestionModal } from '../components/question-bank/AddEditQuestionModal'
 import { ImportCsvDialog } from '../components/question-bank/ImportCsvDialog'
+import { AddToQuizModal } from '../components/question-bank/AddToQuizModal'
 import { useCategories } from '../hooks/useCategories'
 import { useQuizzes } from '../hooks/useQuizzes'
 import { questionBankService, type QuestionBankItem, type CreateQuestionBankDto } from '../services/questionBankService'
@@ -19,6 +20,7 @@ export function QuestionBank() {
   const [showAddEditModal, setShowAddEditModal] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<QuestionBankItem | undefined>(undefined)
   const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showAddToQuizModal, setShowAddToQuizModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -447,14 +449,25 @@ export function QuestionBank() {
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-500">{questions.length} questions</span>
                 {selectedQuestions.size > 0 && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDeleteQuestions(Array.from(selectedQuestions))}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete ({selectedQuestions.size})
-                  </Button>
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowAddToQuizModal(true)}
+                      className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                    >
+                      <Target className="h-4 w-4 mr-2" />
+                      Add to Quiz ({selectedQuestions.size})
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDeleteQuestions(Array.from(selectedQuestions))}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete ({selectedQuestions.size})
+                    </Button>
+                  </>
                 )}
                 <Button onClick={handleBulkUpload} variant="outline" size="sm">
                   <Upload className="h-4 w-4 mr-2" />
@@ -567,8 +580,18 @@ export function QuestionBank() {
       <ImportCsvDialog
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
-        onImportComplete={handleImportComplete}
         selectedCategoryId={selectedItem?.type === 'category' ? parseInt(selectedItem.id) : undefined}
+        onImportComplete={() => loadQuestionsForSelection()}
+      />
+
+      <AddToQuizModal
+        isOpen={showAddToQuizModal}
+        onClose={() => setShowAddToQuizModal(false)}
+        selectedQuestionIds={Array.from(selectedQuestions)}
+        onSuccess={() => {
+          setSelectedQuestions(new Set());
+          loadQuestionsForSelection();
+        }}
       />
     </div>
   )

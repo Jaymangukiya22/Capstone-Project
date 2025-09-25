@@ -280,6 +280,8 @@ class EnhancedMatchService {
 
   private async loadQuizQuestions(quizId: number): Promise<any[]> {
     try {
+      logInfo('Loading questions for quiz', { quizId });
+
       const quizQuestions = await QuizQuestion.findAll({
         where: { quizId },
         include: [{
@@ -293,7 +295,20 @@ class EnhancedMatchService {
         order: [['order', 'ASC']]
       });
 
-      return quizQuestions.map((qq: any) => ({
+      logInfo('Found quiz questions in database', {
+        quizId,
+        count: quizQuestions.length,
+        questions: quizQuestions.map(qq => ({
+          id: qq.id,
+          questionId: qq.questionId,
+          order: qq.order,
+          hasQuestion: !!qq.question,
+          hasOptions: qq.question ? !!qq.question.options : false,
+          optionsCount: qq.question ? qq.question.options.length : 0
+        }))
+      });
+
+      const transformedQuestions = quizQuestions.map((qq: any) => ({
         id: qq.question.id,
         questionText: qq.question.questionText,
         options: qq.question.options.map((opt: any) => ({
@@ -304,6 +319,14 @@ class EnhancedMatchService {
         difficulty: qq.question.difficulty,
         points: qq.points || 100
       }));
+
+      logInfo('Transformed questions for match', {
+        quizId,
+        finalCount: transformedQuestions.length,
+        questions: transformedQuestions.map(q => ({ id: q.id, text: q.questionText.substring(0, 30) + '...' }))
+      });
+
+      return transformedQuestions;
     } catch (error) {
       logError('Failed to load quiz questions', error as Error);
       return [];
@@ -931,13 +954,55 @@ class EnhancedMatchService {
             totalScore: player.score
           });
 
-          // Check if all players have answered
+          // Check if all players have answered the current question
           const allAnswered = Array.from(match.players.values()).every(
             p => p.answers.length > match.currentQuestionIndex
           );
 
+          logInfo('Answer submission check:', {
+            matchId,
+            currentQuestionIndex: match.currentQuestionIndex,
+            totalQuestions: match.questions.length,
+            playerAnswers: Array.from(match.players.values()).map(p => ({
+              userId: p.userId,
+              username: p.username,
+              answersCount: p.answers.length,
+              currentScore: p.score
+            })),
+            allAnswered
+          });
+
           if (allAnswered) {
-            this.nextQuestion(matchId);
+            // Check if this was the last question for ALL players
+            if (match.currentQuestionIndex >= match.questions.length - 1) {
+              logInfo('All players completed all questions - ending match', { 
+                matchId,
+                finalQuestion: match.currentQuestionIndex + 1,
+                totalQuestions: match.questions.length
+              });
+              
+              // End the match only when ALL players have finished ALL questions
+              this.endMatch(matchId);
+            } else {
+              logInfo('Moving to next question - all players answered current question', { 
+                matchId, 
+                nextQuestionIndex: match.currentQuestionIndex + 1,
+                totalQuestions: match.questions.length
+              });
+              
+              // Move to next question
+              this.nextQuestion(matchId);
+            }
+          } else {
+            logInfo('Waiting for other players to answer', {
+              matchId,
+              playersWhoAnswered: Array.from(match.players.values())
+                .filter(p => p.answers.length > match.currentQuestionIndex)
+                .map(p => ({ userId: p.userId, username: p.username })),
+              playersWaiting: Array.from(match.players.values())
+                .filter(p => p.answers.length <= match.currentQuestionIndex)
+                .map(p => ({ userId: p.userId, username: p.username }))
+            });
           }
         } catch (error) {
           logError('Submit answer error', error as Error);
@@ -969,12 +1034,36 @@ class EnhancedMatchService {
     const match = this.matches.get(matchId);
     if (!match) return;
 
+    // Debug: Log questions array
+    logInfo('Starting match with questions', {
+      matchId,
+      questionsCount: match.questions.length,
+      questions: match.questions.map(q => ({ id: q.id, text: q.questionText.substring(0, 50) + '...' }))
+    });
+
+    // Check if questions are loaded
+    if (!match.questions || match.questions.length === 0) {
+      logError('No questions found for match', new Error(`Match ${matchId} has no questions for quiz ${match.quizId}`));
+      this.io.to(matchId).emit('error', {
+        message: 'No questions available for this quiz. Please add questions to the quiz first.'
+      });
+      return;
+    }
+
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
 
     // Send first question
     const currentQuestion = match.questions[0];
+    if (!currentQuestion) {
+      logError('First question is undefined', new Error(`Match ${matchId} has undefined first question`));
+      this.io.to(matchId).emit('error', {
+        message: 'Unable to load the first question. Please try again.'
+      });
+      return;
+    }
+
     const questionForPlayers = {
       id: currentQuestion.id,
       questionText: currentQuestion.questionText,
@@ -1039,42 +1128,93 @@ class EnhancedMatchService {
 
   private async endMatch(matchId: string) {
     const match = this.matches.get(matchId);
-    if (!match) return;
+    if (!match) {
+      logError('Attempted to end non-existent match', new Error(`Match ${matchId} not found`));
+      return;
+    }
 
     match.status = 'COMPLETED';
 
-    // Calculate final results
-    const results = Array.from(match.players.values()).map(player => ({
-      userId: player.userId,
-      username: player.username,
-      firstName: player.firstName,
-      lastName: player.lastName,
-      score: player.score,
-      answers: player.answers
-    }));
+    // Calculate final results for ALL players
+    const results = Array.from(match.players.values()).map(player => {
+      // Calculate accuracy
+      const totalAnswers = player.answers.length;
+      const correctAnswers = player.answers.filter(answer => answer.isCorrect).length;
+      const accuracy = totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0;
 
-    // Sort by score
+      return {
+        userId: player.userId,
+        username: player.username,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        score: player.score,
+        answers: player.answers,
+        correctAnswers,
+        totalAnswers,
+        accuracy
+      };
+    });
+
+    // Sort by score (highest first)
     results.sort((a, b) => b.score - a.score);
 
-    // Send results to all players
-    this.io.to(matchId).emit('match_completed', {
+    logInfo('Match completed - final results calculated', {
+      matchId,
+      playerCount: results.length,
+      results: results.map(r => ({
+        userId: r.userId,
+        username: r.username,
+        score: r.score,
+        correctAnswers: r.correctAnswers,
+        totalAnswers: r.totalAnswers,
+        accuracy: r.accuracy
+      })),
+      winner: results[0] ? { 
+        userId: results[0].userId, 
+        username: results[0].username, 
+        score: results[0].score,
+        accuracy: results[0].accuracy
+      } : null
+    });
+
+    // Create the complete match data that ALL players will receive
+    const completionData = {
       results,
-      winner: results[0],
-      matchId
+      winner: results[0] || null,
+      matchId,
+      completedAt: new Date().toISOString(),
+      isFriendMatch: true
+    };
+
+    logInfo('Broadcasting match completion to ALL players:', {
+      matchId,
+      roomPlayers: Array.from(match.players.values()).map(p => ({
+        userId: p.userId,
+        username: p.username,
+        socketId: p.socketId
+      })),
+      completionData
     });
 
-    // Clean up
-    match.players.forEach(player => {
-      this.userToMatch.delete(player.userId);
-    });
-    
-    if (match.joinCode) {
-      this.joinCodeToMatch.delete(match.joinCode);
-    }
-    
-    this.matches.delete(matchId);
+    // SINGLE broadcast to ensure ALL players get IDENTICAL data
+    this.io.to(matchId).emit('match_completed', completionData);
 
-    logInfo('Match completed', { matchId, results });
+    // Clean up after a delay to ensure the broadcast is sent
+    setTimeout(() => {
+      match.players.forEach(player => {
+        this.userToMatch.delete(player.userId);
+      });
+      
+      if (match.joinCode) {
+        this.joinCodeToMatch.delete(match.joinCode);
+      }
+      
+      this.matches.delete(matchId);
+      
+      logInfo('Match cleanup completed', { matchId });
+    }, 1000);
+
+    logInfo('Match completion broadcast sent', { matchId });
   }
 }
 

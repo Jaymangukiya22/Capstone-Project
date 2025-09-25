@@ -1,0 +1,337 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: quizup_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quizup_db}
+      POSTGRES_USER: ${POSTGRES_USER:-quizup_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docs/database-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/scripts/seed-data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    networks:
+      - quizup_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quizup_user} -d ${POSTGRES_DB:-quizup_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: quizup_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - quizup_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: ${NODE_ENV:-development}
+    container_name: quizup_backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${BACKEND_PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quizup_user}:${POSTGRES_PASSWORD:-quizup_password}@postgres:5432/${POSTGRES_DB:-quizup_db}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-true}
+      SERVICE_TYPE: backend
+      POSTGRES_USER: ${POSTGRES_USER:-quizup_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
+      POSTGRES_DB: ${POSTGRES_DB:-quizup_db}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      # Mount the entire backend directory for hot-reloading
+      - ./backend:/app:cached
+      # Use an anonymous volume to keep the container's node_modules separate
+      - backend_node_modules:/app/node_modules
+      # Add npm cache volume for Windows compatibility
+      - backend_npm_cache:/usr/local/lib/node_modules/npm/.npm
+    # Use nodemon to run the source file and watch for changes
+    command: sh -c "npx nodemon src/server.ts"
+    networks:
+      - quizup_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+
+  # Match Server (WebSocket)
+  matchserver:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: ${NODE_ENV:-development}
+    container_name: quizup_matchserver
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${MATCH_SERVICE_PORT:-3001}
+      MATCH_SERVICE_PORT: ${MATCH_SERVICE_PORT:-3001}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quizup_user}:${POSTGRES_PASSWORD:-quizup_password}@postgres:5432/${POSTGRES_DB:-quizup_db}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_TYPE: matchserver
+      POSTGRES_USER: ${POSTGRES_USER:-quizup_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
+      POSTGRES_DB: ${POSTGRES_DB:-quizup_db}
+    ports:
+      - "${MATCH_SERVICE_PORT:-3001}:3001"
+    volumes:
+      # Mount the entire backend directory for hot-reloading
+      - ./backend:/app:cached
+      # Use an anonymous volume to keep the container's node_modules separate
+      - backend_node_modules:/app/node_modules
+      # Add npm cache volume for Windows compatibility
+      - backend_npm_cache:/usr/local/lib/node_modules/npm/.npm
+    # Use nodemon to run the source file and watch for changes
+    command: sh -c "npx nodemon src/matchServer-enhanced.ts"
+    networks:
+      - quizup_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./Frontend-admin
+      dockerfile: Dockerfile
+      target: ${NODE_ENV:-development}
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+        VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
+        VITE_APP_NAME: ${VITE_APP_NAME:-QuizUP}
+        VITE_APP_VERSION: ${VITE_APP_VERSION:-1.0.0}
+    container_name: quizup_frontend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+      VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./Frontend-admin/src:/app/src:ro
+      - ./Frontend-admin/public:/app/public:ro
+    networks:
+      - quizup_network
+    depends_on:
+      - backend
+      - matchserver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Nginx Load Balancer (Production)
+  nginx:
+    image: nginx:alpine
+    container_name: quizup_nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    networks:
+      - quizup_network
+    depends_on:
+      - frontend
+      - backend
+      - matchserver
+    profiles:
+      - production
+    restart: unless-stopped
+
+  # Adminer (Database Management)
+  adminer:
+    image: adminer:latest
+    container_name: quizup_adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    networks:
+      - quizup_network
+    depends_on:
+      - postgres
+    profiles:
+      - development
+    restart: unless-stopped
+
+  # Redis Commander (Redis Management)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: quizup_redis_commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+      HTTP_USER: ${REDIS_COMMANDER_USER:-admin}
+      HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD:-admin}
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+    networks:
+      - quizup_network
+    depends_on:
+      - redis
+    profiles:
+      - development
+  # Prometheus (Monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: quizup_prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    networks:
+      - quizup_network
+  # Grafana (Dashboard)
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: quizup_grafana
+    ports:
+      - "3003:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    networks:
+      - quizup_network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Node Exporter (System Metrics)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: quizup_node_exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - quizup_network
+    restart: unless-stopped
+
+  # PostgreSQL Exporter (Database Metrics)
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: quizup_postgres_exporter
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-quizup_user}:${POSTGRES_PASSWORD:-quizup_password}@postgres:5432/${POSTGRES_DB:-quizup_db}?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres_exporter/queries.yaml"
+    volumes:
+      - ./monitoring/postgres-exporter:/etc/postgres_exporter:ro
+    networks:
+      - quizup_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Redis Exporter (Cache Metrics)
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: quizup_redis_exporter
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+      REDIS_EXPORTER_LOG_FORMAT: "txt"
+    networks:
+      - quizup_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  quizup_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  # Named volumes for backend to fix Windows permission issues
+  backend_node_modules:
+    driver: local
+  backend_npm_cache:
+    driver: local

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/components/**/*.{ts,tsx}",
+    "src/services/**/*.ts",
+    "src/utils/**/*.ts",
+    "src/types/**/*.ts",
+    "src/hooks/**/*.ts"
+  ],
+  "out": "docs/typedoc",
+  "name": "QuizUP Frontend Admin",
+  "includeVersion": true,
+  "exclude": [
+    "**/*.test.tsx",
+    "**/*.test.ts",
+    "**/*.stories.tsx",
+    "**/*.stories.ts",
+    "src/stories/**",
+    "src/**/*.stories.*",
+    "src/**/stories/**",
+    "**/*stories*",
+    "**/*test*",
+    "**/*spec*"
+  ],
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeInternal": true,
+  "disableSources": false,
+  "readme": "README.md",
+  "tsconfig": "tsconfig.app.json",
+  "theme": "default",
+  "cleanOutputDir": true,
+  "blockTags": ["@example", "@deprecated", "@see", "@link"],
+  "inlineTags": ["@link", "@linkcode", "@linkplain"],
+  "modifierTags": ["@public", "@private", "@protected", "@internal"],
+  "gitRevision": "main",
+  "gitRemote": "origin",
+  "logLevel": "Warn",
+  "validation": {
+    "invalidLink": false,
+    "notDocumented": false,
+    "notExported": false
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false
+  },
+  "skipErrorChecking": true,
+  "treatWarningsAsErrors": false
+}

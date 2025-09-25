@@ -67,8 +67,10 @@ export class QuizService {
 
   async assignQuestionsToQuiz(data: AssignQuestionsData) {
     try {
-      // Verify quiz exists
-      const quiz = await Quiz.findByPk(data.quizId);
+      // Verify quiz exists and get its category
+      const quiz = await Quiz.findByPk(data.quizId, {
+        include: [{ model: Category, as: 'category' }]
+      });
 
       if (!quiz) {
         throw new Error('Quiz not found');
@@ -99,6 +101,26 @@ export class QuizService {
           order: index + 1
         }))
       );
+
+      // Also update questions to belong to the quiz's category (if not already assigned)
+      const questionsToUpdate = questions.filter(q => !q.categoryId);
+      if (questionsToUpdate.length > 0 && quiz.categoryId) {
+        await QuestionBankItem.update(
+          { categoryId: quiz.categoryId },
+          { 
+            where: { 
+              id: { [Op.in]: questionsToUpdate.map(q => q.id) },
+              categoryId: null // Only update questions without category
+            }
+          }
+        );
+        
+        logInfo('Questions also assigned to quiz category', { 
+          quizId: data.quizId, 
+          categoryId: quiz.categoryId,
+          questionsUpdated: questionsToUpdate.length 
+        });
+      }
 
       logInfo('Questions assigned to quiz', { 
         quizId: data.quizId, 

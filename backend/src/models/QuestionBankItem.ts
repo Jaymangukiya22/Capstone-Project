@@ -70,3 +70,6 @@ export class QuestionBankItem extends Model {
   @HasMany(() => QuizQuestion, 'questionId')
   quizQuestions!: QuizQuestion[];
 }
+
+// Re-export the Difficulty enum for convenience
+export { Difficulty } from '../types/enums';

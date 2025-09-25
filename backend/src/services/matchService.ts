@@ -15,6 +15,12 @@ interface MatchPlayer {
   isReady: boolean;
   isAI: boolean;
   answers: any[];
+  aiOpponent?: {
+    id: string;
+    name: string;
+    difficulty: string;
+    avatar: string;
+  };
 }
 
 interface MatchRoom {
@@ -261,12 +267,11 @@ export class MatchService {
             }));
             
             logInfo('Sending player list update', { 
-              matchId, 
               playerCount: playerList.length,
               players: playerList 
             });
             
-            this.io.to(matchId).emit('player_list_updated', {
+            this.io?.to(matchId).emit('player_list_updated', {
               players: playerList
             });
 
@@ -313,7 +318,7 @@ export class MatchService {
           if (player) {
             player.isReady = true;
             
-            this.io.to(matchId).emit('player_ready', {
+            this.io?.to(matchId).emit('player_ready', {
               userId: socket.data.userId,
               username: socket.data.username
             });
@@ -383,6 +388,11 @@ export class MatchService {
   /**
    * Create a new match
    */
+  public async createSoloMatch(userId: number, quizId: number, aiOpponentId?: string): Promise<string> {
+    const match = await this.createMatch(quizId, userId, 2);
+    return match.matchId;
+  }
+
   public async createMatch(quizId: number, userId: number, maxPlayers: number = 10): Promise<{ matchId: string; joinCode: string }> {
     const quiz = await Quiz.findOne({
       where: { id: quizId, isActive: true }
@@ -559,7 +569,7 @@ export class MatchService {
 
     if (match.questions.length === 0) {
       logError('Cannot start match - no questions loaded', new Error(`Match ${matchId} has no questions`));
-      this.io.to(matchId).emit('error', { message: 'No questions available for this quiz' });
+      this.io?.to(matchId).emit('error', { message: 'No questions available for this quiz' });
       return;
     }
 
@@ -595,7 +605,7 @@ export class MatchService {
       totalQuestions: match.questions.length 
     });
 
-    this.io.to(matchId).emit('match_started', {
+    this.io?.to(matchId).emit('match_started', {
       question: questionForPlayers,
       questionIndex: 0,
       totalQuestions: match.questions.length
@@ -650,7 +660,7 @@ export class MatchService {
     });
 
     // Notify player of result
-    this.io.to(player.socketId).emit('answer_result', {
+    this.io?.to(player.socketId).emit('answer_result', {
       isCorrect,
       points,
       correctOptions: correctOptionIds,
@@ -692,7 +702,7 @@ export class MatchService {
 
     match.questionStartTime = Date.now();
 
-    this.io.to(matchId).emit('next_question', {
+    this.io?.to(matchId).emit('next_question', {
       question: questionForPlayers,
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
@@ -725,7 +735,7 @@ export class MatchService {
     results.sort((a, b) => b.score - a.score);
 
     // Send results to all players
-    this.io.to(matchId).emit('match_completed', {
+    this.io?.to(matchId).emit('match_completed', {
       results,
       winner: results[0],
       matchId
@@ -786,6 +796,21 @@ export class MatchService {
     });
 
     return availableMatches;
+  }
+
+  /**
+   * Get active matches (alias for backward compatibility)
+   */
+  public getActiveMatches(): Array<{
+    id: string;
+    quizId: number;
+    quiz: any;
+    playerCount: number;
+    maxPlayers: number;
+    status: string;
+    createdAt: Date;
+  }> {
+    return this.getAvailableMatches();
   }
 }
 

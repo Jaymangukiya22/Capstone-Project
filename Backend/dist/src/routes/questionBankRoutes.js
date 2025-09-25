@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const questionBankController_1 = require("../controllers/questionBankController");
+const validation_1 = require("../middleware/validation");
+const validation_2 = require("../utils/validation");
+const router = (0, express_1.Router)();
+router.get('/search', (0, validation_1.validateQuery)(validation_2.searchQuestionsSchema), questionBankController_1.searchQuestions);
+router.get('/', questionBankController_1.getAllQuestions);
+router.get('/category/:categoryId', questionBankController_1.getQuestionsByCategory);
+router.get('/:id', questionBankController_1.getQuestionById);
+router.post('/', (0, validation_1.validateRequest)(validation_2.createQuestionBankSchema), questionBankController_1.createQuestion);
+router.put('/:id', (0, validation_1.validateRequest)(validation_2.createQuestionBankSchema), questionBankController_1.updateQuestion);
+router.delete('/:id', questionBankController_1.deleteQuestion);
+router.get('/template', questionBankController_1.downloadTemplate);
+router.post('/bulk', (0, validation_1.validateRequest)(validation_2.bulkImportSchema), questionBankController_1.bulkImport);
+router.post('/bulk-import', (0, validation_1.validateRequest)(validation_2.bulkImportSchema), questionBankController_1.bulkImport);
+router.post('/upload-excel', questionBankController_1.uploadMiddleware, questionBankController_1.uploadExcel);
+exports.default = router;
+//# sourceMappingURL=questionBankRoutes.js.map

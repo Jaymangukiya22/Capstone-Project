@@ -1,5 +1,4 @@
-import Joi from 'joi';
-
+import * as Joi from 'joi'; 
 // Authentication validation schemas
 export const registerSchema = Joi.object({
   username: Joi.string().alphanum().min(3).max(50).required(),

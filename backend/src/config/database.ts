@@ -10,8 +10,7 @@ import { QuizAttemptAnswer } from '../models/QuizAttemptAnswer';
 import { Match } from '../models/Match';
 import { MatchPlayer } from '../models/MatchPlayer';
 import { logInfo, logError } from '../utils/logger';
-import dotenv from 'dotenv';
-dotenv.config();
+// Environment variables should be loaded automatically
 // Database configuration
 const sequelize = new Sequelize({
   database: process.env.DB_NAME || 'quiz_app',

@@ -1,24 +1,27 @@
 import express from 'express';
 import { createServer } from 'http';
-import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import dotenv from 'dotenv';
-import { MatchService, matchService as matchServiceInstance } from './services/matchService';
-import { logInfo, logError } from './utils/logger';
+import cors from 'cors';
+import { Server as SocketIOServer } from 'socket.io';
 import { createClient } from 'redis';
+import { MatchService } from './services/matchService';
+import { logInfo, logError } from './utils/logger';
 
 // Load environment variables
-dotenv.config();
-
 const app = express();
 const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 const port = process.env.MATCH_SERVICE_PORT || 3001;
 
 // Initialize Redis
 const redis = createClient({ url: process.env.REDIS_URL });
 redis.connect().catch(console.error);
-
 // Middleware
 app.use(helmet());
 app.use(compression());
@@ -26,7 +29,7 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize Match Service
-const matchService = new MatchService(server);
+const matchService = new MatchService(io);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

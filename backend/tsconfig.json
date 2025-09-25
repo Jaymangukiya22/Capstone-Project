@@ -33,11 +33,11 @@
     },
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "types": ["node", "jest", "@types/node", "@types/jest"]
   },
   "include": [
-    "src/**/*",
-    "prisma/seed.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",

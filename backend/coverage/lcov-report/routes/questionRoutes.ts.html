@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>11/11</span>
+                <span class='fraction'>0/11</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>11/11</span>
+                <span class='fraction'>0/11</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line low'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -90,60 +90,60 @@
 <a name='L25'></a><a href='#L25'>25</a>
 <a name='L26'></a><a href='#L26'>26</a>
 <a name='L27'></a><a href='#L27'>27</a>
-<a name='L28'></a><a href='#L28'>28</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<a name='L28'></a><a href='#L28'>28</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { Router } from 'express';
-import { questionController } from '../controllers/questionController';
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >import { Router } from 'express';</span>
+<span class="cstat-no" title="statement not covered" >import { questionController } from '../controllers/questionController';</span>
 &nbsp;
-const router = Router();
+const router = <span class="cstat-no" title="statement not covered" >Router();</span>
 &nbsp;
 // POST /api/questions - Create a new question (standalone)
-router.post('/', questionController.createQuestion.bind(questionController));
+<span class="cstat-no" title="statement not covered" >router.post('/', questionController.createQuestion.bind(questionController));</span>
 &nbsp;
 // POST /api/questions/quiz/:quizId - Add question to specific quiz
-router.post('/quiz/:quizId', questionController.addQuestionToQuiz.bind(questionController));
+<span class="cstat-no" title="statement not covered" >router.post('/quiz/:quizId', questionController.addQuestionToQuiz.bind(questionController));</span>
 &nbsp;
-// GET /api/questions/:quizId - Get all questions for a quiz
-router.get('/:quizId', questionController.getQuestionsByQuizId.bind(questionController));
+// GET /api/questions/quiz/:quizId - Get all questions for a quiz
+<span class="cstat-no" title="statement not covered" >router.get('/quiz/:quizId', questionController.getQuestionsByQuizId.bind(questionController));</span>
 &nbsp;
-// GET /api/questions/single/:id - Get question by ID
-router.get('/single/:id', questionController.getQuestionById.bind(questionController));
+// GET /api/questions/quiz/:quizId/stats - Get question statistics for a quiz
+<span class="cstat-no" title="statement not covered" >router.get('/quiz/:quizId/stats', questionController.getQuestionStats.bind(questionController));</span>
 &nbsp;
-// PUT /api/questions/single/:id - Update question
-router.put('/single/:id', questionController.updateQuestion.bind(questionController));
+// GET /api/questions/:id - Get question by ID
+<span class="cstat-no" title="statement not covered" >router.get('/:id', questionController.getQuestionById.bind(questionController));</span>
 &nbsp;
-// DELETE /api/questions/single/:id - Delete question
-router.delete('/single/:id', questionController.deleteQuestion.bind(questionController));
+// PUT /api/questions/:id - Update question
+<span class="cstat-no" title="statement not covered" >router.put('/:id', questionController.updateQuestion.bind(questionController));</span>
 &nbsp;
-// GET /api/questions/:quizId/stats - Get question statistics for a quiz
-router.get('/:quizId/stats', questionController.getQuestionStats.bind(questionController));
+// DELETE /api/questions/:id - Delete question
+<span class="cstat-no" title="statement not covered" >router.delete('/:id', questionController.deleteQuestion.bind(questionController));</span>
 &nbsp;
-export default router;
+<span class="cstat-no" title="statement not covered" >export default router;</span>
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -151,7 +151,7 @@ export default router;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-06T04:22:06.436Z
+                at 2025-09-27T13:47:22.997Z
             </div>
         <script src="../prettify.js"></script>
         <script>

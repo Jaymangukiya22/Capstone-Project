@@ -26,7 +26,6 @@ export function CategoryTree({
 }: CategoryTreeProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<string>>(new Set())
-  const [hoveredItem, setHoveredItem] = useState<{ type: 'category' | 'subcategory' | 'quiz'; id: string } | null>(null)
   
   // Fetch quizzes to display in categories
   const { quizzes } = useQuizzes()
@@ -91,7 +90,7 @@ export function CategoryTree({
   // Recursive component to render subcategories with nested structure
   const renderSubcategories = (subcategories: any[], level: number = 1) => {
     return subcategories.map((subcategory) => (
-      <div key={subcategory.id} className="space-y-1">
+      <div key={`subcategory-${subcategory.id}`} className="space-y-1">
         {/* Subcategory Item */}
         <div
           className={cn(
@@ -100,8 +99,6 @@ export function CategoryTree({
               ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800"
               : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 hover:border-gray-300 dark:hover:border-gray-600"
           )}
-          onMouseEnter={() => setHoveredItem({ type: 'subcategory', id: subcategory.id.toString() })}
-          onMouseLeave={() => setHoveredItem(null)}
         >
           <div className="flex items-center space-x-3 flex-1" onClick={() => onSelectItem('subcategory', subcategory.id.toString())}>
             <Button
@@ -132,13 +129,8 @@ export function CategoryTree({
             </div>
           </div>
 
-          {/* Action buttons - visible on hover */}
-          <div className={cn(
-            "flex items-center space-x-1 transition-opacity duration-200",
-            hoveredItem?.type === 'subcategory' && hoveredItem?.id === subcategory.id.toString() 
-              ? "opacity-100" 
-              : "opacity-0"
-          )}>
+          {/* Action buttons - always visible for better UX */}
+          <div className="flex items-center space-x-1 opacity-70 hover:opacity-100 transition-opacity duration-200">
             <Button
               variant="ghost"
               size="sm"
@@ -154,14 +146,14 @@ export function CategoryTree({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className="h-7 w-7 p-0 hover:bg-green-100 dark:hover:bg-green-900/20 rounded transition-colors"
               onClick={(e) => {
                 e.stopPropagation()
                 onAddQuiz(subcategory.id.toString(), 'subcategory')
               }}
-              title="Add Quiz"
+              title="Add Quiz to Subcategory"
             >
-              <Plus className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+              <Plus className="h-3 w-3 text-green-600 dark:text-green-400" />
             </Button>
             <Button
               variant="ghost"
@@ -191,15 +183,13 @@ export function CategoryTree({
             {/* Quizzes */}
             {getQuizzesForCategory(subcategory.id).map((quiz) => (
               <div
-                key={quiz.id}
+                key={`subcategory-quiz-${quiz.id}`}
                 className={cn(
                   "group relative flex items-center justify-between p-2.5 rounded border transition-all duration-200 cursor-pointer",
                   selectedItem?.type === 'quiz' && selectedItem?.id === quiz.id.toString()
                     ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
                     : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 hover:border-gray-300 dark:hover:border-gray-600"
                 )}
-                onMouseEnter={() => setHoveredItem({ type: 'quiz', id: quiz.id.toString() })}
-                onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => onSelectItem('quiz', quiz.id.toString())}
               >
                 <div className="flex items-center space-x-3 flex-1">
@@ -215,13 +205,8 @@ export function CategoryTree({
                   </div>
                 </div>
 
-                {/* Delete button - visible on hover */}
-                <div className={cn(
-                  "transition-opacity duration-200",
-                  hoveredItem?.type === 'quiz' && hoveredItem?.id === quiz.id.toString() 
-                    ? "opacity-100" 
-                    : "opacity-0"
-                )}>
+                {/* Delete button - always visible for better UX */}
+                <div className="opacity-70 hover:opacity-100 transition-opacity duration-200">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -246,7 +231,7 @@ export function CategoryTree({
   return (
     <div className="space-y-3">
       {categories.map((category) => (
-        <div key={category.id} className="space-y-2">
+        <div key={`category-${category.id}`} className="space-y-2">
           {/* Category Item */}
           <div
             className={cn(
@@ -255,8 +240,6 @@ export function CategoryTree({
                 ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
                 : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 hover:border-gray-300 dark:hover:border-gray-600"
             )}
-            onMouseEnter={() => setHoveredItem({ type: 'category', id: category.id.toString() })}
-            onMouseLeave={() => setHoveredItem(null)}
           >
             <div className="flex items-center space-x-4 flex-1" onClick={() => onSelectItem('category', category.id.toString())}>
               <Button
@@ -287,13 +270,8 @@ export function CategoryTree({
               </div>
             </div>
 
-            {/* Action buttons - visible on hover */}
-            <div className={cn(
-              "flex items-center space-x-1 transition-opacity duration-200",
-              hoveredItem?.type === 'category' && hoveredItem?.id === category.id.toString() 
-                ? "opacity-100" 
-                : "opacity-0"
-            )}>
+            {/* Action buttons - always visible for better UX */}
+            <div className="flex items-center space-x-1 opacity-70 hover:opacity-100 transition-opacity duration-200">
               <Button
                 variant="ghost"
                 size="sm"
@@ -309,14 +287,14 @@ export function CategoryTree({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                className="h-8 w-8 p-0 hover:bg-green-100 dark:hover:bg-green-900/20 rounded transition-colors"
                 onClick={(e) => {
                   e.stopPropagation()
                   onAddQuiz(category.id.toString(), 'category')
                 }}
-                title="Add Quiz"
+                title="Add Quiz to Category"
               >
-                <Plus className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
               </Button>
               <Button
                 variant="ghost"
@@ -346,15 +324,13 @@ export function CategoryTree({
               {/* Render quizzes directly under this category */}
               {getQuizzesForCategory(category.id).map((quiz) => (
                 <div
-                  key={quiz.id}
+                  key={`category-quiz-${quiz.id}`}
                   className={cn(
                     "group relative flex items-center justify-between p-2.5 rounded border transition-all duration-200 cursor-pointer",
                     selectedItem?.type === 'quiz' && selectedItem?.id === quiz.id.toString()
                       ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
                       : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 hover:border-gray-300 dark:hover:border-gray-600"
                   )}
-                  onMouseEnter={() => setHoveredItem({ type: 'quiz', id: quiz.id.toString() })}
-                  onMouseLeave={() => setHoveredItem(null)}
                   onClick={() => onSelectItem('quiz', quiz.id.toString())}
                 >
                   <div className="flex items-center space-x-3 flex-1">
@@ -370,13 +346,8 @@ export function CategoryTree({
                     </div>
                   </div>
 
-                  {/* Delete button - visible on hover */}
-                  <div className={cn(
-                    "transition-opacity duration-200",
-                    hoveredItem?.type === 'quiz' && hoveredItem?.id === quiz.id.toString() 
-                      ? "opacity-100" 
-                      : "opacity-0"
-                  )}>
+                  {/* Delete button - always visible for better UX */}
+                  <div className="opacity-70 hover:opacity-100 transition-opacity duration-200">
                     <Button
                       variant="ghost"
                       size="sm"

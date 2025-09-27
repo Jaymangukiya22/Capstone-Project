@@ -7,11 +7,26 @@ import { defineConfig } from "vite";
 // https://vite.dev/config/
 import { fileURLToPath } from 'node:url';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
+
 const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    host: '0.0.0.0', // Necessary for Docker
+    port: 5173,
+    allowedHosts: ['.tunnelmole.net'],
+    hmr: {
+      // This is the corrected part.
+      // It tells the browser to connect to the tunnel's public
+      // HTTPS port (443) using a secure websocket protocol.
+      
+      clientPort: 443,
+      protocol: 'wss'
+    }
+  },
+  assetsInclude: ['**/*.html'],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src")

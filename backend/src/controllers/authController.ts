@@ -1,37 +1,38 @@
 import { Request, Response } from 'express';
 import { User, UserRole } from '../models';
 import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/auth';
-import { logInfo, logError } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { Op } from 'sequelize';
+import { logInfo, logError } from '../utils/logger';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('Registration attempt:', { body: req.body });
     const { username, email, password, firstName, lastName, role } = req.body;
 
     // Check if user already exists
+    console.log('Checking for existing user...');
     const existingUser = await User.findOne({
       where: {
-        [Op.or]: [
-          { email },
-          { username }
-        ]
+        [Op.or]: [{ email }, { username }]
       }
     });
 
     if (existingUser) {
-      res.status(400).json({
+      console.log('User already exists:', existingUser.username);
+      res.status(409).json({
         success: false,
-        error: 'User already exists',
-        message: 'Email or username already registered'
+        error: 'User with this email or username already exists'
       });
       return;
     }
 
     // Hash password
+    console.log('Hashing password...');
     const passwordHash = await hashPassword(password);
 
     // Create user
+    console.log('Creating user with data:', { username, email, firstName, lastName, role });
     // Default to ADMIN for testing (change to PLAYER in production)
     const user = await User.create({
       username,
@@ -41,6 +42,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       lastName,
       role: role || UserRole.ADMIN  // Changed from PLAYER to ADMIN for testing
     });
+    console.log('User created successfully:', user.id);
 
     // Return user without password
     const userResponse = {

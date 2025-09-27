@@ -11,10 +11,8 @@ import { DetailPanel } from '@/components/categories/DetailPanel'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, BreadcrumbPage } from '@/components/ui/breadcrumb'
 import { useCategories } from '@/hooks/useCategories'
 import { useQuizzes } from '@/hooks/useQuizzes'
-import type { Category as ApiCategory, CreateCategoryDto } from '@/types/api'
-import { mockCategories, mockStats } from '@/data/mockData'
-import { addSubcategoryToTree } from '@/utils/categoryUtils'
-import type { Category, Subcategory, Quiz, QuizMode } from '@/types'
+import type { Category as ApiCategory } from '@/types/api'
+import type { Category, Subcategory, QuizMode } from '@/types'
 
 export function Categories() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -31,8 +29,6 @@ export function Categories() {
     categories: apiCategories, 
     loading, 
     error, 
-    createCategory, 
-    updateCategory, 
     deleteCategory,
     getCategoryHierarchy 
   } = useCategories({ includeChildren: true, depth: 5, autoFetch: false })
@@ -109,13 +105,14 @@ export function Categories() {
     recentlyAdded: 0, // TODO: Calculate from recent data
   }
 
-  function countSubcategories(subcategories: Subcategory[]): number {
-    return subcategories.reduce((acc, sub) => acc + 1 + countSubcategories(sub.subcategories), 0)
-  }
+  // Helper functions for counting (kept for potential future use)
+  // function countSubcategories(subcategories: Subcategory[]): number {
+  //   return subcategories.reduce((acc, sub) => acc + 1 + countSubcategories(sub.subcategories), 0)
+  // }
 
-  function countQuizzes(subcategories: Subcategory[]): number {
-    return subcategories.reduce((acc, sub) => acc + sub.quizzes.length + countQuizzes(sub.subcategories), 0)
-  }
+  // function countQuizzes(subcategories: Subcategory[]): number {
+  //   return subcategories.reduce((acc, sub) => acc + sub.quizzes.length + countQuizzes(sub.subcategories), 0)
+  // }
 
   const handleSelectItem = (type: 'category' | 'subcategory' | 'quiz', id: string) => {
     setSelectedItem({ type, id })
@@ -123,33 +120,57 @@ export function Categories() {
 
   const handleAddCategory = async (name: string, description?: string, parentId?: string) => {
     try {
-      await createCategory({
+      // Don't use the hook's createCategory as it uses different refresh method
+      const { categoryService } = await import('@/services/categoryService')
+      
+      await categoryService.createCategory({
         name,
         description,
         parentId: parentId ? parseInt(parentId) : null,
         isActive: true
       })
+      
+      // Immediately refresh with the same method used for initial load
+      console.log('🔄 Refreshing categories after creation...')
+      await getCategoryHierarchy(5)
+      console.log('✅ Categories refreshed successfully')
+      
+      // Show success message
+      alert(`Category "${name}" created successfully!`)
+      
     } catch (err) {
       console.error('Failed to create category:', err)
       alert('Failed to create category. Please try again.')
     }
   }
 
-  const handleAddSubcategory = async (name: string, parentId: string, parentType: 'category' | 'subcategory', description?: string) => {
+  const handleAddSubcategory = async (name: string, parentId: string, _parentType: 'category' | 'subcategory', description?: string) => {
     try {
-      await createCategory({
+      // Don't use the hook's createCategory as it uses different refresh method
+      const { categoryService } = await import('@/services/categoryService')
+      
+      await categoryService.createCategory({
         name,
         description,
         parentId: parseInt(parentId),
         isActive: true
       })
+      
+      // Immediately refresh with the same method used for initial load
+      console.log('🔄 Refreshing categories after subcategory creation...')
+      await getCategoryHierarchy(5)
+      console.log('✅ Categories refreshed successfully')
+      
+      // Show success message
+      alert(`Subcategory "${name}" created successfully!`)
+      
     } catch (err) {
       console.error('Failed to create subcategory:', err)
       alert('Failed to create subcategory. Please try again.')
     }
   }
 
-  const handleAddQuiz = async (name: string, mode: QuizMode, subcategoryId: string, description?: string) => {
+  const handleAddQuiz = async (name: string, _mode: QuizMode, categoryId: string, description?: string, difficulty?: 'EASY' | 'MEDIUM' | 'HARD', timeLimit?: number) => {
     try {
       // Import quiz service
       const { quizService } = await import('@/services/quizService')
@@ -157,16 +178,18 @@ export function Categories() {
       const quizData = {
         title: name,
         description: description || '',
-        categoryId: parseInt(subcategoryId),
-        difficulty: 'MEDIUM' as const,
-        timeLimit: 30
+        categoryId: parseInt(categoryId),
+        difficulty: difficulty || 'MEDIUM' as const,
+        timeLimit: timeLimit || 30
       }
       
       const newQuiz = await quizService.createQuiz(quizData)
       console.log('Quiz created successfully:', newQuiz)
       
-      // Refresh categories to show the new quiz
-      // Note: In a real implementation, you might want to optimistically update the UI
+      // Refresh the categories to show the new quiz
+      await getCategoryHierarchy(5)
+      
+      // Show success message
       alert(`Quiz "${name}" created successfully!`)
       
     } catch (err) {
@@ -201,12 +224,9 @@ export function Categories() {
     setShowAddSubcategoryModal(true)
   }
 
-  const handleAddQuizClick = (parentId: string, parentType: 'category' | 'subcategory') => {
-    if (parentType === 'subcategory') {
-      setSelectedSubcategoryForQuiz(parentId)
-    } else if (selectedItem?.type === 'subcategory') {
-      setSelectedSubcategoryForQuiz(selectedItem.id)
-    }
+  const handleAddQuizClick = (parentId: string, _parentType: 'category' | 'subcategory') => {
+    // Set the parent ID regardless of type - both categories and subcategories can have quizzes
+    setSelectedSubcategoryForQuiz(parentId)
     setShowAddQuizModal(true)
   }
 
@@ -377,6 +397,7 @@ export function Categories() {
         onOpenChange={setShowAddQuizModal}
         onAddQuiz={handleAddQuiz}
         subcategoryId={selectedSubcategoryForQuiz}
+        categories={apiCategories}
       />
     </div>
   )

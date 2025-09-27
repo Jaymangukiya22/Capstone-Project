@@ -1,7 +1,4 @@
 *node_modules
-<<<<<<< Updated upstream
-*.env
-=======
 *.env
 /backend/logs
 backend/logs/combined.log
@@ -19,4 +16,5 @@ backend/logs.zip
 backend/logs/error.log
 backend/src/server.ts
 /backend/logs
->>>>>>> Stashed changes
+/backend/dist/
+/Frontend-admin/dist/

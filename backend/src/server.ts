@@ -50,8 +50,31 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:3001",
+  "http://localhost:8090",
   "http://10.80.5.18",
+  "https://jv7ot4-ip-157-32-46-222.tunnelmole.net"
 ];
+
+// Add environment-based origins
+const envOrigins = process.env.CORS_ORIGIN?.split(',') || [];
+allowedOrigins.push(...envOrigins);
+
+// Function to check if origin matches wildcard patterns
+const isOriginAllowed = (origin: string): boolean => {
+  // Check exact matches first
+  if (allowedOrigins.includes(origin)) return true;
+  
+  // Check wildcard patterns
+  for (const allowedOrigin of allowedOrigins) {
+    if (allowedOrigin.includes('*')) {
+      const pattern = allowedOrigin.replace(/\*/g, '.*');
+      const regex = new RegExp(`^${pattern}$`);
+      if (regex.test(origin)) return true;
+    }
+  }
+  
+  return false;
+};
 // Load OpenAPI document
 const openApiPath = path.join(__dirname, "../../docs/openapi.yaml");
 let openApiDocument: any = {};
@@ -60,21 +83,24 @@ try {
   openApiDocument = yaml.parse(yamlFile);
 } catch (error) {
   console.warn("Could not load OpenAPI document:", error);
-  openApiDocument = { openapi: "3.0.0", info: { title: "Quiz API", version: "1.0.0" }, paths: {} };
+  // Create a basic OpenAPI document as fallback
+  openApiDocument = { 
+    openapi: "3.0.0", 
+    info: { 
+      title: "QuizUP API", 
+      version: "1.0.0",
+      description: "QuizUP Backend API"
+    }, 
+    paths: {
+    } 
+  };
 }
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // allow mobile apps, curl, etc.
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      } else {
-        return callback(new Error(`CORS blocked for origin: ${origin}`), false);
-      }
-    },
+    origin: true, // Allow all origins for testing
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

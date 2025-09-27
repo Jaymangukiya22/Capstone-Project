@@ -10,6 +10,7 @@ import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
 import { logInfo, logError } from './utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { matchService } from './services/matchService';
 
 // Load environment variables
 dotenv.config();
@@ -147,6 +148,46 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Metrics endpoint for Prometheus
+app.get('/metrics', (req, res) => {
+  try {
+    const activeMatches = enhancedMatchService ? enhancedMatchService.getActiveMatchesCount() : 0;
+    const connectedUsers = enhancedMatchService ? enhancedMatchService.getConnectedUsersCount() : 0;
+    
+    const metrics = `
+# HELP matchserver_active_matches_total Total number of active matches
+# TYPE matchserver_active_matches_total gauge
+matchserver_active_matches_total ${activeMatches}
+
+# HELP matchserver_connected_users_total Total number of connected users
+# TYPE matchserver_connected_users_total gauge
+matchserver_connected_users_total ${connectedUsers}
+
+# HELP matchserver_uptime_seconds Uptime of the match server in seconds
+# TYPE matchserver_uptime_seconds counter
+matchserver_uptime_seconds ${Math.floor(process.uptime())}
+
+# HELP matchserver_memory_usage_bytes Memory usage in bytes
+# TYPE matchserver_memory_usage_bytes gauge
+matchserver_memory_usage_bytes ${process.memoryUsage().heapUsed}
+
+# HELP matchserver_store_type Store type being used (1=Redis, 0=InMemory)
+# TYPE matchserver_store_type gauge
+matchserver_store_type ${isRedisConnected ? 1 : 0}
+
+# HELP matchserver_status Server status (1=running, 0=stopped)
+# TYPE matchserver_status gauge
+matchserver_status 1
+`.trim();
+
+    res.set('Content-Type', 'text/plain');
+    res.send(metrics);
+  } catch (error) {
+    logError('Error generating metrics', error as Error);
+    res.status(500).send('Error generating metrics');
+  }
+});
+
 // Get match by join code
 app.get('/matches/code/:joinCode', async (req, res) => {
   try {
@@ -280,8 +321,6 @@ class EnhancedMatchService {
 
   private async loadQuizQuestions(quizId: number): Promise<any[]> {
     try {
-      logInfo('Loading questions for quiz', { quizId });
-
       const quizQuestions = await QuizQuestion.findAll({
         where: { quizId },
         include: [{
@@ -295,20 +334,7 @@ class EnhancedMatchService {
         order: [['order', 'ASC']]
       });
 
-      logInfo('Found quiz questions in database', {
-        quizId,
-        count: quizQuestions.length,
-        questions: quizQuestions.map(qq => ({
-          id: qq.id,
-          questionId: qq.questionId,
-          order: qq.order,
-          hasQuestion: !!qq.question,
-          hasOptions: qq.question ? !!qq.question.options : false,
-          optionsCount: qq.question ? qq.question.options.length : 0
-        }))
-      });
-
-      const transformedQuestions = quizQuestions.map((qq: any) => ({
+      return quizQuestions.map((qq: any) => ({
         id: qq.question.id,
         questionText: qq.question.questionText,
         options: qq.question.options.map((opt: any) => ({
@@ -319,14 +345,6 @@ class EnhancedMatchService {
         difficulty: qq.question.difficulty,
         points: qq.points || 100
       }));
-
-      logInfo('Transformed questions for match', {
-        quizId,
-        finalCount: transformedQuestions.length,
-        questions: transformedQuestions.map(q => ({ id: q.id, text: q.questionText.substring(0, 30) + '...' }))
-      });
-
-      return transformedQuestions;
     } catch (error) {
       logError('Failed to load quiz questions', error as Error);
       return [];
@@ -595,8 +613,29 @@ class EnhancedMatchService {
 
           // Check if user is already in the match
           if (match.players.has(socket.data.userId)) {
-            socket.emit('error', { message: 'Already in this match' });
-            return;
+            // If already in the match, just update their socket ID and proceed
+            const existingPlayer = match.players.get(socket.data.userId);
+            if (existingPlayer) {
+              existingPlayer.socketId = socket.id;
+              this.userToMatch.set(socket.data.userId, matchId);
+              socket.join(matchId);
+              socket.emit('match_joined', {
+                matchId,
+                players: Array.from(match.players.values()).map(p => ({
+                  userId: p.userId,
+                  username: p.username,
+                  firstName: p.firstName,
+                  lastName: p.lastName,
+                  isReady: p.isReady
+                }))
+              });
+              logInfo('Player reconnected to match', {
+                matchId,
+                userId: socket.data.userId,
+                playerCount: match.players.size
+              });
+              return;
+            }
           }
 
           // Add player to match
@@ -1215,6 +1254,15 @@ class EnhancedMatchService {
     }, 1000);
 
     logInfo('Match completion broadcast sent', { matchId });
+  }
+
+  // Public methods for metrics
+  public getActiveMatchesCount(): number {
+    return this.matches.size;
+  }
+
+  public getConnectedUsersCount(): number {
+    return this.userToMatch.size;
   }
 }
 

@@ -1,11 +1,10 @@
-# QuizUP - Gamified Quiz Platform
+# QuizUP - Quiz Management Platform
 
-**A comprehensive real-time quiz platform built for competitive learning and knowledge assessment.**
+A comprehensive quiz management system built with React, Node.js, and PostgreSQL with LocalTunnel for easy sharing and testing. competitive learning and knowledge assessment.**
 
 ## 🎯 Project Overview
 
 QuizUP is a modern, scalable quiz platform designed for educational institutions, competitive gaming, and skill assessment. Built with enterprise-grade architecture, it supports real-time multiplayer matches, AI opponents, and comprehensive question management.
-
 ### Key Features
 - **Real-time Multiplayer Matches** with friend invitations and join codes
 - **AI Opponent System** with multiple difficulty levels (Rookie, Smart, Genius)
@@ -41,6 +40,7 @@ QuizUP is a modern, scalable quiz platform designed for educational institutions
 - Docker & Docker Compose
 - PostgreSQL 15+ (if running locally)
 - Redis 7+ (if running locally)
+- LocalTunnel for public access (optional)
 
 ### Development Setup
 
@@ -82,10 +82,50 @@ npm run dev
 ```
 
 ### Service URLs
-- **Application**: http://localhost:5173
-- **API Documentation**: http://localhost:3000/api-docs
+- **Application**: http://localhost:8090 (via nginx proxy)
+- **Frontend Dev**: http://localhost:5173 (direct Vite)
+- **Backend API**: http://localhost:3000
+- **Match Server**: http://localhost:3001
 - **Database Admin**: http://localhost:8080 (Adminer)
 - **Cache Admin**: http://localhost:8081 (Redis Commander)
+- **Grafana**: http://localhost:3003 (monitoring)
+
+### 🌐 Public Access with Tunnelmole
+
+For sharing your application publicly (demos, testing, mobile access):
+
+#### Quick Start with Tunnelmole
+```bash
+# Install Tunnelmole globally
+npm install -g tunnelmole
+
+# Start your application
+docker compose up -d --build
+
+# Create public tunnel (Windows)
+scripts\start-tunnelmole.bat
+
+# Create public tunnel (Linux/macOS)
+./scripts/start-tunnelmole.sh
+```
+
+#### Manual Tunnelmole Setup
+```bash
+# Start tunnel (automatic URL generation)
+tmole 8090
+
+# Your app will be available at:
+# https://random-id.tunnelmole.net
+```
+
+#### Tunnelmole Benefits
+- ✅ **Much Faster** - Optimized for speed and performance
+- ✅ **Open Source** - Transparent and community-driven
+- ✅ **No Registration** - Works immediately without signup
+- ✅ **No Domain Required** - Get instant public URLs
+- ✅ **Unlimited Bandwidth** - No artificial speed limits
+- ✅ **More Reliable** - Less congested than alternatives
+- ✅ **Perfect for Development** - Ideal for testing and demos
 
 ## 📋 System Design Documentation
 

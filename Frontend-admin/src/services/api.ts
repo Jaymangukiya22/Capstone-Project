@@ -1,22 +1,48 @@
-// Dynamic API configuration that works for both local and network access
+// Dynamic API configuration that works for local, network, and tunnel access
 const getApiBaseUrl = (): string => {
   const { protocol, hostname } = window.location;
   
+  // Check if we're running through Tunnelmole
+  if (hostname.includes('tunnelmole.net')) {
+    return `${protocol}//${hostname}/api`;
+  }
+  
+  // Check if we're running through LocalTunnel (legacy support)
+  if (hostname.includes('loca.lt')) {
+    return `${protocol}//${hostname}/api`;
+  }
+  
   // If accessing from localhost, use localhost for backend
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:3000/api';
+    return 'http://localhost:8090/api';
   }
   
   // For network access, use the same hostname but different port
-  return `${protocol}//${hostname}:3000/api`;
+  return `${protocol}//${hostname}:8090/api`;
 };
 
 const getWebSocketUrl = (): string => {
-  const { hostname } = window.location;
+  const { protocol, hostname } = window.location;
   
-  // Always use the current hostname for WebSocket connection
-  // This ensures it works for both localhost and network access
-  return `ws://${hostname}:3001`;
+  // Check if we're running through Tunnelmole
+  if (hostname.includes('tunnelmole.net')) {
+    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProtocol}//${hostname}/socket.io`;
+  }
+  
+  // Check if we're running through LocalTunnel (legacy support)
+  if (hostname.includes('loca.lt')) {
+    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProtocol}//${hostname}/socket.io`;
+  }
+  
+  // If accessing from localhost
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'ws://localhost:8090/socket.io';
+  }
+  
+  // For network access
+  return `ws://${hostname}:8090/socket.io`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

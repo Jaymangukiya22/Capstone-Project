@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 
 export interface CreateQuestionBankItemData {
   questionText: string;
-  categoryId: number;
+  categoryId: number | null;
   difficulty: Difficulty;
   createdById: number;
   options: {

@@ -1,5 +1,5 @@
 pg_database:
-  query: "SELECT pg_database.datname, pg_database_size(pg_database.datname) as size_bytes FROM pg_database"
+  query: "SELECT relname, pg_database_size(relname) as size_bytes FROM pg_database WHERE datistemplate = false"
   master: true
   cache_seconds: 30
   metrics:
@@ -10,53 +10,23 @@ pg_database:
         usage: "GAUGE"
         description: "Size of the database in bytes"
 
-pg_stat_user_tables:
-  query: "SELECT current_database() datname, schemaname, tablename, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_tup_ins, n_tup_upd, n_tup_del FROM pg_stat_user_tables"
-  master: true
-  cache_seconds: 30
-  metrics:
-    - datname:
-        usage: "LABEL"
-        description: "Name of current database"
-    - schemaname:
-        usage: "LABEL"  
-        description: "Name of the schema that this table is in"
-    - tablename:
-        usage: "LABEL"
-        description: "Name of this table"
-    - seq_scan:
-        usage: "COUNTER"
-        description: "Number of sequential scans initiated on this table"
-    - seq_tup_read:
-        usage: "COUNTER"
-        description: "Number of live rows fetched by sequential scans"
-    - idx_scan:
-        usage: "COUNTER"
-        description: "Number of index scans initiated on this table"
-    - idx_tup_fetch:
-        usage: "COUNTER"
-        description: "Number of live rows fetched by index scans"
-    - n_tup_ins:
-        usage: "COUNTER"
-        description: "Number of rows inserted"
-    - n_tup_upd:
-        usage: "COUNTER"
-        description: "Number of rows updated"
-    - n_tup_del:
-        usage: "COUNTER"
-        description: "Number of rows deleted"
-
 pg_stat_activity:
-  query: "SELECT current_database() datname, count(*) as connections, count(*) filter (where state = 'active') as active_connections FROM pg_stat_activity WHERE datname IS NOT NULL"
+  query: "SELECT count(*) as total_connections, count(*) FILTER (WHERE state = 'active') as active_connections FROM pg_stat_activity"
   master: true
   cache_seconds: 30
   metrics:
-    - datname:
-        usage: "LABEL"
-        description: "Name of the database"
-    - connections:
+    - total_connections:
         usage: "GAUGE"
-        description: "Number of connections to this database"
+        description: "Total number of connections"
     - active_connections:
         usage: "GAUGE"
-        description: "Number of active connections to this database"
+        description: "Number of active connections"
+
+pg_settings:
+  query: "SELECT count(*) as settings_count FROM pg_settings"
+  master: true
+  cache_seconds: 60
+  metrics:
+    - settings_count:
+        usage: "GAUGE"
+        description: "Number of PostgreSQL settings"

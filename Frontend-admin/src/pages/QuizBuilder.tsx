@@ -67,6 +67,13 @@ export function QuizBuilder() {
     loadCategories()
   }, [])
 
+  // Add refresh function for categories
+  const refreshCategories = async () => {
+    console.log('🔄 Refreshing Quiz Builder categories...')
+    await loadCategories()
+    console.log('✅ Quiz Builder categories refreshed')
+  }
+
   // Check for editing quiz data from localStorage
   useEffect(() => {
     const editingQuizData = localStorage.getItem('editingQuiz')
@@ -101,7 +108,12 @@ export function QuizBuilder() {
       setLoading(true)
       setError(null)
       
-      const result = await categoryService.getAllCategories({ includeChildren: true, depth: 3 })
+      const result = await categoryService.getAllCategories({ 
+        includeChildren: true, 
+        depth: 5,
+        limit: 1000, // Get all categories, not just first 10
+        hierarchy: true // Ensure we get the full hierarchy
+      })
       
       // Transform API categories to match frontend format
       const transformedCategories: Category[] = result.categories.map((apiCategory: any) => ({
@@ -115,6 +127,20 @@ export function QuizBuilder() {
       
       setCategories(transformedCategories)
       
+      // Debug logging
+      console.log('📁 Quiz Builder - Loaded categories:', transformedCategories)
+      console.log('📁 Quiz Builder - Total categories:', transformedCategories.length)
+      console.log('📁 Quiz Builder - Category IDs:', transformedCategories.map(cat => `${cat.name} (ID: ${cat.id})`))
+      
+      // Check if we have the new categories (61-66)
+      const newCategoryIds = [61, 62, 63, 64, 65, 66]
+      const foundNewCategories = transformedCategories.filter(cat => newCategoryIds.includes(parseInt(cat.id)))
+      console.log('🔍 Found new categories (61-66):', foundNewCategories.map(cat => `${cat.name} (ID: ${cat.id})`))
+      
+      transformedCategories.forEach(cat => {
+        console.log(`📁 Category: ${cat.name} (ID: ${cat.id}) - Subcategories: ${cat.subcategories.length}`)
+      })
+      
     } catch (err) {
       console.error('Failed to load categories:', err)
       setError('Failed to load categories. Please try again.')
@@ -124,6 +150,7 @@ export function QuizBuilder() {
   }
 
   const transformSubcategories = (apiSubcategories: any[]): any[] => {
+    if (!Array.isArray(apiSubcategories)) return []
     return apiSubcategories.map((apiSub: any) => ({
       id: apiSub.id.toString(),
       name: apiSub.name,
@@ -138,7 +165,24 @@ export function QuizBuilder() {
   }
 
   const selectedCategory = categories.find(cat => cat.id === formData.categoryId)
-  const availableSubcategories = selectedCategory?.subcategories || []
+  
+  // Flatten all subcategories (including nested ones) for display
+  const flattenSubcategories = (subcategories: any[], prefix = ''): any[] => {
+    let flattened: any[] = []
+    subcategories.forEach(sub => {
+      const displayName = prefix ? `${prefix} > ${sub.name}` : sub.name
+      flattened.push({
+        ...sub,
+        displayName
+      })
+      if (sub.subcategories && sub.subcategories.length > 0) {
+        flattened = flattened.concat(flattenSubcategories(sub.subcategories, displayName))
+      }
+    })
+    return flattened
+  }
+  
+  const availableSubcategories = selectedCategory ? flattenSubcategories(selectedCategory.subcategories) : []
 
   const handleInputChange = (field: keyof QuizFormData, value: string) => {
     setFormData(prev => ({
@@ -253,6 +297,15 @@ export function QuizBuilder() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshCategories}
+            className="flex items-center space-x-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span>Refresh Categories</span>
+          </Button>
           <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg">
             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
             <span>Auto-save enabled</span>
@@ -407,7 +460,7 @@ export function QuizBuilder() {
                       <SelectContent>
                         {availableSubcategories.map((subcategory) => (
                           <SelectItem key={subcategory.id} value={subcategory.id}>
-                            {subcategory.name}
+                            {subcategory.displayName || subcategory.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

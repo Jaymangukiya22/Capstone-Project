@@ -17,6 +17,7 @@
     "seed:massive": "ts-node src/scripts/seedDatabase.ts",
     "seed:quick": "ts-node --transpile-only src/scripts/quickSeed.ts",
     "seed:dev": "ts-node-dev --respawn --transpile-only src/scripts/seedDatabase.ts",
+    "migrate:tags": "ts-node src/scripts/migrate-tags.ts",
     "test": "jest --detectOpenHandles --forceExit",
     "test:watch": "jest --watch --detectOpenHandles",
     "test:coverage": "jest --coverage --detectOpenHandles --forceExit",

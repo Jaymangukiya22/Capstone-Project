@@ -93,14 +93,44 @@ export function Categories() {
 
   // Calculate stats from API data
   const countAllSubcategories = (categories: ApiCategory[]): number => {
-    return categories.reduce((acc, cat) => {
-      return acc + (cat.children?.length || 0) + countAllSubcategories(cat.children || [])
+    const result = categories.reduce((acc, cat) => {
+      const childrenCount = cat.children?.length || 0
+      const nestedCount = countAllSubcategories(cat.children || [])
+      console.log(`🔢 Counting for ${cat.name}: children=${childrenCount}, nested=${nestedCount}`)
+      return acc + childrenCount + nestedCount
     }, 0)
+    console.log(`📊 Total subcategories counted: ${result}`)
+    return result
   }
 
+  // Debug logging to understand the data structure
+  console.log('🔍 Categories Debug:', {
+    apiCategoriesLength: apiCategories.length,
+    rootCategoriesLength: rootCategories.length,
+    sampleCategory: apiCategories[0],
+    sampleRootCategory: rootCategories[0],
+    allCategoriesWithChildren: apiCategories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      parentId: cat.parentId,
+      childrenCount: cat.children?.length || 0,
+      hasChildren: !!cat.children && cat.children.length > 0
+    }))
+  })
+
+  // Simple method: count all non-root categories (subcategories)
+  const subcategoryCount = apiCategories.filter(cat => cat.parentId !== null).length
+  const hierarchicalCount = countAllSubcategories(rootCategories)
+  
+  console.log('📊 Subcategory counts:', {
+    fromFilter: subcategoryCount,
+    fromHierarchy: hierarchicalCount,
+    usingCount: Math.max(subcategoryCount, hierarchicalCount)
+  })
+
   const stats = {
-    totalCategories: apiCategories.length,
-    totalSubcategories: countAllSubcategories(apiCategories),
+    totalCategories: rootCategories.length, // Only count root categories
+    totalSubcategories: Math.max(subcategoryCount, hierarchicalCount), // Use the higher count
     totalQuizzes: Array.isArray(quizzes) ? quizzes.length : 0,
     recentlyAdded: 0, // TODO: Calculate from recent data
   }

@@ -5,12 +5,13 @@ import { logError } from '../utils/logger';
 
 export const createQuiz = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { title, description, difficulty, timeLimit, maxQuestions, categoryId } = req.body;
+    const { title, description, tags, difficulty, timeLimit, maxQuestions, categoryId } = req.body;
     const createdById = req.user?.id || 1; // Default to user ID 1 for testing
 
     const quiz = await quizService.createQuiz({
       title,
       description,
+      tags,
       difficulty,
       timeLimit,
       maxQuestions,
@@ -69,10 +70,18 @@ export const assignQuestionsToQuiz = async (req: AuthenticatedRequest, res: Resp
 
 export const searchQuizzes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    // Handle tags parameter - can be a single string or comma-separated string
+    let tags: string | string[] | undefined;
+    if (req.query.tags) {
+      const tagsParam = req.query.tags as string;
+      tags = tagsParam.includes(',') ? tagsParam.split(',').map(t => t.trim()) : tagsParam;
+    }
+
     const filters = {
       difficulty: req.query.difficulty as any,
       categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
       search: req.query.search as string,
+      tags,
       page: req.query.page ? parseInt(req.query.page as string) : 1,
       limit: req.query.limit ? parseInt(req.query.limit as string) : 20
     };

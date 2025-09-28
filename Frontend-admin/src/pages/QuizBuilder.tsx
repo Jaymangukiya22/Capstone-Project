@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -24,7 +25,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { FileQuestion, RotateCcw, Save, BookOpen, Settings, Rocket } from "lucide-react"
+import { FileQuestion, RotateCcw, Save, BookOpen, Settings, Rocket, X } from "lucide-react"
 import { categoryService } from "@/services"
 import { useQuizzes } from "@/hooks/useQuizzes"
 import { QuestionsTab } from "@/components/questions/QuestionsTab"
@@ -34,12 +35,11 @@ import type { Category } from "@/types"
 import type { Question } from "@/types/question"
 import type { QuizSettings } from "@/types/quiz-settings"
 import { defaultQuizSettings } from "@/types/quiz-settings"
-import type { CreateQuizDto } from "@/types/api"
 
 interface QuizFormData {
   title: string
   description: string
-  tags: string
+  tags: string[]
   categoryId: string
   subcategoryId: string
 }
@@ -52,15 +52,17 @@ export function QuizBuilder() {
   const [formData, setFormData] = useState<QuizFormData>({
     title: "",
     description: "",
-    tags: "",
+    tags: [],
     categoryId: "",
     subcategoryId: "",
   })
-  const [questions, setQuestions] = useState<Question[]>([])
+  const [currentTagInput, setCurrentTagInput] = useState("")
+  const [editingQuizId, setEditingQuizId] = useState<number | null>(null)
+  const [questions] = useState<Question[]>([]) // setQuestions will be used when question management is implemented
   const [quizSettings, setQuizSettings] = useState<QuizSettings>(defaultQuizSettings)
   
   // Use quiz management hook
-  const { createQuiz } = useQuizzes({ autoFetch: false })
+  const { createQuiz, updateQuiz } = useQuizzes({ autoFetch: false })
 
   // Load categories from API
   useEffect(() => {
@@ -83,7 +85,7 @@ export function QuizBuilder() {
         setFormData({
           title: quizData.title || "",
           description: quizData.description || "",
-          tags: "",
+          tags: quizData.tags || [],
           categoryId: quizData.categoryId?.toString() || "",
           subcategoryId: "",
         })
@@ -94,6 +96,11 @@ export function QuizBuilder() {
           difficulty: quizData.difficulty || 'MEDIUM',
           timeLimit: quizData.timeLimit || 30,
         }))
+        
+        // Store the quiz ID for updating instead of creating new
+        if (quizData.id) {
+          setEditingQuizId(quizData.id)
+        }
         
         // Clear the editing data after loading
         localStorage.removeItem('editingQuiz')
@@ -193,14 +200,50 @@ export function QuizBuilder() {
     }))
   }
 
+  // Tag management functions
+  const addTag = (tagText: string) => {
+    const trimmedTag = tagText.trim()
+    if (trimmedTag && !formData.tags.includes(trimmedTag)) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...prev.tags, trimmedTag]
+      }))
+    }
+  }
+
+  const removeTag = (tagToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }))
+  }
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      if (currentTagInput.trim()) {
+        addTag(currentTagInput)
+        setCurrentTagInput("")
+      }
+    }
+  }
+
+  const handleTagInputBlur = () => {
+    if (currentTagInput.trim()) {
+      addTag(currentTagInput)
+      setCurrentTagInput("")
+    }
+  }
+
   const handleReset = () => {
     setFormData({
       title: "",
       description: "",
-      tags: "",
+      tags: [],
       categoryId: "",
       subcategoryId: "",
     })
+    setCurrentTagInput("")
   }
 
   const handleSave = async () => {
@@ -210,27 +253,38 @@ export function QuizBuilder() {
       setSaving(true)
       setError(null)
       
-      const quizData: CreateQuizDto = {
+      const quizData = {
         title: formData.title,
         description: formData.description,
+        tags: formData.tags,
         categoryId: parseInt(formData.subcategoryId || formData.categoryId),
         difficulty: 'MEDIUM' as const, // Default difficulty
         timeLimit: 30 // Default time limit
       }
       
-      const newQuiz = await createQuiz(quizData)
-      
-      console.log('Quiz created successfully:', newQuiz)
-      alert(`Quiz "${newQuiz.title}" created successfully!`)
+      let savedQuiz
+      if (editingQuizId) {
+        // Update existing quiz
+        savedQuiz = await updateQuiz(editingQuizId, quizData)
+        console.log('Quiz updated successfully:', savedQuiz)
+        alert(`Quiz "${savedQuiz.title}" updated successfully!`)
+      } else {
+        // Create new quiz
+        savedQuiz = await createQuiz(quizData)
+        console.log('Quiz created successfully:', savedQuiz)
+        alert(`Quiz "${savedQuiz.title}" created successfully!`)
+      }
       
       // Reset form after successful save
       setFormData({
         title: "",
         description: "",
-        tags: "",
+        tags: [],
         categoryId: "",
         subcategoryId: "",
       })
+      setCurrentTagInput("")
+      setEditingQuizId(null)
       
     } catch (err) {
       console.error('Failed to save quiz:', err)
@@ -404,15 +458,45 @@ export function QuizBuilder() {
                     <Label htmlFor="tags" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                       Tags
                     </Label>
-                    <Input
-                      id="tags"
-                      placeholder="Enter tags separated by commas"
-                      value={formData.tags}
-                      onChange={(e) => handleInputChange('tags', e.target.value)}
-                      className="w-full"
-                    />
+                    
+                    {/* Tag Input */}
+                    <div className="space-y-2">
+                      <Input
+                        id="tags"
+                        placeholder="Type a tag and press Enter or comma"
+                        value={currentTagInput}
+                        onChange={(e) => setCurrentTagInput(e.target.value)}
+                        onKeyDown={handleTagInputKeyDown}
+                        onBlur={handleTagInputBlur}
+                        className="w-full"
+                      />
+                      
+                      {/* Tag Display */}
+                      {formData.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-md border">
+                          {formData.tags.map((tag, index) => (
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="flex items-center gap-1 px-2 py-1 text-xs"
+                            >
+                              {tag}
+                              <button
+                                type="button"
+                                onClick={() => removeTag(tag)}
+                                className="ml-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full p-0.5"
+                                aria-label={`Remove ${tag} tag`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Help others find your quiz with relevant keywords
+                      Help others find your quiz with relevant keywords. Press Enter or comma to add tags.
                     </p>
                   </div>
                 </div>
@@ -505,7 +589,10 @@ export function QuizBuilder() {
         <TabsContent value="publish" className="space-y-6">
           <PublishReviewTab 
             quizId="current-quiz"
-            quizData={formData}
+            quizData={{
+              ...formData,
+              tags: formData.tags.join(', ') // Convert array back to string for compatibility
+            }}
             questions={questions}
             settings={quizSettings}
           />

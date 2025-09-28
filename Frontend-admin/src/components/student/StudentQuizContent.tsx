@@ -208,12 +208,12 @@ export function StudentQuizContent() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col lg:flex-row h-full">
       {/* Left Panel - Quiz List with Filters */}
-      <div className="w-1/2 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 flex flex-col">
         {/* Header with Search and Filters */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="space-y-4">
+        <div className="p-3 md:p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="space-y-3 md:space-y-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -225,10 +225,10 @@ export function StudentQuizContent() {
               />
             </div>
 
-            {/* Filters */}
-            <div className="flex space-x-2">
+            {/* Filters - Stack on mobile */}
+            <div className="flex flex-col sm:flex-row gap-2">
               <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -242,7 +242,7 @@ export function StudentQuizContent() {
               </Select>
 
               <Select value={selectedDifficulty} onValueChange={handleDifficultyChange}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-full sm:w-[140px]">
                   <SelectValue placeholder="All Levels" />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,8 +257,10 @@ export function StudentQuizContent() {
                 variant="outline"
                 size="sm"
                 onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                className="w-full sm:w-auto"
               >
                 {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+                <span className="ml-2 sm:hidden">{viewMode === 'grid' ? 'List View' : 'Grid View'}</span>
               </Button>
             </div>
 
@@ -270,13 +272,13 @@ export function StudentQuizContent() {
         </div>
 
         {/* Quiz List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-3 md:p-4">
           {paginatedQuizzes.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No quizzes found matching your criteria.</p>
             </div>
           ) : (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 gap-4' : 'space-y-3'}>
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 md:gap-4' : 'space-y-3'}>
               {paginatedQuizzes.map((quiz) => (
                 <Card
                   key={quiz.id}
@@ -289,18 +291,18 @@ export function StudentQuizContent() {
                 >
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg">{quiz.title}</CardTitle>
-                      <Badge className={getDifficultyColor(quiz.difficulty)}>
+                      <CardTitle className="text-base md:text-lg line-clamp-2">{quiz.title}</CardTitle>
+                      <Badge className={`${getDifficultyColor(quiz.difficulty)} flex-shrink-0 ml-2`}>
                         {quiz.difficulty}
                       </Badge>
                     </div>
-                    <CardDescription className="text-sm">
+                    <CardDescription className="text-xs md:text-sm">
                       {quiz.categoryName} • {quiz.timeLimit}s per question
                     </CardDescription>
                   </CardHeader>
                   {quiz.description && (
                     <CardContent className="pt-0">
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                      <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
                         {quiz.description}
                       </p>
                     </CardContent>
@@ -313,7 +315,7 @@ export function StudentQuizContent() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-3 md:p-4 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <Button
                 variant="outline"
@@ -340,7 +342,7 @@ export function StudentQuizContent() {
       </div>
       
       {/* Right Panel - Quiz Overview */}
-      <div className="w-1/2">
+      <div className="w-full lg:w-1/2 min-h-0 flex-1">
         <QuizOverviewPanel
           selectedQuiz={selectedQuiz ? {
             id: selectedQuiz.id.toString(),

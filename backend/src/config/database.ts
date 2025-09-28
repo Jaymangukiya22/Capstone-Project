@@ -47,29 +47,33 @@ export const connectDatabase = async (): Promise<void> => {
     await sequelize.authenticate();
     logInfo('Database connection established successfully');
     
-    // Sync models in development
+    // Sync models in development - preserve existing data
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ force: true }); // Recreate tables to fix schema issues
-      logInfo('Database models synchronized with force: true - tables recreated');
+      // Use alter: true to update schema without losing data
+      await sequelize.sync({ alter: true });
+      logInfo('Database models synchronized with alter: true - schema updated, data preserved');
       
-      // Run engineering seeder after sync
-      try {
-        const EngineeringSeeder = await import('../scripts/engineeringSeeder');
-        const seeder = new EngineeringSeeder.EngineeringSeeder();
-        await seeder.run();
-        logInfo('Engineering database seeded successfully');
-      } catch (seedError) {
-        logError('Error seeding engineering database', seedError as Error);
-        // Fallback to quick seeder if engineering seeder fails
-        // try {
-        //   const { default: quickSeed } = await import('../scripts/quickEngineeringSeeder');
-        //   logInfo('Running quick engineering seeder as fallback...');
-        // } catch (fallbackError) {
-        //   logError('Fallback seeder also failed', fallbackError as Error);
-        // }
+      // Only seed if tables are empty (first time setup)
+      const userCount = await User.count();
+      const categoryCount = await Category.count();
+      
+      if (userCount === 0 && categoryCount === 0) {
+        logInfo('Database is empty - running initial seeding...');
+        try {
+          const EngineeringSeeder = await import('../scripts/engineeringSeeder');
+          const seeder = new EngineeringSeeder.EngineeringSeeder();
+          await seeder.run();
+          logInfo('Engineering database seeded successfully');
+        } catch (seedError) {
+          logError('Error seeding engineering database', seedError as Error);
+        }
+      } else {
+        logInfo(`Database already contains data (${userCount} users, ${categoryCount} categories) - skipping seeding`);
       }
     } else {
-      logInfo('Database sync skipped - using existing schema');
+      // Production: only sync without altering
+      await sequelize.sync();
+      logInfo('Database models synchronized - production mode');
     }
   } catch (error) {
     logError('Unable to connect to database', error as Error);

@@ -5,6 +5,7 @@ import { Op } from 'sequelize';
 export interface CreateQuizData {
   title: string;
   description?: string;
+  tags?: string[];
   difficulty?: Difficulty;
   timeLimit?: number;
   maxQuestions?: number;
@@ -21,6 +22,7 @@ export interface QuizSearchFilters {
   difficulty?: Difficulty;
   categoryId?: number;
   search?: string;
+  tags?: string | string[];
   page?: number;
   limit?: number;
 }
@@ -38,6 +40,7 @@ export class QuizService {
       const quiz = await Quiz.create({
         title: quizData.title,
         description: quizData.description,
+        tags: quizData.tags || [],
         difficulty: quizData.difficulty || 'MEDIUM',
         timeLimit: quizData.timeLimit,
         maxQuestions: quizData.maxQuestions,
@@ -155,6 +158,15 @@ export class QuizService {
           { title: { [Op.iLike]: `%${filters.search}%` } },
           { description: { [Op.iLike]: `%${filters.search}%` } }
         ];
+      }
+
+      // Tag-based filtering with optimized JSON queries
+      if (filters.tags) {
+        const tagArray = Array.isArray(filters.tags) ? filters.tags : [filters.tags];
+        // PostgreSQL JSON array contains any of the specified tags
+        where[Op.and] = tagArray.map(tag => ({
+          tags: { [Op.contains]: [tag] }
+        }));
       }
 
       const [quizzes, total] = await Promise.all([
@@ -298,6 +310,7 @@ export class QuizService {
       await Quiz.update({
         title: data.title,
         description: data.description,
+        tags: data.tags,
         difficulty: data.difficulty,
         timeLimit: data.timeLimit,
         maxQuestions: data.maxQuestions,

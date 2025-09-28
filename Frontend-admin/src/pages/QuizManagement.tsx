@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, FileQuestion, Edit, Trash2, Eye, Play, Users } from 'lucide-react'
+import { Plus, Search, FileQuestion, Edit, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -66,6 +66,7 @@ export function QuizManagement() {
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
+      tags: quiz.tags || [],
       difficulty: quiz.difficulty,
       timeLimit: quiz.timeLimit,
       categoryId: quiz.categoryId
@@ -75,17 +76,6 @@ export function QuizManagement() {
     window.location.href = '/quiz-builder'
   }
 
-  const handleViewQuiz = (quiz: Quiz) => {
-    // Store quiz ID and navigate to student view
-    localStorage.setItem('selectedQuizId', quiz.id.toString())
-    window.location.href = '/quiz-interface'
-  }
-
-  const handlePlayQuiz = (quiz: Quiz) => {
-    // Store quiz ID and navigate to countdown
-    localStorage.setItem('selectedQuizId', quiz.id.toString())
-    window.location.href = '/quiz-countdown'
-  }
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -100,13 +90,15 @@ export function QuizManagement() {
     const findCategory = (cats: any[]): string => {
       for (const cat of cats) {
         if (cat.id === categoryId) return cat.name
-        if (cat.children) {
+        if (cat.children && cat.children.length > 0) {
           const found = findCategory(cat.children)
-          if (found) return found
+          if (found !== 'Unknown') return found
         }
       }
       return 'Unknown'
     }
+    
+    if (!categories || categories.length === 0) return 'Loading...'
     return findCategory(categories)
   }
 
@@ -272,26 +264,10 @@ export function QuizManagement() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        title="View Quiz"
-                        onClick={() => handleViewQuiz(quiz)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
                         title="Edit Quiz"
                         onClick={() => handleEditQuiz(quiz)}
                       >
                         <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        title="Play Quiz"
-                        onClick={() => handlePlayQuiz(quiz)}
-                      >
-                        <Play className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" title="View Stats">
                         <Users className="h-4 w-4" />

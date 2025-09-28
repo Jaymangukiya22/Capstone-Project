@@ -151,14 +151,14 @@ services:
       dockerfile: Dockerfile
       target: ${NODE_ENV:-development}
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090}
         VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
         VITE_APP_NAME: ${VITE_APP_NAME:-QuizUP}
         VITE_APP_VERSION: ${VITE_APP_VERSION:-1.0.0}
     container_name: quizup_frontend
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090}
       VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
@@ -262,19 +262,33 @@ services:
       ports:
         - "3003:3000"
       volumes:
-        - grafana_data:/var/lib/grafana
-        - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-        - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+        # - grafana_data:/var/lib/grafana
+        # - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+        # - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+          # 📁 1. Mounts your datasource YAML files
+          - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+
+          # 📁 2. Mounts your dashboard provider YAML file
+          - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+          
+          # 📁 3. Mounts the folder with all your dashboard JSON files
+          - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+          
+          # 📁 4. Mounts your custom grafana.ini file
+          - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini
+          
+          # 📁 5. Provides persistent storage for Grafana's database
+          - grafana_data:/var/lib/grafana
       environment:
         - GF_SECURITY_ADMIN_USER=admin
         - GF_SECURITY_ADMIN_PASSWORD=admin
-        - GF_PLUGINS_PREINSTALL_SYNC=redis-datasource,redis-explorer-app,golioth-websocket-datasource
-        - GF_PLUGINS_ALLOW_UNSIGNED=redis-explorer-app,redis-datasource,golioth-websocket-datasource
+        - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource,redis-datasource,redis-explorer-app,golioth-websocket-datasource
+        - GF_PLUGINS_ALLOW_UNSIGNED=redis-explorer-app,redis-datasource,golioth-websocket-datasource,yesoreyeram-infinity-datasource
       networks:
         - quizup_network
       depends_on:
         - prometheus
-      # restart: unless-stopped
+      restart: unless-stopped
 
     
   # grafana:
@@ -365,6 +379,32 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # InfluxDB (for Cloudflare Analytics)
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: quizup_influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: admin123
+      DOCKER_INFLUXDB_INIT_ORG: quizup
+      DOCKER_INFLUXDB_INIT_BUCKET: cloudflare
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    networks:
+      - quizup_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 networks:
   quizup_network:
@@ -381,6 +421,10 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  influxdb_data:
+    driver: local
+  influxdb_config:
     driver: local
   backend_node_modules:
     driver: local

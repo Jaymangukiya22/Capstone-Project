@@ -6,8 +6,7 @@ import QuizSidebar from './quiz-interface/QuizSidebar';
 import { gameWebSocket } from '@/services/matchService';
 import { toast } from '@/lib/toast';
 import { Users, Wifi, WifiOff } from 'lucide-react';
-
-const NET_IP=import.meta.env.VITE_NETWORK_IP
+import { apiClient } from '@/services/api';
 interface FriendMatchQuestion {
   id: number;
   questionText: string;
@@ -178,9 +177,9 @@ const FriendMatchInterface: React.FC = () => {
         if (mode === 'create') {
           console.log('🔧 USER IS CREATOR - Finding match by code first');
           // For creators, we need to get the match ID first, then connect
-          fetch(`http://${NET_IP}:3000/api/friend-matches/code/${joinCode}`)
-            .then(response => response.json())
-            .then(data => {
+          apiClient.get(`/friend-matches/code/${joinCode}`)
+            .then(response => {
+              const data = response.data;
               if (data.success && data.data.match) {
                 const realMatchId = data.data.match.id;
                 console.log('🎯 Found match ID:', realMatchId, 'Now connecting...');
@@ -550,6 +549,22 @@ const FriendMatchInterface: React.FC = () => {
     }
   };
 
+  // Auto-advance to next question when time runs out
+  const handleQuestionTimeUp = async () => {
+    console.log('⏰ Question time up! Auto-advancing...');
+    // Submit current answer (even if empty)
+    await submitCurrentAnswer();
+    
+    const isLastQuestion = currentQuestion === totalQuestions;
+    if (isLastQuestion) {
+      console.log('⏰ Last question - submitting quiz...');
+      setIsSubmitting(true);
+    } else {
+      console.log('⏰ Moving to next question...');
+      // The server will send the next question automatically
+    }
+  };
+
   // Navigation handlers
   const handleNext = () => {
     submitCurrentAnswer();
@@ -560,11 +575,8 @@ const FriendMatchInterface: React.FC = () => {
     submitCurrentAnswer();
     setIsSubmitting(true);
     
-    // Just submit the answer and wait for the backend to handle match completion
-    // DO NOT navigate to results page individually
-    console.log(`📝 Question ${currentQuestion} submitted - waiting for match completion from server`);
-    
-    // Show submitted state
+    // Don't complete quiz individually - wait for server to handle both players
+    console.log('🎯 Answer submitted, waiting for server to handle completion...');
     setTimeout(() => {
       setIsSubmitting(false);
     }, 1000);
@@ -590,17 +602,16 @@ const FriendMatchInterface: React.FC = () => {
     const questionTimer = setInterval(() => {
       setQuestionTimeRemaining(prev => {
         if (prev <= 1) {
-          // Auto-submit when time runs out
-          console.log('⏰ Time up! Auto-submitting current answer...');
-          handleSubmit();
-          return 0;
+          // Auto-advance to next question when time runs out
+          handleQuestionTimeUp();
+          return 30; // Reset for next question
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(questionTimer);
-  }, [questionTimeRemaining, currentQuestion, isLoading, isWaitingForPlayers]);
+  }, [questionTimeRemaining, currentQuestion, totalQuestions, isLoading, isWaitingForPlayers]);
 
   // Remove duplicate timer - using the one above
 
@@ -775,71 +786,81 @@ const FriendMatchInterface: React.FC = () => {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-background relative">
-      {/* Connection status indicator */}
-      <div className="absolute top-4 right-4 z-50 flex items-center space-x-2">
+    <div className="min-h-screen bg-background flex flex-col overflow-hidden">
+      {/* Connection status indicator - Mobile optimized */}
+      <div className="absolute top-2 right-2 z-50 flex items-center space-x-1 sm:space-x-2">
         {isConnected ? (
           <>
-            <Wifi size={16} className="text-green-500" />
-            <span className="text-xs text-green-500">Connected</span>
+            <Wifi size={14} className="text-green-500 sm:w-4 sm:h-4" />
+            <span className="text-xs text-green-500 hidden sm:inline">Connected</span>
           </>
         ) : (
           <>
-            <WifiOff size={16} className="text-red-500" />
-            <span className="text-xs text-red-500">Disconnected</span>
+            <WifiOff size={14} className="text-red-500 sm:w-4 sm:h-4" />
+            <span className="text-xs text-red-500 hidden sm:inline">Disconnected</span>
           </>
         )}
-        <div className="bg-primary/10 text-primary text-xs px-3 py-1 rounded-full border border-primary/20">
-          Friend Match - {joinCode}
+        <div className="bg-primary/10 text-primary text-xs px-2 py-1 sm:px-3 rounded-full border border-primary/20">
+          <span className="hidden sm:inline">Friend Match - </span>{joinCode}
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        {/* Quiz Header */}
-        <QuizHeader
-          currentQuestion={currentQuestion}
-          totalQuestions={totalQuestions}
-          timeRemaining={questionTimeRemaining}
-          questionTimeRemaining={questionTimeRemaining}
-          onTimeUp={handleTimeUp}
-          quizTitle={quizTitle}
-        />
+      {/* Mobile-optimized layout matching QuizInterface */}
+      <div className="flex-1 flex flex-col h-screen">
+        {/* Compact Quiz Header - Fixed height */}
+        <div className="flex-shrink-0 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 border-b border-border">
+          <QuizHeader
+            currentQuestion={currentQuestion}
+            totalQuestions={totalQuestions}
+            timeRemaining={questionTimeRemaining}
+            questionTimeRemaining={questionTimeRemaining}
+            onTimeUp={handleTimeUp}
+            quizTitle={`${quizTitle} - ${joinCode}`}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          {/* Quiz Sidebar */}
-          <div className="xl:col-span-1">
-            <QuizSidebar
-              questions={Array(totalQuestions).fill(null).map((_, i) => ({
-                id: i + 1,
-                question: `Question ${i + 1}`,
-                options: ['A', 'B', 'C', 'D'],
-                correctAnswer: 'A'
-              }))}
-              currentQuestion={currentQuestion}
-              answeredQuestions={answeredQuestions}
-            />
+        {/* Main content area - Flexible height */}
+        <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+          {/* Quiz Sidebar - hidden on mobile and tablet */}
+          <div className="hidden xl:block xl:w-80 2xl:w-96 flex-shrink-0 border-r border-border">
+            <div className="h-full overflow-y-auto p-4">
+              <QuizSidebar
+                questions={Array(totalQuestions).fill(null).map((_, i) => ({
+                  id: i + 1,
+                  question: `Question ${i + 1}`,
+                  options: ['A', 'B', 'C', 'D'],
+                  correctAnswer: 'A'
+                }))}
+                currentQuestion={currentQuestion}
+                answeredQuestions={answeredQuestions}
+              />
+            </div>
           </div>
 
-          {/* Main Quiz Content */}
-          <div className="xl:col-span-3 space-y-6">
-            {/* Question Card */}
-            <QuestionCard
-              question={questionForCard}
-              selectedAnswer={currentAnswer}
-              onAnswerSelect={handleAnswerSelect}
-              questionNumber={currentQuestion}
-              totalQuestions={totalQuestions}
-            />
+          {/* Main Quiz Content - Flexible layout */}
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Question Card - Takes available space, scrollable if needed */}
+            <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 overflow-y-auto">
+              <QuestionCard
+                question={questionForCard}
+                selectedAnswer={currentAnswer}
+                onAnswerSelect={handleAnswerSelect}
+                questionNumber={currentQuestion}
+                totalQuestions={totalQuestions}
+              />
+            </div>
 
-            {/* Navigation */}
-            <QuizNavigation
-              currentQuestion={currentQuestion}
-              totalQuestions={totalQuestions}
-              hasAnswer={!!currentAnswer}
-              onNext={handleNext}
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-            />
+            {/* Navigation - Fixed at bottom with ultra-compact padding for iPhone */}
+            <div className="flex-shrink-0 px-3 py-1 sm:px-4 sm:py-2 md:px-6 md:py-3 border-t border-border bg-background/95 backdrop-blur-sm">
+              <QuizNavigation
+                currentQuestion={currentQuestion}
+                totalQuestions={totalQuestions}
+                hasAnswer={!!currentAnswer}
+                onNext={handleNext}
+                onSubmit={handleSubmit}
+                isSubmitting={isSubmitting}
+              />
+            </div>
           </div>
         </div>
       </div>

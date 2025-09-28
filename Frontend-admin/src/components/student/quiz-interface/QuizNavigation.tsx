@@ -14,7 +14,7 @@ interface QuizNavigationProps {
 const QuizNavigation: React.FC<QuizNavigationProps> = ({
   currentQuestion,
   totalQuestions,
-  hasAnswer,
+  hasAnswer: _hasAnswer, // Acknowledge but don't use for now
   onNext,
   onSubmit,
   isSubmitting = false
@@ -22,55 +22,64 @@ const QuizNavigation: React.FC<QuizNavigationProps> = ({
   const isLastQuestion = currentQuestion === totalQuestions;
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border p-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <span>Question</span>
-          <span className="font-semibold text-foreground text-lg">
-            {currentQuestion}
-          </span>
-          <span>of</span>
-          <span className="font-semibold text-foreground text-lg">
-            {totalQuestions}
-          </span>
+    <div className="bg-card rounded-lg shadow-sm border p-1.5 sm:p-2 md:p-3">
+      {/* Mobile-first layout - Ultra compact for iPhone */}
+      <div className="flex flex-col gap-1.5 sm:gap-2">
+        {/* Top row: Question counter and button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <span className="hidden sm:inline">Question</span>
+            <span className="font-semibold text-foreground text-base sm:text-lg">
+              {currentQuestion}
+            </span>
+            <span>of</span>
+            <span className="font-semibold text-foreground text-base sm:text-lg">
+              {totalQuestions}
+            </span>
+          </div>
+
+          {/* Action Button - Prominent on mobile */}
+          {isLastQuestion ? (
+            <Button
+              onClick={onSubmit}
+              disabled={isSubmitting}
+              className="min-w-[120px] sm:min-w-[140px] bg-green-600 hover:bg-green-700 text-sm sm:text-base"
+              size="sm"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-2"></div>
+                  <span className="hidden sm:inline">Submitting...</span>
+                  <span className="sm:hidden">Submit</span>
+                </>
+              ) : (
+                <>
+                  <Check className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Submit Quiz</span>
+                  <span className="sm:hidden">Submit</span>
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button
+              onClick={onNext}
+              className="min-w-[120px] sm:min-w-[140px] text-sm sm:text-base"
+              size="sm"
+            >
+              <span className="hidden sm:inline">Next Question</span>
+              <span className="sm:hidden">Next</span>
+              <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2" />
+            </Button>
+          )}
         </div>
 
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground mb-2">
-            Questions advance automatically after 30 seconds
-          </p>
+        {/* Bottom row: Instructions - Ultra compact on mobile */}
+        <div className="text-center border-t border-border pt-1">
           <p className="text-xs text-muted-foreground">
-            You can also click Next to continue
+            <span className="hidden md:inline">Questions advance automatically after 30 seconds. You can also click Next to continue.</span>
+            <span className="md:hidden">Auto-advance in 30s</span>
           </p>
         </div>
-
-        {isLastQuestion ? (
-          <Button
-            onClick={onSubmit}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto min-w-[140px] bg-green-600 hover:bg-green-700"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4 mr-2" />
-                Submit Quiz
-              </>
-            )}
-          </Button>
-        ) : (
-          <Button
-            onClick={onNext}
-            className="w-full sm:w-auto min-w-[140px]"
-          >
-            Next Question
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
-        )}
       </div>
     </div>
   );

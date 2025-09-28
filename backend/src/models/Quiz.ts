@@ -35,6 +35,14 @@ export class Quiz extends Model {
   @Column(DataType.TEXT)
   description?: string;
 
+  @Default([])
+  @Column({
+    type: DataType.JSON,
+    allowNull: false,
+    comment: 'Array of tags for categorizing and searching quizzes'
+  })
+  tags!: string[];
+
   @Default(Difficulty.MEDIUM)
   @Column(DataType.ENUM(...Object.values(Difficulty)))
   difficulty!: Difficulty;

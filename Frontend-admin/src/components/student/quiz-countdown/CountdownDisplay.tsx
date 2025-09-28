@@ -30,14 +30,15 @@ const CountdownDisplay: React.FC<CountdownDisplayProps> = ({ onCountdownComplete
   }, [onCountdownComplete]);
 
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
+    <div className="flex items-center justify-center h-full px-4 py-8">
+      <div className="text-center w-full max-w-lg">
         {!showGo && currentCount > 0 && (
           <div className="relative animate-in zoom-in duration-600">
-            <div className="text-[12rem] md:text-[16rem] lg:text-[20rem] font-bold text-primary leading-none select-none animate-pulse">
+            {/* Mobile-optimized countdown numbers */}
+            <div className="text-[8rem] sm:text-[10rem] md:text-[12rem] lg:text-[16rem] xl:text-[20rem] font-bold text-primary leading-none select-none animate-pulse">
               {currentCount}
             </div>
-            <div className="absolute inset-0 text-[12rem] md:text-[16rem] lg:text-[20rem] font-bold text-primary/20 leading-none select-none">
+            <div className="absolute inset-0 text-[8rem] sm:text-[10rem] md:text-[12rem] lg:text-[16rem] xl:text-[20rem] font-bold text-primary/20 leading-none select-none">
               {currentCount}
             </div>
           </div>
@@ -45,24 +46,25 @@ const CountdownDisplay: React.FC<CountdownDisplayProps> = ({ onCountdownComplete
 
         {showGo && !isComplete && (
           <div className="relative animate-in zoom-in duration-800">
-            <div className="text-[8rem] md:text-[12rem] lg:text-[16rem] font-bold text-green-500 leading-none select-none animate-bounce">
+            {/* Mobile-optimized GO text */}
+            <div className="text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem] xl:text-[16rem] font-bold text-green-500 leading-none select-none animate-bounce">
               GO!
             </div>
-            <div className="absolute inset-0 text-[8rem] md:text-[12rem] lg:text-[16rem] font-bold text-green-500/30 leading-none select-none">
+            <div className="absolute inset-0 text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem] xl:text-[16rem] font-bold text-green-500/30 leading-none select-none">
               GO!
             </div>
           </div>
         )}
 
-        {/* Animated circles around the countdown */}
+        {/* Animated circles around the countdown - Mobile optimized */}
         <div className="absolute inset-0 pointer-events-none">
-          {Array.from({ length: 6 }, (_, i) => (
+          {Array.from({ length: 4 }, (_, i) => (
             <div
               key={i}
-              className="absolute w-4 h-4 bg-primary/20 rounded-full animate-bounce"
+              className="absolute w-3 h-3 sm:w-4 sm:h-4 bg-primary/20 rounded-full animate-bounce"
               style={{
-                left: `${20 + (i * 12)}%`,
-                top: `${30 + (i % 2) * 40}%`,
+                left: `${15 + (i * 20)}%`,
+                top: `${25 + (i % 2) * 50}%`,
                 animationDelay: `${i * 0.3}s`,
                 animationDuration: `${2 + (i * 0.2)}s`
               }}

@@ -16,12 +16,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // Necessary for Docker
     port: 5173,
-    allowedHosts: ['.tunnelmole.net'],
+    allowedHosts: ['.dpdns.org'],
     hmr: {
-      // This is the corrected part.
-      // It tells the browser to connect to the tunnel's public
-      // HTTPS port (443) using a secure websocket protocol.
-      
+      // Cloudflare tunnel configuration
+      // HMR will work through the tunnel
+      host: 'quizdash.dpdns.org',
       clientPort: 443,
       protocol: 'wss'
     }

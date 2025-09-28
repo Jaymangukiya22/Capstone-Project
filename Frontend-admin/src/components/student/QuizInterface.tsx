@@ -304,62 +304,72 @@ const QuizInterface: React.FC = () => {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-background relative">
-      {/* Full-screen quiz mode indicator */}
-      <div className="absolute top-4 right-4 z-50">
+    <div className="min-h-screen bg-background flex flex-col overflow-hidden">
+      {/* Full-screen quiz mode indicator - hidden on mobile */}
+      <div className="absolute top-2 right-2 z-50 hidden md:block">
         <div className="bg-primary/10 text-primary text-xs px-3 py-1 rounded-full border border-primary/20">
           Quiz Mode - Full Screen
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        {/* Quiz Header */}
-        <QuizHeader
-          currentQuestion={currentQuestion}
-          totalQuestions={questions.length}
-          timeRemaining={timeRemaining}
-          questionTimeRemaining={questionTimeRemaining}
-          onTimeUp={handleTimeUp}
-          quizTitle={quizTitle}
-        />
+      {/* Mobile-optimized layout */}
+      <div className="flex-1 flex flex-col h-screen">
+        {/* Compact Quiz Header - Fixed height */}
+        <div className="flex-shrink-0 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 border-b border-border">
+          <QuizHeader
+            currentQuestion={currentQuestion}
+            totalQuestions={questions.length}
+            timeRemaining={timeRemaining}
+            questionTimeRemaining={questionTimeRemaining}
+            onTimeUp={handleTimeUp}
+            quizTitle={quizTitle}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          {/* Quiz Sidebar */}
-          <div className="xl:col-span-1">
-            <QuizSidebar
-              questions={questions.map(q => ({
-                id: q.id,
-                question: q.questionText,
-                options: q.options.slice(0, 4).map(opt => opt.optionText), // Ensure exactly 4 options
-                correctAnswer: q.options.find(opt => opt.isCorrect)?.optionText || ''
-              }))}
-              currentQuestion={currentQuestion}
-              answeredQuestions={answeredQuestions}
-            />
+        {/* Main content area - Flexible height */}
+        <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+          {/* Quiz Sidebar - hidden on mobile and tablet */}
+          <div className="hidden xl:block xl:w-80 2xl:w-96 flex-shrink-0 border-r border-border">
+            <div className="h-full overflow-y-auto p-4">
+              <QuizSidebar
+                questions={questions.map(q => ({
+                  id: q.id,
+                  question: q.questionText,
+                  options: q.options.slice(0, 4).map(opt => opt.optionText),
+                  correctAnswer: q.options.find(opt => opt.isCorrect)?.optionText || ''
+                }))}
+                currentQuestion={currentQuestion}
+                answeredQuestions={answeredQuestions}
+              />
+            </div>
           </div>
 
-          {/* Main Quiz Content */}
-          <div className="xl:col-span-3 space-y-6">
-            {/* Question Card */}
-            {currentQuestionFormatted && (
-              <QuestionCard
-                question={currentQuestionFormatted}
-                selectedAnswer={currentAnswer}
-                onAnswerSelect={handleAnswerSelect}
-                questionNumber={currentQuestion}
-                totalQuestions={questions.length}
-              />
-            )}
+          {/* Main Quiz Content - Flexible layout */}
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Question Card - Takes available space, scrollable if needed */}
+            <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 overflow-y-auto">
+              {currentQuestionFormatted && (
+                <QuestionCard
+                  question={currentQuestionFormatted}
+                  selectedAnswer={currentAnswer}
+                  onAnswerSelect={handleAnswerSelect}
+                  questionNumber={currentQuestion}
+                  totalQuestions={questions.length}
+                />
+              )}
+            </div>
 
-            {/* Navigation */}
-            <QuizNavigation
-              currentQuestion={currentQuestion}
-              totalQuestions={questions.length}
-              hasAnswer={!!currentAnswer}
-              onNext={handleNext}
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-            />
+            {/* Navigation - Fixed at bottom with ultra-compact padding for iPhone */}
+            <div className="flex-shrink-0 px-3 py-1 sm:px-4 sm:py-2 md:px-6 md:py-3 border-t border-border bg-background/95 backdrop-blur-sm">
+              <QuizNavigation
+                currentQuestion={currentQuestion}
+                totalQuestions={questions.length}
+                hasAnswer={!!currentAnswer}
+                onNext={handleNext}
+                onSubmit={handleSubmit}
+                isSubmitting={isSubmitting}
+              />
+            </div>
           </div>
         </div>
       </div>

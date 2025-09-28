@@ -65,6 +65,9 @@ export const categoryQuerySchema = Joi.object({
 export const createQuizSchema = Joi.object({
   title: Joi.string().min(1).max(200).required(),
   description: Joi.string().optional().allow(''),
+  tags: Joi.array().items(
+    Joi.string().trim().min(1).max(50)
+  ).max(20).default([]).optional(),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').default('MEDIUM'),
   timeLimit: Joi.number().integer().positive().optional(),
   maxQuestions: Joi.number().integer().positive().optional(),
@@ -140,6 +143,10 @@ export const searchQuestionsSchema = Joi.object({
 
 export const searchQuizzesSchema = Joi.object({
   search: Joi.string().min(1).max(200).optional(),
+  tags: Joi.alternatives().try(
+    Joi.string().min(1).max(200), // Single tag as string
+    Joi.array().items(Joi.string().min(1).max(50)) // Multiple tags as array
+  ).optional(),
   categoryId: Joi.number().integer().positive().optional(),
   difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').optional(),
   page: Joi.number().integer().min(1).default(1),

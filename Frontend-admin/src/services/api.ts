@@ -1,8 +1,13 @@
-// Dynamic API configuration that works for local, network, and tunnel access
+// Dynamic API configuration that works for local, network, and Cloudflare tunnel access
 const getApiBaseUrl = (): string => {
   const { protocol, hostname } = window.location;
   
-  // Check if we're running through Tunnelmole
+  // Check if we're running through Cloudflare tunnel
+  if (hostname.includes('quizdash.dpdns.org')) {
+    return 'https://api.quizdash.dpdns.org/api';
+  }
+  
+  // Check if we're running through Tunnelmole (legacy support)
   if (hostname.includes('tunnelmole.net')) {
     return `${protocol}//${hostname}/api`;
   }
@@ -12,19 +17,24 @@ const getApiBaseUrl = (): string => {
     return `${protocol}//${hostname}/api`;
   }
   
-  // If accessing from localhost, use localhost for backend
+  // If accessing from localhost, use nginx load balancer
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:8090/api';
   }
   
-  // For network access, use the same hostname but different port
+  // For network access, use nginx load balancer port
   return `${protocol}//${hostname}:8090/api`;
 };
 
 const getWebSocketUrl = (): string => {
   const { protocol, hostname } = window.location;
   
-  // Check if we're running through Tunnelmole
+  // Check if we're running through Cloudflare tunnel
+  if (hostname.includes('quizdash.dpdns.org')) {
+    return 'wss://match.quizdash.dpdns.org';
+  }
+  
+  // Check if we're running through Tunnelmole (legacy support)
   if (hostname.includes('tunnelmole.net')) {
     const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
     return `${wsProtocol}//${hostname}/socket.io`;
@@ -38,11 +48,11 @@ const getWebSocketUrl = (): string => {
   
   // If accessing from localhost
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'ws://localhost:8090/socket.io';
+    return 'ws://localhost:3001';
   }
   
   // For network access
-  return `ws://${hostname}:8090/socket.io`;
+  return `ws://${hostname}:3001`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

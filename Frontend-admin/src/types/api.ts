@@ -17,6 +17,7 @@ export interface Quiz {
   id: number;
   title: string;
   description?: string;
+  tags: string[];
   categoryId: number;
   category?: Category;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
@@ -64,6 +65,7 @@ export interface UpdateCategoryDto {
 export interface CreateQuizDto {
   title: string;
   description?: string;
+  tags?: string[];
   categoryId: number;
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
   timeLimit?: number;
@@ -72,6 +74,7 @@ export interface CreateQuizDto {
 export interface UpdateQuizDto {
   title?: string;
   description?: string;
+  tags?: string[];
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
   timeLimit?: number;
 }

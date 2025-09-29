@@ -52,31 +52,31 @@ const allowedOrigins = [
   "http://localhost:3001",
   "http://localhost:8090",
   "http://10.80.5.18",
-  "https://jv7ot4-ip-157-32-46-222.tunnelmole.net"
+  "https://jv7ot4-ip-157-32-46-222.tunnelmole.net",
 ];
 
 // Add environment-based origins
-const envOrigins = process.env.CORS_ORIGIN?.split(',') || [];
+const envOrigins = process.env.CORS_ORIGIN?.split(",") || [];
 allowedOrigins.push(...envOrigins);
 
 // Function to check if origin matches wildcard patterns
 const isOriginAllowed = (origin: string): boolean => {
   // Check exact matches first
   if (allowedOrigins.includes(origin)) return true;
-  
+
   // Check wildcard patterns
   for (const allowedOrigin of allowedOrigins) {
-    if (allowedOrigin.includes('*')) {
-      const pattern = allowedOrigin.replace(/\*/g, '.*');
+    if (allowedOrigin.includes("*")) {
+      const pattern = allowedOrigin.replace(/\*/g, ".*");
       const regex = new RegExp(`^${pattern}$`);
       if (regex.test(origin)) return true;
     }
   }
-  
+
   return false;
 };
 // Load OpenAPI document
-const openApiPath = path.join(__dirname, "../../docs/openapi.yaml");
+const openApiPath = path.join(__dirname, "../docs/openapi.yaml");
 let openApiDocument: any = {};
 try {
   const yamlFile = fs.readFileSync(openApiPath, "utf8");
@@ -84,15 +84,14 @@ try {
 } catch (error) {
   console.warn("Could not load OpenAPI document:", error);
   // Create a basic OpenAPI document as fallback
-  openApiDocument = { 
-    openapi: "3.0.0", 
-    info: { 
-      title: "QuizUP API", 
+  openApiDocument = {
+    openapi: "3.0.0",
+    info: {
+      title: "QuizUP API",
       version: "1.0.0",
-      description: "QuizUP Backend API"
-    }, 
-    paths: {
-    } 
+      description: "QuizUP Backend API",
+    },
+    paths: {},
   };
 }
 
@@ -157,7 +156,7 @@ app.get("/debug/routes", (req, res) => {
 // Available at /metrics
 
 // Custom metrics endpoint with our business metrics
-app.get('/metrics-custom', metricsEndpoint);
+app.get("/metrics-custom", metricsEndpoint);
 
 // API Routes
 app.use("/api/auth", authRoutes);

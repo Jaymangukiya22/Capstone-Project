@@ -1,0 +1,34 @@
+apiVersion: 1
+
+datasources:
+  # Infinity datasource for Cloudflare GraphQL API
+  - name: infinity-cloudflare
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    url: https://api.cloudflare.com/client/v4
+    uid: DS_INFINITY-CLOUDFLARE
+    isDefault: false
+    editable: true
+    jsonData:
+      auth_method: bearer_token
+      allowed_hosts:
+        - "*"
+      health_check_enabled: false
+    secureJsonData:
+      bearer_token: ${CLOUDFLARE_API_TOKEN}
+
+  # InfluxDB datasource for Cloudflare analytics
+  - name: influxdb-Cloudflare
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    uid: DS_INFLUXDB-CLOUDFLARE
+    isDefault: false
+    editable: true
+    jsonData:
+      version: Flux
+      organization: quizup
+      defaultBucket: cloudflare
+      tlsSkipVerify: true
+    secureJsonData:
+      token: ${INFLUXDB_TOKEN}

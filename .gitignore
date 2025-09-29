@@ -1,2 +1,73 @@
+# Dependencies
 *node_modules
+node_modules/
+
+# Environment files
 *.env
+.env*
+!.env.example
+
+# Logs
+logs/
+*.log
+/backend/logs/
+/backend/dist/
+/Frontend-admin/dist/
+cloudflare-tunnel.yml
+# Cloudflare credentials (SECURITY CRITICAL)
+cloudflare-credentials.json
+cloudflare-tunnel.yml
+# *.json
+!package.json
+!package-lock.json
+!tsconfig.json
+260b3937-da0e-4802-bd8b-219e47806139.json
+
+config-local.yml
+
+# Grafana provisioning with sensitive data
+monitoring/grafana/provisioning/datasources/*.yml
+!monitoring/grafana/provisioning/datasources/cloudflare.yml.example
+
+# Docker volumes
+postgres_data/
+redis_data/
+grafana_data/
+prometheus_data/
+influxdb_data/
+influxdb_config/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+*.tgz
+*.tar.gz
+
+# Temporary files
+*.tmp
+*.temp
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+/etc/cloudflared/
+
+# Database dumps
+*.sql
+!docs/database-schema.sql
+
+# Backup files
+*.bak
+*.backup

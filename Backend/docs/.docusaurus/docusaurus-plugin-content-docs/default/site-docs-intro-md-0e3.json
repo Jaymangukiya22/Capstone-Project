@@ -1,0 +1,22 @@
+{
+  "id": "intro",
+  "title": "Getting Started with QuizUP Backend API",
+  "description": "Welcome to the QuizUP Backend API documentation! This guide will help you get started with the Node.js backend API for the QuizUP platform.",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/intro",
+  "permalink": "/backend-docs/docs/intro",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/your-org/quizup-backend/tree/main/docs/intro.md",
+  "tags": [],
+  "version": "current",
+  "lastUpdatedBy": null,
+  "lastUpdatedAt": null,
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Architecture Overview",
+    "permalink": "/backend-docs/docs/architecture"
+  }
+}

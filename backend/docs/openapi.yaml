@@ -1,0 +1,1331 @@
+openapi: 3.1.2
+info:
+  title: QuizUP API
+  description: Comprehensive API for QuizUP - A gamified quiz platform
+  version: 1.0.0
+  contact:
+    name: QuizUP Team
+    email: dev@quizup.com
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.quizup.com
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Authentication Endpoints
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                firstName:
+                  type: string
+                  maxLength: 50
+                lastName:
+                  type: string
+                  maxLength: 50
+                role:
+                  $ref: '#/components/schemas/UserRole'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already exists
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Categories Endpoints
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: Get all categories
+      parameters:
+        - name: hierarchy
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Return hierarchical structure
+        - name: includeQuizzes
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5
+            default: 2
+      responses:
+        '200':
+          description: Categories retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+
+    post:
+      tags: [Categories]
+      summary: Create new category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                parentId:
+                  type: integer
+                  nullable: true
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Category'
+
+  /api/categories/{id}:
+    get:
+      tags: [Categories]
+      summary: Get category by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Category retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Category'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Categories]
+      summary: Update category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                parentId:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Category'
+
+    delete:
+      tags: [Categories]
+      summary: Delete category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  # Quizzes Endpoints
+  /api/quizzes:
+    get:
+      tags: [Quizzes]
+      summary: Get all quizzes with filtering
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: difficulty
+          in: query
+          schema:
+            $ref: '#/components/schemas/Difficulty'
+        - name: isPublished
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        '200':
+          description: Quizzes retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      quizzes:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Quiz'
+                      total:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+
+    post:
+      tags: [Quizzes]
+      summary: Create new quiz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuizRequest'
+      responses:
+        '201':
+          description: Quiz created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Quiz'
+
+  /api/quizzes/{id}:
+    get:
+      tags: [Quizzes]
+      summary: Get quiz by ID with questions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: includeQuestions
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Quiz retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/QuizWithQuestions'
+
+    put:
+      tags: [Quizzes]
+      summary: Update quiz
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuizRequest'
+      responses:
+        '200':
+          description: Quiz updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Quiz'
+
+    delete:
+      tags: [Quizzes]
+      summary: Delete quiz
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Quiz deleted
+
+  /api/quizzes/{id}/stats:
+    get:
+      tags: [Quizzes]
+      summary: Get quiz statistics
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Quiz statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/QuizStats'
+
+  # Questions Endpoints
+  /api/questions:
+    get:
+      tags: [Questions]
+      summary: Get questions from question bank
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: difficulty
+          in: query
+          schema:
+            $ref: '#/components/schemas/Difficulty'
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Questions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      questions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QuestionWithOptions'
+                      total:
+                        type: integer
+
+    post:
+      tags: [Questions]
+      summary: Create new question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuestionRequest'
+      responses:
+        '201':
+          description: Question created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/QuestionWithOptions'
+
+  /api/questions/bulk-import:
+    post:
+      tags: [Questions]
+      summary: Bulk import questions from CSV/Excel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                categoryId:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Questions imported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      imported:
+                        type: integer
+                      failed:
+                        type: integer
+                      errors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            row:
+                              type: integer
+                            error:
+                              type: string
+
+  /api/questions/{id}:
+    get:
+      tags: [Questions]
+      summary: Get question by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Question retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/QuestionWithOptions'
+
+    put:
+      tags: [Questions]
+      summary: Update question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuestionRequest'
+      responses:
+        '200':
+          description: Question updated
+
+    delete:
+      tags: [Questions]
+      summary: Delete question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Question deleted
+
+  # Matches Endpoints
+  /api/matches:
+    get:
+      tags: [Matches]
+      summary: Get user's match history
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/MatchStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Match history retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Match'
+
+    post:
+      tags: [Matches]
+      summary: Create new match
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMatchRequest'
+      responses:
+        '201':
+          description: Match created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Match'
+
+  /api/matches/code/{joinCode}:
+    get:
+      tags: [Matches]
+      summary: Get match by join code
+      parameters:
+        - name: joinCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Match found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Match'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/matches/{id}:
+    get:
+      tags: [Matches]
+      summary: Get match details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Match retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/MatchWithPlayers'
+
+  # Leaderboard Endpoints
+  /api/leaderboard:
+    get:
+      tags: [Leaderboard]
+      summary: Get global leaderboard
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, all-time]
+            default: all-time
+      responses:
+        '200':
+          description: Leaderboard retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaderboardEntry'
+
+  # Health Check
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check endpoint
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, unhealthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: boolean
+                      redis:
+                        type: boolean
+                      matchService:
+                        type: boolean
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserRole:
+      type: string
+      enum: [ADMIN, FACULTY, STUDENT, PLAYER]
+
+    Difficulty:
+      type: string
+      enum: [EASY, MEDIUM, HARD]
+
+    MatchStatus:
+      type: string
+      enum: [WAITING, IN_PROGRESS, COMPLETED, CANCELLED]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        firstName:
+          type: string
+        lastName:
+          type: string
+        eloRating:
+          type: integer
+        totalMatches:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        isActive:
+          type: boolean
+        lastLoginAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        parentId:
+          type: integer
+          nullable: true
+        level:
+          type: integer
+        path:
+          type: string
+        isActive:
+          type: boolean
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        quizzes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Quiz'
+        createdAt:
+          type: string
+          format: date-time
+
+    Quiz:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: integer
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        timeLimit:
+          type: integer
+        pointsPerQuestion:
+          type: integer
+        timeBonusEnabled:
+          type: boolean
+        maxTimeBonus:
+          type: integer
+        negativeMarking:
+          type: boolean
+        negativePoints:
+          type: integer
+        shuffleQuestions:
+          type: boolean
+        shuffleOptions:
+          type: boolean
+        maxAttempts:
+          type: integer
+        isPublished:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        createdById:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    QuestionOption:
+      type: object
+      properties:
+        id:
+          type: integer
+        optionText:
+          type: string
+        isCorrect:
+          type: boolean
+        orderIndex:
+          type: integer
+
+    QuestionWithOptions:
+      type: object
+      properties:
+        id:
+          type: integer
+        questionText:
+          type: string
+        explanation:
+          type: string
+        categoryId:
+          type: integer
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        questionType:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        usageCount:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionOption'
+        createdAt:
+          type: string
+          format: date-time
+
+    QuizWithQuestions:
+      allOf:
+        - $ref: '#/components/schemas/Quiz'
+        - type: object
+          properties:
+            questions:
+              type: array
+              items:
+                $ref: '#/components/schemas/QuestionWithOptions'
+            category:
+              $ref: '#/components/schemas/Category'
+
+    Match:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        quizId:
+          type: integer
+        matchType:
+          type: string
+          enum: [FRIEND, RANKED, TOURNAMENT, AI]
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        joinCode:
+          type: string
+        maxPlayers:
+          type: integer
+        currentQuestionIndex:
+          type: integer
+        timePerQuestion:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        winnerId:
+          type: integer
+        createdById:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    MatchPlayer:
+      type: object
+      properties:
+        id:
+          type: integer
+        matchId:
+          type: string
+          format: uuid
+        userId:
+          type: integer
+        isAI:
+          type: boolean
+        aiDifficulty:
+          $ref: '#/components/schemas/Difficulty'
+        score:
+          type: integer
+        correctAnswers:
+          type: integer
+        totalAnswers:
+          type: integer
+        isReady:
+          type: boolean
+        joinedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+
+    MatchWithPlayers:
+      allOf:
+        - $ref: '#/components/schemas/Match'
+        - type: object
+          properties:
+            players:
+              type: array
+              items:
+                $ref: '#/components/schemas/MatchPlayer'
+            quiz:
+              $ref: '#/components/schemas/Quiz'
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+        eloRating:
+          type: integer
+        totalMatches:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        winRate:
+          type: number
+          format: float
+        avgScore:
+          type: number
+          format: float
+        bestStreak:
+          type: integer
+        currentStreak:
+          type: integer
+
+    QuizStats:
+      type: object
+      properties:
+        totalAttempts:
+          type: integer
+        uniqueUsers:
+          type: integer
+        avgScore:
+          type: number
+          format: float
+        maxScore:
+          type: integer
+        avgTimeToken:
+          type: number
+          format: float
+        totalQuestions:
+          type: integer
+        avgCompletion:
+          type: number
+          format: float
+        lastAttempted:
+          type: string
+          format: date-time
+
+    CreateQuizRequest:
+      type: object
+      required: [title, categoryId]
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        categoryId:
+          type: integer
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        timeLimit:
+          type: integer
+          minimum: 5
+          maximum: 300
+        pointsPerQuestion:
+          type: integer
+          minimum: 1
+        timeBonusEnabled:
+          type: boolean
+        maxTimeBonus:
+          type: integer
+        negativeMarking:
+          type: boolean
+        negativePoints:
+          type: integer
+        shuffleQuestions:
+          type: boolean
+        shuffleOptions:
+          type: boolean
+        maxAttempts:
+          type: integer
+          minimum: 1
+        isPublished:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateQuizRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        categoryId:
+          type: integer
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        timeLimit:
+          type: integer
+          minimum: 5
+          maximum: 300
+        isPublished:
+          type: boolean
+
+    CreateQuestionRequest:
+      type: object
+      required: [questionText, options]
+      properties:
+        questionText:
+          type: string
+          maxLength: 1000
+        explanation:
+          type: string
+        categoryId:
+          type: integer
+          nullable: true
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        questionType:
+          type: string
+          default: MCQ
+        tags:
+          type: array
+          items:
+            type: string
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items:
+            type: object
+            required: [optionText, isCorrect]
+            properties:
+              optionText:
+                type: string
+                maxLength: 500
+              isCorrect:
+                type: boolean
+
+    UpdateQuestionRequest:
+      type: object
+      properties:
+        questionText:
+          type: string
+          maxLength: 1000
+        explanation:
+          type: string
+        categoryId:
+          type: integer
+          nullable: true
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        tags:
+          type: array
+          items:
+            type: string
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              optionText:
+                type: string
+                maxLength: 500
+              isCorrect:
+                type: boolean
+
+    CreateMatchRequest:
+      type: object
+      required: [quizId, matchType]
+      properties:
+        quizId:
+          type: integer
+        matchType:
+          type: string
+          enum: [FRIEND, RANKED, TOURNAMENT, AI]
+        maxPlayers:
+          type: integer
+          minimum: 2
+          maximum: 10
+          default: 2
+        timePerQuestion:
+          type: integer
+          minimum: 5
+          maximum: 300
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid input data
+              details:
+                field: email
+                issue: Invalid email format
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: Invalid or missing authentication token
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: Insufficient permissions for this operation
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: Requested resource not found
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: INTERNAL_ERROR
+              message: An unexpected error occurred

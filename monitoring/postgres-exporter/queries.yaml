@@ -1,0 +1,32 @@
+pg_database:
+  query: "SELECT relname, pg_database_size(relname) as size_bytes FROM pg_database WHERE datistemplate = false"
+  master: true
+  cache_seconds: 30
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "Name of the database"
+    - size_bytes:
+        usage: "GAUGE"
+        description: "Size of the database in bytes"
+
+pg_stat_activity:
+  query: "SELECT count(*) as total_connections, count(*) FILTER (WHERE state = 'active') as active_connections FROM pg_stat_activity"
+  master: true
+  cache_seconds: 30
+  metrics:
+    - total_connections:
+        usage: "GAUGE"
+        description: "Total number of connections"
+    - active_connections:
+        usage: "GAUGE"
+        description: "Number of active connections"
+
+pg_settings:
+  query: "SELECT count(*) as settings_count FROM pg_settings"
+  master: true
+  cache_seconds: 60
+  metrics:
+    - settings_count:
+        usage: "GAUGE"
+        description: "Number of PostgreSQL settings"

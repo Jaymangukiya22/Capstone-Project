@@ -1,293 +1,183 @@
-# QuizSpark Backend
+# Quiz Management System Backend
 
-A competitive academic platform backend built with Node.js, TypeScript, and PostgreSQL. Features a monolith + microservice architecture for optimal performance.
+A production-ready backend for a comprehensive Quiz Management System built with Node.js, Express.js, Prisma ORM, PostgreSQL, and Docker. Features advanced logging, observability, and comprehensive API testing.
 
-## Architecture
+## 🚀 Features
 
-- **Main Service (Monolith)**: Handles user management, courses, quizzes, and ELO ratings
-- **Match Service (Microservice)**: Real-time quiz battles with WebSocket support
+- **Hierarchical Categories**: Self-referencing category system with unlimited nesting levels
+- **Advanced Quiz Management**: Support for multiple game types (STANDARD, TIMED, MULTIPLAYER, TOURNAMENT)
+- **Flexible Question System**: MCQ (2-4 options) and Boolean questions with multiple correct answers
+- **Observability**: Winston logging, OpenTelemetry tracing, Prometheus metrics
+- **Production Middleware**: Request logging, error handling, CORS, compression, security headers
+- **Basic Authentication**: Development-ready auth system (aryan:admin)
+- **Docker Ready**: Multi-stage builds with auto-migrations and health checks
+- **TypeScript**: Full type safety throughout the application
+- **Prisma ORM**: Type-safe database operations with automatic migrations
+- **API Testing**: Comprehensive Postman collection with automated tests
 
-## Tech Stack
+## 🏗 Architecture
 
-- **Runtime**: Node.js 18+
-- **Language**: TypeScript
-- **Framework**: Express.js
-- **Database**: PostgreSQL with Prisma ORM
-- **Cache**: Redis
-- **Real-time**: WebSockets
-- **Authentication**: JWT
+```
+src/
+├── controllers/     # HTTP request handlers with validation
+├── services/        # Business logic layer with logging
+├── routes/          # API route definitions
+├── middleware/      # Request logging, error handling, auth
+├── utils/           # Validation schemas, Winston logger
+├── tracing.ts       # OpenTelemetry configuration
+└── server.ts        # Application entry point with metrics
+```
 
-## Features
+## 📊 Database Schema
 
-### 👑 Admin Features
-- Universal data access and management
-- Course creation and management
-- User account management
-- Platform-wide analytics
+### Core Models
+- **Quiz**: Game metadata (name, type, timing, bonuses, tags)
+- **Question**: Text content with MCQ/Boolean flag
+- **Option**: Answer choices with correctness flag
+- **Category**: Hierarchical structure with self-referencing parentId
 
-### 🎓 Faculty Features
-- Quiz and content creation with multimedia support
-- Student management per course
-- Live quiz moderation and scheduling
-- Performance analytics
+### Key Features
+- **Game Types**: STANDARD, TIMED, MULTIPLAYER, TOURNAMENT
+- **Question Types**: MCQ (2-4 options) and Boolean (2 options)
+- **Hierarchical Categories**: Unlimited nesting with level tracking
+- **Flexible Options**: Multiple correct answers supported
 
-### 🧑‍🎓 Student Features
-- Real-time 1v1 quiz competitions
-- ELO-based skill tracking
-- Match history and analytics
-- Course leaderboards
+## 🔌 API Endpoints
 
-### ⚙️ Core Platform Features
-- JWT-based authentication with role-based access
-- Dynamic ELO rating system
-- Low-latency real-time infrastructure
-- Comprehensive API with validation
+### Categories
+- `POST /api/categories` - Create category (with optional parent)
+- `GET /api/categories` - List all categories with hierarchy
+- `GET /api/categories/:id` - Get category details
+- `PUT /api/categories/:id` - Update category
+- `DELETE /api/categories/:id` - Delete category
 
-## Quick Start
+### Quizzes
+- `POST /api/quizzes` - Create quiz with game type and settings
+- `GET /api/quizzes` - List quizzes with filters (gameType, tags, pagination)
+- `GET /api/quizzes/:id` - Get quiz with questions and options
+- `PUT /api/quizzes/:id` - Update quiz metadata
+- `DELETE /api/quizzes/:id` - Delete quiz and cascade questions
+- `GET /api/quizzes/:id/stats` - Get comprehensive quiz statistics
 
-### Prerequisites
+### Questions
+- `POST /api/questions` - Create standalone question
+- `POST /api/questions/quiz/:quizId` - Add MCQ/Boolean question to quiz
+- `GET /api/questions/:quizId` - Get all questions for a quiz
+- `GET /api/questions/single/:id` - Get question by ID with options
+- `PUT /api/questions/single/:id` - Update question and options
+- `DELETE /api/questions/single/:id` - Delete question and options
+- `GET /api/questions/:quizId/stats` - Get question statistics
 
-- Node.js 18+
-- PostgreSQL 14+
-- Redis 6+
+### Observability
+- `GET /health` - Health check endpoint
+- `GET /metrics` - Prometheus metrics endpoint
 
-### Installation
+## 🐳 Docker Setup
 
-1. **Clone and install dependencies**
+### Quick Start
 ```bash
-cd backend
-npm install
-cd match-service
-npm install
+# Clone and navigate to backend directory
+cd Backend
+
+# Start all services (PostgreSQL + Redis + Backend)
+docker-compose up --build
+
+# The backend will be available at http://localhost:3000
 ```
 
-2. **Environment Setup**
-```bash
-# Copy environment files
-cp .env.example .env
-cp match-service/.env.example match-service/.env
-
-# Update database URLs and secrets in .env files
-```
-
-3. **Database Setup**
-```bash
-# Generate Prisma client
-npm run prisma:generate
-
-# Run migrations
-npm run prisma:migrate
-
-# (Optional) Seed database
-npm run prisma:seed
-```
-
-4. **Start Services**
-```bash
-# Terminal 1: Main service
-npm run dev
-
-# Terminal 2: Match service
-cd match-service
-npm run dev
-```
-
-## API Documentation
-
-### Main Service (Port 3000)
-
-#### Authentication
-- `POST /api/v1/auth/register` - Register new user
-- `POST /api/v1/auth/login` - User login
-- `GET /api/v1/auth/profile` - Get user profile
-- `PUT /api/v1/auth/profile` - Update profile
-
-#### Courses
-- `POST /api/v1/courses` - Create course (Faculty/Admin)
-- `GET /api/v1/courses` - List courses
-- `GET /api/v1/courses/:id` - Get course details
-- `POST /api/v1/courses/:id/enroll` - Enroll in course
-
-#### Quizzes
-- `POST /api/v1/quizzes` - Create quiz (Faculty/Admin)
-- `GET /api/v1/quizzes/:id` - Get quiz details
-- `POST /api/v1/quizzes/:id/questions` - Add question
-- `POST /api/v1/quizzes/:id/schedule` - Schedule quiz
-
-#### Leaderboards
-- `GET /api/v1/leaderboard/course/:id` - Course leaderboard
-- `GET /api/v1/leaderboard/global` - Global leaderboard
-
-### Match Service (Port 3001)
-
-#### REST Endpoints
-- `POST /api/v1/matches` - Create match
-- `GET /api/v1/matches/:id` - Get match details
-- `GET /api/v1/matches/:id/results` - Get match results
-
-#### WebSocket (ws://localhost:3001/ws)
-- `JOIN_MATCH` - Join match room
-- `PLAYER_READY` - Set ready status
-- `SUBMIT_ANSWER` - Submit answer
-
-## Database Schema
-
-### Core Entities
-- **User**: Authentication and profile data
-- **Course**: Course information and enrollment
-- **Quiz**: Quiz metadata and questions
-- **Question**: Quiz questions with options
-- **Match**: Real-time match data
-- **EloRating**: Skill ratings per course
-
-### Key Relationships
-- Users can create courses (Faculty/Admin)
-- Users enroll in courses (Students)
-- Courses contain multiple quizzes
-- Quizzes have questions with options
-- Matches track real-time gameplay
-- ELO ratings track skill per course
-
-## Development
-
-### Scripts
-
-**Main Service:**
-```bash
-npm run dev          # Development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run test         # Run tests
-npm run prisma:studio # Database GUI
-```
-
-**Match Service:**
-```bash
-npm run dev          # Development server
-npm run build        # Build for production
-npm run start        # Start production server
-```
-
-### Code Structure
-
-```
-backend/
-├── src/
-│   ├── config/          # Database and app configuration
-│   ├── controllers/     # Request handlers
-│   ├── middleware/      # Auth, validation, error handling
-│   ├── routes/          # API route definitions
-│   ├── services/        # Business logic
-│   ├── types/           # TypeScript type definitions
-│   └── utils/           # Helper functions
-├── prisma/
-│   └── schema.prisma    # Database schema
-└── match-service/
-    └── src/
-        ├── services/    # Match and WebSocket services
-        ├── types/       # Match-specific types
-        └── server.ts    # Match service entry point
-```
+### Services
+- **Backend**: Node.js Express app (Port 3000)
+- **PostgreSQL**: Database (Port 5432)
+- **Redis**: Cache and pub/sub (Port 6379)
 
 ### Environment Variables
-
-**Main Service (.env):**
-```env
-DATABASE_URL="postgresql://user:pass@localhost:5432/quizspark"
+Copy `.env.example` to `.env` and configure:
+```bash
+DATABASE_URL="postgresql://quiz_user:quiz_password@localhost:5432/quiz_db?schema=public"
 REDIS_URL="redis://localhost:6379"
-JWT_SECRET="your-secret-key"
 PORT=3000
-NODE_ENV="development"
+BASIC_AUTH_USERNAME=aryan
+BASIC_AUTH_PASSWORD=admin
 ```
 
-**Match Service (.env):**
-```env
-REDIS_URL="redis://localhost:6379"
-JWT_SECRET="same-as-main-service"
-PORT=3001
-NODE_ENV="development"
+## 🧪 Testing
+
+The application includes comprehensive test coverage using TestSprite MCP server:
+
+- Category creation and hierarchy validation
+- Quiz creation and association tests
+- Question and answer validation (2-4 options, at least one correct)
+- Authentication tests
+- API schema and response format validation
+
+## 🔐 Authentication
+
+Basic Authentication for development:
+- Username: `aryan`
+- Password: `admin`
+
+Include in requests:
+```bash
+curl -H "Authorization: Basic YXJ5YW46YWRtaW4=" http://localhost:3000/api/categories
 ```
 
-## Deployment
+## 📈 Performance Features
 
-### Production Setup
+- **Redis Caching**: Quiz details cached for 5 minutes, categories for 10 minutes
+- **Database Indexing**: Optimized queries on category_id, quiz_id
+- **Connection Pooling**: Efficient database connection management
+- **Compression**: Gzip compression for API responses
+- **Health Checks**: Built-in health monitoring
 
-1. **Environment Configuration**
-   - Set production database URLs
-   - Configure Redis connection
-   - Set secure JWT secrets
-   - Enable CORS for frontend domain
-
-2. **Database Migration**
-   ```bash
-   npm run prisma:migrate
-   ```
-
-3. **Build and Start**
-   ```bash
-   npm run build
-   npm start
-   ```
-
-### Docker Support
-
-```dockerfile
-# Dockerfile example for main service
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-## Security Features
-
-- **JWT Authentication**: Secure token-based auth
-- **Role-based Access Control**: Admin/Faculty/Student permissions
-- **Input Validation**: Comprehensive request validation
-- **Rate Limiting**: API abuse protection
-- **CORS Configuration**: Cross-origin request control
-- **Helmet Security**: HTTP security headers
-
-## Performance Optimizations
-
-- **Redis Caching**: Fast data retrieval
-- **Connection Pooling**: Efficient database connections
-- **Compression**: Response compression
-- **WebSocket Optimization**: Low-latency real-time communication
-- **ELO Calculation**: Optimized rating algorithms
-
-## Testing
+## 🔄 Database Operations
 
 ```bash
-# Run all tests
-npm test
+# Generate Prisma client
+npm run db:generate
 
-# Run tests in watch mode
-npm run test:watch
+# Push schema changes
+npm run db:push
 
-# Generate coverage report
-npm run test:coverage
+# Run migrations
+npm run db:migrate
+
+# Seed database with sample data
+npm run db:seed
 ```
 
-## Contributing
+## 🚦 Health Check
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+```bash
+curl http://localhost:3000/health
+```
 
-## License
+## 📝 Sample Data
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+The seed script creates:
+- Hierarchical categories (Science → Physics → Quantum Mechanics)
+- Sample quizzes with questions and multiple-choice answers
+- Demonstrates both single and multiple correct answer formats
 
-## Support
+## 🔮 Future Modules
 
-For support and questions:
-- Create an issue on GitHub
-- Check the API documentation at `/api/v1`
-- Review the health check at `/health`
+This backend is designed to support:
+- Module 2: Real-time matchmaking (1v1, 1vN)
+- Module 3: Live quiz gameplay with WebSocket
+- Module 4: Leaderboards and scoring systems
+- Module 5: User management and JWT authentication
+
+## 🛠 Development
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```

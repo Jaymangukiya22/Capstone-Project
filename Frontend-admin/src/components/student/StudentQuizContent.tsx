@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Grid, List } from 'lucide-react'
+import { Search, Grid, List, Menu, ChevronLeft } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { QuizOverviewPanel } from './QuizOverviewPanel'
 import { Button } from '@/components/ui/button'
@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useQuizzes } from '@/hooks/useQuizzes'
 import { useCategories } from '@/hooks/useCategories'
 import { WEBSOCKET_URL } from '@/services/api';
 import { friendMatchService } from '@/services/friendMatchService';
+import { cn } from '@/lib/utils'
 
 import type { Quiz } from '@/types/api'
 
@@ -25,6 +27,8 @@ export function StudentQuizContent() {
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [currentPage, setCurrentPage] = useState(1)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [showQuizDetails, setShowQuizDetails] = useState(false)
   const itemsPerPage = 12
 
   // Fetch quizzes and categories
@@ -68,6 +72,10 @@ export function StudentQuizContent() {
 
   const handleQuizSelect = (quiz: StudentQuiz) => {
     setSelectedQuiz(quiz)
+    // On mobile, show quiz details view
+    if (window.innerWidth < 768) {
+      setShowQuizDetails(true)
+    }
   }
 
   const handleSearchChange = (value: string) => {
@@ -187,12 +195,12 @@ export function StudentQuizContent() {
     window.location.pathname = '/friend-match'
   }
 
-  const getDifficultyColor = (difficulty: string) => {
+  const getDifficultyVariant = (difficulty: string): "default" | "secondary" | "destructive" | "outline" => {
     switch (difficulty) {
-      case 'EASY': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-      case 'HARD': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+      case 'EASY': return 'secondary'
+      case 'MEDIUM': return 'default'
+      case 'HARD': return 'destructive'
+      default: return 'outline'
     }
   }
 
@@ -209,11 +217,142 @@ export function StudentQuizContent() {
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
+      {/* Mobile Header - Only visible on mobile */}
+      <div className="lg:hidden flex items-center justify-between p-3 border-b bg-background sticky top-0 z-40">
+        <h1 className="text-base font-semibold">Quiz Selection</h1>
+        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Menu className="h-4 w-4 mr-1" />
+              Filters
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+            <SheetHeader>
+              <SheetTitle>Filters</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6 space-y-4">
+              {/* Mobile Filters */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Category</label>
+                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map(category => (
+                      <SelectItem key={category.id} value={category.id.toString()}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">Difficulty</label>
+                <Select value={selectedDifficulty} onValueChange={handleDifficultyChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Levels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="EASY">Easy</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HARD">Hard</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">View Mode</label>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                >
+                  {viewMode === 'grid' ? (
+                    <><List className="h-4 w-4 mr-2" /> Switch to List View</>
+                  ) : (
+                    <><Grid className="h-4 w-4 mr-2" /> Switch to Grid View</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Mobile Quiz Details View - Full screen on mobile when quiz is selected */}
+      {showQuizDetails && window.innerWidth < 768 && selectedQuiz && (
+        <div className="fixed inset-0 z-50 bg-background lg:hidden">
+          <div className="flex flex-col h-full">
+            <div className="flex items-center gap-2 p-4 border-b">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowQuizDetails(false)}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <h2 className="text-lg font-semibold flex-1">Quiz Details</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <QuizOverviewPanel
+                selectedQuiz={selectedQuiz ? {
+                  id: selectedQuiz.id.toString(),
+                  name: selectedQuiz.title,
+                  description: selectedQuiz.description || '',
+                  category: selectedQuiz.categoryName || 'Uncategorized',
+                  subcategory: '',
+                  difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
+                            selectedQuiz.difficulty === 'MEDIUM' ? 'intermediate' as const : 'hard' as const,
+                  questionCounts: {
+                    easy: 5,
+                    intermediate: 5,
+                    hard: 5,
+                    total: 15
+                  },
+                  estimatedDuration: Math.floor((selectedQuiz.timeLimit || 30) / 60),
+                  passingScore: 70,
+                  timePerQuestion: 30,
+                  maxPlayers: 4,
+                  lastUpdated: new Date(),
+                  isActive: true
+                } : null}
+                onPlayQuiz={handlePlayQuiz}
+                onCreateFriendGame={handleCreateFriendGame}
+                onJoinFriendGame={handleJoinFriendGame}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Panel - Quiz List with Filters */}
-      <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        {/* Header with Search and Filters */}
-        <div className="p-3 md:p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="space-y-3 md:space-y-4">
+      <div className={cn(
+        "w-full lg:w-1/2 xl:w-2/5 flex flex-col",
+        "lg:border-r border-gray-200 dark:border-gray-700",
+        showQuizDetails && window.innerWidth < 768 ? "hidden" : ""
+      )}>
+        {/* Mobile Search - Visible on mobile */}
+        <div className="lg:hidden p-3 border-b">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search quizzes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Desktop Search and Filters - Hidden on mobile */}
+        <div className="hidden lg:block p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="space-y-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -225,8 +364,8 @@ export function StudentQuizContent() {
               />
             </div>
 
-            {/* Filters - Stack on mobile */}
-            <div className="flex flex-col sm:flex-row gap-2">
+            {/* Desktop Filters */}
+            <div className="flex flex-wrap gap-2">
               <Select value={selectedCategory} onValueChange={handleCategoryChange}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="All Categories" />
@@ -271,61 +410,76 @@ export function StudentQuizContent() {
           </div>
         </div>
 
+        {/* Mobile Search - Visible only on mobile */}
+        <div className="lg:hidden p-4 border-b">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search quizzes..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
         {/* Quiz List */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-4">
-          {paginatedQuizzes.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No quizzes found matching your criteria.</p>
+        <div className="flex-1 overflow-y-auto p-3 lg:p-4">
+          {filteredQuizzes.length === 0 ? (
+            <div className="text-center py-8 lg:py-12">
+              <p className="text-sm lg:text-base text-gray-500 dark:text-gray-400">No quizzes found matching your criteria.</p>
             </div>
           ) : (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 md:gap-4' : 'space-y-3'}>
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4' : 'space-y-3 lg:space-y-4'}>
               {paginatedQuizzes.map((quiz) => (
-                <Card
+                <Card 
                   key={quiz.id}
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    selectedQuiz?.id === quiz.id 
-                      ? 'ring-2 ring-primary border-primary' 
-                      : 'hover:border-gray-300'
-                  }`}
+                  className={cn(
+                    "cursor-pointer transition-all hover:shadow-lg",
+                    selectedQuiz?.id === quiz.id && "ring-2 ring-primary"
+                  )}
                   onClick={() => handleQuizSelect(quiz)}
                 >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-base md:text-lg line-clamp-2">{quiz.title}</CardTitle>
-                      <Badge className={`${getDifficultyColor(quiz.difficulty)} flex-shrink-0 ml-2`}>
+                  <CardHeader className="p-3 lg:p-6 pb-2 lg:pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-sm lg:text-lg line-clamp-2">{quiz.title}</CardTitle>
+                      <Badge 
+                        variant={getDifficultyVariant(quiz.difficulty)}
+                        className="text-xs shrink-0"
+                      >
                         {quiz.difficulty}
                       </Badge>
                     </div>
-                    <CardDescription className="text-xs md:text-sm">
-                      {quiz.categoryName} • {quiz.timeLimit}s per question
+                    <CardDescription className="mt-1 text-xs lg:text-sm line-clamp-2">
+                      {quiz.description || 'No description available'}
                     </CardDescription>
                   </CardHeader>
-                  {quiz.description && (
-                    <CardContent className="pt-0">
-                      <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {quiz.description}
-                      </p>
-                    </CardContent>
-                  )}
+                  <CardContent className="p-3 lg:p-6 pt-2 lg:pt-0">
+                    <div className="flex items-center justify-between text-xs lg:text-sm text-gray-500">
+                      <span className="truncate">{quiz.categoryName || 'Uncategorized'}</span>
+                      <span className="shrink-0">{quiz.timeLimit ? `${quiz.timeLimit} min` : 'No limit'}</span>
+                    </div>
+                  </CardContent>
                 </Card>
               ))}
             </div>
           )}
         </div>
-
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-3 md:p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
+                className="text-xs sm:text-sm"
               >
-                Previous
+                <span className="hidden sm:inline">Previous</span>
+                <ChevronLeft className="h-4 w-4 sm:hidden" />
               </Button>
-              <span className="text-sm text-gray-500">
+              <span className="text-xs sm:text-sm text-gray-500">
                 Page {currentPage} of {totalPages}
               </span>
               <Button
@@ -333,35 +487,38 @@ export function StudentQuizContent() {
                 size="sm"
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
+                className="text-xs sm:text-sm"
               >
-                Next
+                <span className="hidden sm:inline">Next</span>
+                <ChevronLeft className="h-4 w-4 rotate-180 sm:hidden" />
               </Button>
             </div>
           </div>
         )}
       </div>
       
-      {/* Right Panel - Quiz Overview */}
-      <div className="w-full lg:w-1/2 min-h-0 flex-1">
+      {/* Right Panel - Quiz Overview - Hidden on mobile, visible on desktop */}
+      <div className="hidden lg:block lg:flex-1">
         <QuizOverviewPanel
           selectedQuiz={selectedQuiz ? {
             id: selectedQuiz.id.toString(),
             name: selectedQuiz.title,
             description: selectedQuiz.description || '',
             category: selectedQuiz.categoryName || 'Uncategorized',
-            subcategory: selectedQuiz.categoryName || 'Uncategorized',
-            difficulty: selectedQuiz.difficulty.toLowerCase() as 'easy' | 'intermediate' | 'hard',
-            questionCounts: { 
-              total: 10, 
-              easy: 3, 
-              intermediate: 4, 
-              hard: 3 
+            subcategory: '',
+            difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
+                      selectedQuiz.difficulty === 'MEDIUM' ? 'intermediate' as const : 'hard' as const,
+            questionCounts: {
+              easy: 5,
+              intermediate: 5,
+              hard: 5,
+              total: 15
             },
-            estimatedDuration: Math.ceil((selectedQuiz.timeLimit || 30) * 10 / 60),
+            estimatedDuration: Math.floor((selectedQuiz.timeLimit || 30) / 60),
             passingScore: 70,
-            timePerQuestion: selectedQuiz.timeLimit || 30,
-            maxPlayers: 10,
-            lastUpdated: new Date(selectedQuiz.updatedAt),
+            timePerQuestion: 30,
+            maxPlayers: 4,
+            lastUpdated: new Date(),
             isActive: true
           } : null}
           onPlayQuiz={handlePlayQuiz}

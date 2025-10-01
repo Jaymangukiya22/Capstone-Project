@@ -19,23 +19,23 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   if (!question) return null;
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border p-6 mb-6">
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm font-medium text-muted-foreground">
+    <div className="bg-card rounded-lg shadow-sm border p-4 sm:p-6 mb-4 sm:mb-6">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-3 sm:mb-4">
+          <span className="text-xs sm:text-sm font-medium text-muted-foreground">
             Question {questionNumber} of {totalQuestions}
           </span>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs sm:text-sm text-muted-foreground">
             Multiple Choice
           </span>
         </div>
         
-        <h2 className="text-xl font-semibold text-foreground leading-relaxed">
+        <h2 className="text-base sm:text-xl font-semibold text-foreground leading-relaxed">
           {question.question}
         </h2>
       </div>
       
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {question.options.map((option, index) => {
           const optionId = `option-${questionNumber}-${index}`;
           const isSelected = selectedAnswer === option;
@@ -50,8 +50,8 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               }`}
               onClick={() => onAnswerSelect(option)}
             >
-              <div className="flex items-start space-x-3 p-4">
-                <div className="flex-shrink-0 mt-1">
+              <div className="flex items-start space-x-2 sm:space-x-3 p-3 sm:p-4">
+                <div className="flex-shrink-0 mt-0.5 sm:mt-1">
                   <input
                     type="radio"
                     id={optionId}
@@ -60,12 +60,14 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                     checked={isSelected}
                     onChange={() => onAnswerSelect(option)}
                     className="w-4 h-4 text-primary border-2 border-border focus:ring-2 focus:ring-primary/20"
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
                 
                 <label 
                   htmlFor={optionId}
-                  className="flex-1 text-foreground font-medium cursor-pointer leading-relaxed"
+                  className="flex-1 text-sm sm:text-base text-foreground font-medium cursor-pointer leading-relaxed"
+                  onClick={(e) => e.preventDefault()}
                 >
                   {option}
                 </label>

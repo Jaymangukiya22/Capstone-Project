@@ -3,6 +3,9 @@ import QuizHeader from './quiz-interface/QuizHeader';
 import QuestionCard from './quiz-interface/QuestionCard';
 import QuizNavigation from './quiz-interface/QuizNavigation';
 import QuizSidebar from './quiz-interface/QuizSidebar';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Menu } from 'lucide-react';
 import { quizAttemptService, type QuizQuestion as BackendQuizQuestion } from '@/services/quizAttemptService';
 import { toast } from '@/lib/toast';
 
@@ -20,6 +23,7 @@ const QuizInterface: React.FC = () => {
   const [questionTimeRemaining, setQuestionTimeRemaining] = useState(30); // Will be set from backend
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [quizTitle, setQuizTitle] = useState('Quiz');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Get answered questions set for progress tracking
   const answeredQuestions = new Set(answers.keys());
@@ -304,18 +308,47 @@ const QuizInterface: React.FC = () => {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-hidden">
-      {/* Full-screen quiz mode indicator - hidden on mobile */}
-      <div className="absolute top-2 right-2 z-50 hidden md:block">
+    <div className="min-h-screen bg-background relative">
+      {/* Mobile Header with Menu Button - Only on mobile */}
+      <div className="lg:hidden flex items-center justify-between p-4 border-b bg-background sticky top-0 z-40">
+        <h1 className="text-lg font-semibold truncate flex-1">{quizTitle}</h1>
+        <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Menu className="h-4 w-4 mr-2" />
+              Progress
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[85vw] sm:w-[400px] p-4">
+            <SheetHeader>
+              <SheetTitle>Quiz Progress</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6">
+              <QuizSidebar
+                questions={questions.map(q => ({
+                  id: q.id,
+                  question: q.questionText,
+                  options: q.options.slice(0, 4).map(opt => opt.optionText),
+                  correctAnswer: q.options.find(opt => opt.isCorrect)?.optionText || ''
+                }))}
+                currentQuestion={currentQuestion}
+                answeredQuestions={answeredQuestions}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Full-screen quiz mode indicator - Desktop only */}
+      <div className="hidden lg:block absolute top-4 right-4 z-50">
         <div className="bg-primary/10 text-primary text-xs px-3 py-1 rounded-full border border-primary/20">
-          Quiz Mode - Full Screen
+          Quiz Mode
         </div>
       </div>
 
-      {/* Mobile-optimized layout */}
-      <div className="flex-1 flex flex-col h-screen">
-        {/* Compact Quiz Header - Fixed height */}
-        <div className="flex-shrink-0 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 border-b border-border">
+      <div className="container mx-auto px-4 py-4 md:py-6 max-w-7xl">
+        {/* Quiz Header - Responsive */}
+        <div className="mb-4 md:mb-6">
           <QuizHeader
             currentQuestion={currentQuestion}
             totalQuestions={questions.length}
@@ -326,11 +359,10 @@ const QuizInterface: React.FC = () => {
           />
         </div>
 
-        {/* Main content area - Flexible height */}
-        <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-          {/* Quiz Sidebar - hidden on mobile and tablet */}
-          <div className="hidden xl:block xl:w-80 2xl:w-96 flex-shrink-0 border-r border-border">
-            <div className="h-full overflow-y-auto p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
+          {/* Desktop Sidebar - Hidden on mobile */}
+          <div className="hidden lg:block lg:col-span-1">
+            <div className="sticky top-24">
               <QuizSidebar
                 questions={questions.map(q => ({
                   id: q.id,
@@ -344,20 +376,18 @@ const QuizInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* Main Quiz Content - Flexible layout */}
-          <div className="flex-1 flex flex-col min-h-0">
-            {/* Question Card - Takes available space, scrollable if needed */}
-            <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 overflow-y-auto">
-              {currentQuestionFormatted && (
-                <QuestionCard
-                  question={currentQuestionFormatted}
-                  selectedAnswer={currentAnswer}
-                  onAnswerSelect={handleAnswerSelect}
-                  questionNumber={currentQuestion}
-                  totalQuestions={questions.length}
-                />
-              )}
-            </div>
+          {/* Main Quiz Content - Responsive */}
+          <div className="lg:col-span-3 space-y-4 md:space-y-6">
+            {/* Question Card */}
+            {currentQuestionFormatted && (
+              <QuestionCard
+                question={currentQuestionFormatted}
+                selectedAnswer={currentAnswer}
+                onAnswerSelect={handleAnswerSelect}
+                questionNumber={currentQuestion}
+                totalQuestions={questions.length}
+              />
+            )}
 
             {/* Navigation - Fixed at bottom with ultra-compact padding for iPhone */}
             <div className="flex-shrink-0 px-3 py-1 sm:px-4 sm:py-2 md:px-6 md:py-3 border-t border-border bg-background/95 backdrop-blur-sm">

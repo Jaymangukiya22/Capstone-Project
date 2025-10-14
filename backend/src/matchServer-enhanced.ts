@@ -1,4 +1,6 @@
 import express from 'express';
+import promBundle from 'express-prom-bundle';
+import client from 'prom-client';
 import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -136,6 +138,19 @@ app.use(compression());
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Express HTTP metrics (do not expose its own endpoint; we will merge into our /metrics)
+const httpMetrics = promBundle({
+  includeMethod: true,
+  includePath: true,
+  includeStatusCode: true,
+  includeUp: true,
+  promClient: {
+    collectDefaultMetrics: {},
+  },
+  metricsPath: '/metrics-bundle' // avoid clashing with our /metrics
+});
+app.use(httpMetrics);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -149,12 +164,23 @@ app.get('/health', (req, res) => {
 });
 
 // Metrics endpoint for Prometheus
-app.get('/metrics', (req, res) => {
+app.get('/metrics', async (req, res) => {
   try {
     const activeMatches = enhancedMatchService ? enhancedMatchService.getActiveMatchesCount() : 0;
     const connectedUsers = enhancedMatchService ? enhancedMatchService.getConnectedUsersCount() : 0;
+    const playersPerMatch = enhancedMatchService ? enhancedMatchService.getPlayersPerMatch() : [];
+    const matchesCreated = enhancedMatchService ? enhancedMatchService.getMatchesCreatedTotal() : 0;
+    const workerStats = enhancedMatchService ? enhancedMatchService.computeWorkerStats() : {
+      activeWorkers: 0,
+      totalWorkers: 0,
+      idleWorkers: 0,
+      workerMatchCounts: [] as Array<{ worker_id: number; matches: number }>
+    };
+    const workersSpawned = enhancedMatchService ? enhancedMatchService.getWorkersSpawnedTotal() : 0;
+    // Pull express/prom-client metrics
+    const bundleMetrics = await client.register.metrics();
     
-    const metrics = `
+    const metricsHeader = `
 # HELP matchserver_active_matches_total Total number of active matches
 # TYPE matchserver_active_matches_total gauge
 matchserver_active_matches_total ${activeMatches}
@@ -162,6 +188,14 @@ matchserver_active_matches_total ${activeMatches}
 # HELP matchserver_connected_users_total Total number of connected users
 # TYPE matchserver_connected_users_total gauge
 matchserver_connected_users_total ${connectedUsers}
+
+# HELP matchserver_connected_players_total Total number of connected players (alias)
+# TYPE matchserver_connected_players_total gauge
+matchserver_connected_players_total ${connectedUsers}
+
+# HELP matchserver_matches_created_total Total matches created since start
+# TYPE matchserver_matches_created_total counter
+matchserver_matches_created_total ${matchesCreated}
 
 # HELP matchserver_uptime_seconds Uptime of the match server in seconds
 # TYPE matchserver_uptime_seconds counter
@@ -179,6 +213,32 @@ matchserver_store_type ${isRedisConnected ? 1 : 0}
 # TYPE matchserver_status gauge
 matchserver_status 1
 `.trim();
+
+    // Per-match players metric lines
+    const perMatchLines = playersPerMatch.map(pm => `matchserver_match_players{match_id="${pm.matchId}"} ${pm.count}`).join('\n');
+
+    // Worker-related gauges (computed abstraction)
+    const workersHeader = `
+# HELP matchserver_total_workers Total worker processes handling matches
+# TYPE matchserver_total_workers gauge
+matchserver_total_workers ${workerStats.totalWorkers}
+# HELP matchserver_active_workers Currently active workers
+# TYPE matchserver_active_workers gauge
+matchserver_active_workers ${workerStats.activeWorkers}
+# HELP matchserver_idle_workers Currently idle workers
+# TYPE matchserver_idle_workers gauge
+matchserver_idle_workers ${workerStats.idleWorkers}
+# HELP matchserver_workers_spawned_total Total workers spawned since start
+# TYPE matchserver_workers_spawned_total counter
+matchserver_workers_spawned_total ${workersSpawned}`.trim();
+
+    const workerMatchLines = workerStats.workerMatchCounts
+      .map(w => `matchserver_worker_matches{worker_id="${w.worker_id}"} ${w.matches}`)
+      .join('\n');
+
+    const metrics = [bundleMetrics, metricsHeader, perMatchLines, workersHeader, workerMatchLines]
+      .filter(Boolean)
+      .join('\n');
 
     res.set('Content-Type', 'text/plain');
     res.send(metrics);
@@ -300,6 +360,16 @@ class EnhancedMatchService {
   private matches: Map<string, MatchRoom> = new Map();
   private userToMatch: Map<number, string> = new Map();
   private joinCodeToMatch: Map<string, string> = new Map();
+  // Simple in-process counters for Prometheus exposition
+  private matchesCreatedTotal: number = 0;
+  private workersSpawnedTotal: number = 0;
+  private lastActiveWorkers: number = 0;
+
+  // Worker scaling configuration (from env with sane defaults)
+  private readonly maxMatchesPerWorker: number = parseInt(process.env.MAX_MATCHES_PER_WORKER || '4', 10);
+  private readonly minWorkers: number = parseInt(process.env.MIN_WORKERS || '10', 10);
+  private readonly maxWorkers: number = parseInt(process.env.MAX_WORKERS || '50', 10);
+
 
   constructor(server: any) {
     this.io = new SocketIOServer(server, {
@@ -308,6 +378,73 @@ class EnhancedMatchService {
     });
 
     this.setupSocketHandlers();
+  }
+
+  // Metrics helpers
+  public getPlayersPerMatch(): Array<{ matchId: string; count: number }> {
+    const result: Array<{ matchId: string; count: number }> = [];
+    this.matches.forEach((m, id) => {
+      result.push({ matchId: id, count: m.players.size });
+    });
+    return result;
+  }
+
+  public getMatchesCreatedTotal(): number {
+    return this.matchesCreatedTotal;
+  }
+
+  public getActiveMatchesCount(): number {
+    return this.matches.size;
+  }
+
+  public getConnectedUsersCount(): number {
+    let total = 0;
+    this.matches.forEach((m) => (total += m.players.size));
+    return total;
+  }
+
+  public getWorkersSpawnedTotal(): number {
+    return this.workersSpawnedTotal;
+  }
+
+  // Compute desired worker stats based on active matches and env config
+  public computeWorkerStats(): {
+    activeWorkers: number;
+    totalWorkers: number;
+    idleWorkers: number;
+    workerMatchCounts: Array<{ worker_id: number; matches: number }>;
+  } {
+    const activeMatches = this.getActiveMatchesCount();
+    // Scale-to-zero when there is no work
+    if (activeMatches === 0) {
+      this.lastActiveWorkers = 0;
+      return { activeWorkers: 0, totalWorkers: 0, idleWorkers: 0, workerMatchCounts: [] };
+    }
+
+    // Otherwise determine desired active workers based on load
+    const rawActive = Math.ceil(activeMatches / Math.max(1, this.maxMatchesPerWorker));
+    const activeWorkers = Math.min(this.maxWorkers, rawActive);
+    const totalWorkers = Math.max(this.minWorkers, activeWorkers);
+    const idleWorkers = Math.max(0, totalWorkers - activeWorkers);
+
+    // Track spawned workers counter when scaling up
+    if (activeWorkers > this.lastActiveWorkers) {
+      this.workersSpawnedTotal += (activeWorkers - this.lastActiveWorkers);
+    }
+    this.lastActiveWorkers = activeWorkers;
+
+    // Distribute matches across active workers for visibility
+    const workerMatchCounts: Array<{ worker_id: number; matches: number }> = [];
+    if (activeWorkers > 0) {
+      const base = Math.floor(activeMatches / activeWorkers);
+      const rem = activeMatches % activeWorkers;
+      for (let i = 1; i <= activeWorkers; i++) {
+        const matches = base + (i <= rem ? 1 : 0);
+        workerMatchCounts.push({ worker_id: i, matches });
+      }
+    }
+
+    return { activeWorkers, totalWorkers, idleWorkers, workerMatchCounts };
   }
 
   private generateJoinCode(): string {
@@ -487,6 +624,8 @@ class EnhancedMatchService {
           this.matches.set(matchId, match);
           this.userToMatch.set(socket.data.userId, matchId);
           this.joinCodeToMatch.set(joinCode, matchId);
+          // metrics: created match
+          this.matchesCreatedTotal += 1;
 
           socket.join(matchId);
           socket.emit('friend_match_created', { matchId, joinCode });
@@ -1256,14 +1395,6 @@ class EnhancedMatchService {
     logInfo('Match completion broadcast sent', { matchId });
   }
 
-  // Public methods for metrics
-  public getActiveMatchesCount(): number {
-    return this.matches.size;
-  }
-
-  public getConnectedUsersCount(): number {
-    return this.userToMatch.size;
-  }
 }
 
 // API Routes for friend matches

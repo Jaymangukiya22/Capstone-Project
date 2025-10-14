@@ -1,0 +1,79 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "API p95 & p99 Latency (seconds)",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "clamp_min(histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))), 0)",
+          "legendFormat": "p95 {{path}}",
+          "refId": "A"
+        },
+        {
+          "expr": "clamp_min(histogram_quantile(0.99, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))), 0)",
+          "legendFormat": "p99 {{path}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "options": {"legend": {"showLegend": true}}
+    },
+    {
+      "type": "bargauge",
+      "title": "5xx Error Rate by Route (last 5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (path) (rate(http_requests_total{job=\"match-server-master\", status_code=~\"5..\"}[5m])) / sum by (path) (rate(http_requests_total{job=\"match-server-master\"}[5m]))",
+          "legendFormat": "{{path}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Total RPS",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(http_requests_total{job=\"match-server-master\"}[1m]))", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "req/s"}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "type": "table",
+      "title": "Slowest Routes (p99) - Top 10",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.99, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "options": {"showHeader": true}
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["api", "latency", "errors"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "API Latency & Errors",
+  "version": 1
+}

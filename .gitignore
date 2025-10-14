@@ -48,8 +48,8 @@ influxdb_config/
 Thumbs.db
 
 # Build outputs
-dist/
-build/
+*dist/
+*build/
 *.tgz
 *.tar.gz
 
@@ -71,3 +71,12 @@ build/
 # Backup files
 *.bak
 *.backup
+
+
+# Tests
+*coverage/
+*dist/
+*logs/
+
+Frontend-admin/docs/
+backend/docs/

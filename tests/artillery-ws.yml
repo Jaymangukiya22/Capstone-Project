@@ -1,0 +1,23 @@
+config:
+  target: "ws://localhost:3001"
+  phases:
+    - duration: 180
+      arrivalRate: 10
+  engines:
+    socketio-v3: {}
+  protocols:
+    socketio: socketio-v3
+scenarios:
+  - engine: socketio-v3
+    flow:
+      - emit:
+          channel: authenticate
+          data:
+            userId: "{{ $randomNumber(2, 100000) }}"
+            username: "user{{ $randomNumber(2, 100000) }}"
+      - think: 1
+      - emit:
+          channel: create_friend_match
+          data:
+            quizId: 1
+      - think: 2

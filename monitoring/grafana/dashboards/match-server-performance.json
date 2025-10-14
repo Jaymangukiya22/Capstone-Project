@@ -1,0 +1,390 @@
+{
+  "title": "Match Server Performance - 2000 Matches Scale",
+  "uid": "match-server-performance",
+  "tags": ["match-server", "performance", "scaling"],
+  "timezone": "browser",
+  "schemaVersion": 30,
+  "version": 2,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "System Overview",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "title": "CPU Usage %",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"match-server-master\"}[5m]) * 100",
+          "legendFormat": "CPU Usage %",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percent",
+          "min": 0,
+          "max": 100
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 70,
+          "colorMode": "critical",
+          "op": "gt",
+          "fill": true,
+          "line": true,
+          "yaxis": "left"
+        },
+        {
+          "value": 90,
+          "colorMode": "critical",
+          "op": "gt",
+          "fill": true,
+          "line": true,
+          "yaxis": "left"
+        }
+      ],
+      "alert": {
+        "name": "High CPU Usage",
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [70],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": ["A", "5m", "now"]
+            },
+            "reducer": {
+              "params": [],
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ]
+      },
+      "id": 2
+    },
+    {
+      "id": 3,
+      "title": "Memory Usage %",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"match-server-master\"} / 1073741824",
+          "legendFormat": "Memory Usage (GB)",
+          "refId": "A"
+        },
+        {
+          "expr": "nodejs_heap_used_bytes{job=\"match-server-master\"} / nodejs_heap_total_bytes{job=\"match-server-master\"} * 100",
+          "legendFormat": "Heap Usage %",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percent",
+          "min": 0,
+          "max": 100
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 70,
+          "colorMode": "critical",
+          "op": "gt"
+        },
+        {
+          "value": 85,
+          "colorMode": "critical",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Worker Pool Statistics",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+    },
+    {
+      "id": 5,
+      "title": "Active Workers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "expr": "matchserver_active_workers{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "red" },
+              { "value": 10, "color": "yellow" },
+              { "value": 20, "color": "green" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Total Workers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 10 },
+      "targets": [
+        {
+          "expr": "matchserver_total_workers{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Active Matches",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 10 },
+      "targets": [
+        {
+          "expr": "matchserver_active_matches_total{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "blue" },
+              { "value": 500, "color": "green" },
+              { "value": 1500, "color": "yellow" },
+              { "value": 1900, "color": "orange" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Idle Workers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 10 },
+      "targets": [
+        {
+          "expr": "matchserver_idle_workers{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "API Performance",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+    },
+    {
+      "id": 10,
+      "title": "Request Rate (req/s)",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"match-server-master\"}[1m]))",
+          "legendFormat": "Total",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"match-server-master\", status_code=~\"5..\"}[1m]))",
+          "legendFormat": "5xx Errors",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "API Latency (ms) - p50, p95, p99",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))) * 1000",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))) * 1000",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))) * 1000",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ms",
+          "min": 0
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 200,
+          "colorMode": "critical",
+          "op": "gt"
+        },
+        {
+          "value": 500,
+          "colorMode": "critical",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Endpoint Performance (Top 10 Slowest)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 23 },
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.99, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))))",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "path": "Endpoint",
+              "Value": "p99 Latency (s)"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Network & I/O",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 }
+    },
+    {
+      "id": 14,
+      "title": "Event Loop Lag (ms)",
+      "type": "graph",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 34 },
+      "targets": [
+        {
+          "expr": "nodejs_eventloop_lag_seconds{job=\"match-server-master\"} * 1000",
+          "legendFormat": "Event Loop Lag",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ms",
+          "min": 0
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 50,
+          "colorMode": "critical",
+          "op": "gt"
+        },
+        {
+          "value": 100,
+          "colorMode": "critical",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Memory Breakdown",
+      "type": "graph",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 34 },
+      "targets": [
+        {
+          "expr": "nodejs_heap_size_used_bytes{job=\"match-server-master\"}",
+          "legendFormat": "Heap Used (bytes)",
+          "refId": "A"
+        },
+        {
+          "expr": "nodejs_heap_size_total_bytes{job=\"match-server-master\"}",
+          "legendFormat": "Heap Total (bytes)",
+          "refId": "B"
+        },
+        {
+          "expr": "process_resident_memory_bytes{job=\"match-server-master\"}",
+          "legendFormat": "External",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "bytes",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Bottlenecks Detection",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 }
+    },
+    {
+      "id": 17,
+      "title": "Critical Bottlenecks (Error Rate > 5%)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
+      "targets": [
+        {
+          "expr": "100 * (sum by (path) (rate(http_request_duration_seconds_count{job=\"match-server-master\", status_code=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_request_duration_seconds_count{job=\"match-server-master\"}[5m])), 1))",
+          "format": "table",
+          "refId": "A",
+          "legendFormat": "{{path}}"
+        }
+      ],
+      "description": "Endpoints with an error rate > 5%. Use panel thresholds to highlight."
+    },
+    {
+      "id": 18,
+      "title": "Error Rate by Endpoint",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 49 },
+      "targets": [
+        {
+          "expr": "100 * (sum by (path) (rate(http_request_duration_seconds_count{job=\"match-server-master\", status_code=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_request_duration_seconds_count{job=\"match-server-master\"}[5m])), 1))",
+          "legendFormat": "{{path}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percentunit",
+          "min": 0
+        }
+      ]
+    }
+  ]
+}

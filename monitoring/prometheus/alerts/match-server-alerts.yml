@@ -1,0 +1,196 @@
+groups:
+  - name: match_server_critical
+    interval: 30s
+    rules:
+      # Critical CPU Usage
+      - alert: CriticalCPUUsage
+        expr: nodejs_cpu_usage_percent > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% (threshold: 90%)"
+          
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: nodejs_memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% (threshold: 85%)"
+          
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_errors_total[5m]) / rate(http_requests_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+          
+      # Slow API Response
+      - alert: SlowAPIResponse
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Slow API responses (p99)"
+          description: "p99 latency is {{ $value }}s (threshold: 1s)"
+          
+      # Event Loop Blocked
+      - alert: EventLoopBlocked
+        expr: nodejs_event_loop_lag_ms > 100
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Event loop is blocked"
+          description: "Event loop lag is {{ $value }}ms (threshold: 100ms)"
+          
+      # Worker Pool Exhausted
+      - alert: WorkerPoolExhausted
+        expr: matchserver_active_workers >= matchserver_total_workers * 0.95
+        for: 5m
+        labels:
+          severity: critical
+          component: scaling
+        annotations:
+          summary: "Worker pool near capacity"
+          description: "{{ $value }} workers active out of maximum"
+          
+      # High Match Load
+      - alert: HighMatchLoad
+        expr: matchserver_active_matches_total > 1800
+        for: 5m
+        labels:
+          severity: warning
+          component: scaling
+        annotations:
+          summary: "Approaching match capacity"
+          description: "{{ $value }} active matches (target: 2000)"
+
+  - name: match_server_warnings
+    interval: 60s
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: nodejs_cpu_usage_percent > 70
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% (threshold: 70%)"
+          
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: nodejs_memory_usage_percent > 70
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% (threshold: 70%)"
+          
+      # Elevated Error Rate
+      - alert: ElevatedErrorRate
+        expr: rate(http_errors_total[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Elevated error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          
+      # Slow Endpoint
+      - alert: SlowEndpoint
+        expr: http_request_error_rate_percent > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Slow endpoint: {{ $labels.endpoint }}"
+          description: "Error rate is {{ $value }}% (threshold: 5%)"
+          
+      # Low Worker Count
+      - alert: LowWorkerCount
+        expr: matchserver_active_workers < 5
+        for: 5m
+        labels:
+          severity: warning
+          component: scaling
+        annotations:
+          summary: "Low worker count"
+          description: "Only {{ $value }} workers active (minimum: 5)"
+          
+      # Database Connection Pool High
+      - alert: DatabaseConnectionPoolHigh
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database connection usage"
+          description: "{{ $value }} connections active (limit: 100)"
+          
+      # Redis Memory High
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis using {{ $value | humanizePercentage }} of available memory"
+
+  - name: match_server_performance
+    interval: 60s
+    rules:
+      # Match Creation Rate Dropped
+      - alert: MatchCreationRateDropped
+        expr: rate(matchserver_active_matches_total[5m]) < rate(matchserver_active_matches_total[5m] offset 10m) * 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Match creation rate dropped significantly"
+          description: "Current rate is 50% lower than 10 minutes ago"
+          
+      # Worker Crashes
+      - alert: WorkerCrashes
+        expr: increase(matchserver_total_workers[5m]) > 3
+        for: 2m
+        labels:
+          severity: critical
+          component: stability
+        annotations:
+          summary: "Multiple worker crashes detected"
+          description: "{{ $value }} workers crashed in 5 minutes"
+          
+      # Heap Memory Growth
+      - alert: HeapMemoryGrowth
+        expr: rate(nodejs_heap_used_bytes[10m]) > 1000000
+        for: 15m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "Heap memory growing rapidly"
+          description: "Heap growing at {{ $value | humanize }}B/s - possible memory leak"

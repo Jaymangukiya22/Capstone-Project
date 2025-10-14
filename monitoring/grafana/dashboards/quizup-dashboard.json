@@ -127,7 +127,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "up{job=\"quizup-backend\"}",
+          "expr": "up{job=\"api-server\"}",
           "legendFormat": "Backend API",
           "range": true,
           "refId": "A"
@@ -138,7 +138,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "up{job=\"quizup-matchserver\"}",
+          "expr": "up{job=\"match-server-master\"}",
           "hide": false,
           "legendFormat": "Match Server",
           "range": true,
@@ -231,8 +231,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(http_requests_total{job=\"quizup-backend\"}[5m])",
-          "legendFormat": "API Requests",
+          "expr": "sum(rate(http_requests_total{job=\"api-server\"}[5m]))",
+          "legendFormat": "API Requests (api-server)",
           "range": true,
           "refId": "A"
         }

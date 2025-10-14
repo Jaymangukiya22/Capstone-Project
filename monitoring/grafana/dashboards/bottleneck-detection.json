@@ -1,0 +1,232 @@
+{
+  "title": "Bottleneck Detection & Analysis",
+  "uid": "bottleneck-detection",
+  "tags": ["bottlenecks", "performance", "debugging"],
+  "timezone": "browser",
+  "schemaVersion": 30,
+  "version": 1,
+  "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Critical Bottlenecks",
+        "type": "table",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "topk(10, histogram_quantile(0.99, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "description": "Top 10 slowest endpoints (p99 > 500ms)",
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "endpoint": "Endpoint",
+                "Value": "p99 Latency (s)",
+                "__name__": "Metric"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 0.2, "color": "yellow" },
+                { "value": 0.5, "color": "orange" },
+                { "value": 1, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "API Endpoint Performance Comparison",
+        "type": "graph",
+        "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+        "targets": [
+          {
+            "expr": "(sum by (path) (rate(http_request_duration_seconds_sum{job=\"match-server-master\"}[5m])) / sum by (path) (rate(http_request_duration_seconds_count{job=\"match-server-master\"}[5m]))) * 1000",
+            "legendFormat": "{{path}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "p99 Latency"
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "max": true,
+          "sort": "current",
+          "sortDesc": true
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate by Endpoint",
+        "type": "graph",
+        "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
+        "targets": [
+          {
+            "expr": "100 * (sum by (path) (rate(http_requests_total{job=\"match-server-master\", status_code=~\"5..\"}[5m])) / sum by (path) (rate(http_requests_total{job=\"match-server-master\"}[5m])))",
+            "legendFormat": "{{path}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Error Rate"
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 5,
+            "colorMode": "critical"
+          },
+          {
+            "value": 10,
+            "colorMode": "critical"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Resource Utilization Heatmap",
+        "type": "heatmap",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"match-server-master\"}[1m]) * 100",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "dataFormat": "tsbuckets",
+        "yAxis": {
+          "format": "percent"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Database Query Performance",
+        "type": "table",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+        "targets": [
+          {
+            "expr": "topk(10, (sum by (queryid) (rate(pg_stat_statements_total_time_seconds{job=\"postgresql\"}[5m])) / sum by (queryid) (rate(pg_stat_statements_calls{job=\"postgresql\"}[5m]))))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "description": "Slowest database queries (>100ms)"
+      },
+      {
+        "id": 6,
+        "title": "Redis Operation Latency",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+        "targets": [
+          {
+            "expr": "(sum by (cmd) (rate(redis_commands_duration_seconds_total{job=\"redis\"}[5m])) / sum by (cmd) (rate(redis_commands_total{job=\"redis\"}[5m]))) * 1000",
+            "legendFormat": "{{cmd}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Latency"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Network I/O Bottlenecks",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 38 },
+        "targets": [
+          {
+            "expr": "rate(node_network_receive_bytes_total{job=\"node\"}[1m])",
+            "legendFormat": "RX {{device}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(node_network_transmit_bytes_total{job=\"node\"}[1m])",
+            "legendFormat": "TX {{device}}",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "Bps",
+            "label": "Bytes/sec"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Disk I/O Wait Time",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 38 },
+        "targets": [
+          {
+            "expr": "rate(node_disk_io_time_seconds_total{job=\"node\"}[1m])",
+            "legendFormat": "{{device}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "I/O Wait"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Worker Distribution Analysis",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 46 },
+        "targets": [
+          {
+            "expr": "matchserver_active_workers{job=\"match-server-master\"}",
+            "legendFormat": "Active Workers",
+            "refId": "A"
+          },
+          {
+            "expr": "matchserver_idle_workers{job=\"match-server-master\"}",
+            "legendFormat": "Idle Workers",
+            "refId": "B"
+          },
+          {
+            "expr": "(matchserver_active_matches_total{job=\"match-server-master\"}) / ignoring(instance) clamp_min(matchserver_active_workers{job=\"match-server-master\"}, 1)",
+            "legendFormat": "Matches per Worker",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Recommendations",
+        "type": "text",
+        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 54 },
+        "options": {
+          "content": "## Performance Optimization Recommendations\n\n### High CPU Usage (>70%)\n- Add more workers: Increase MAX_WORKERS\n- Optimize event loop: Check for blocking operations\n- Scale horizontally: Add more servers\n\n### High Memory Usage (>70%)\n- Check for memory leaks: Review heap growth\n- Reduce worker count: Decrease MAX_WORKERS\n- Optimize data structures: Use streaming where possible\n\n### Slow API Endpoints (p99 >500ms)\n- Add database indexes\n- Implement query result caching\n- Optimize business logic\n- Consider async processing for heavy operations\n\n### High Error Rate (>5%)\n- Check application logs\n- Review recent deployments\n- Validate input data\n- Monitor third-party dependencies\n\n### Worker Pool Exhausted\n- CRITICAL: Add more servers immediately\n- Current capacity:Reached maximum\n- Action: Deploy additional match server instances",
+          "mode": "markdown"
+        }
+      }
+    ]
+}

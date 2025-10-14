@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkquiz_app_backend=self.webpackChunkquiz_app_backend||[]).push([[647],{1207:(e,a,s)=>{s.r(a),s.d(a,{default:()=>t});s(5512);var r=s(7798),u=s(6541),c=s(4114),n=s(2831),p=s(5555),d=s(5668);function t(e){return(0,d.jsx)(c.e3,{className:(0,r.A)(u.G.wrapper.docsPages),children:(0,d.jsx)(p.A,{children:(0,n.v)(e.route.routes)})})}}}]);

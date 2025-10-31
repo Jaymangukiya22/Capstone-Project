@@ -12,6 +12,7 @@ import QuizResults from "@/components/student/QuizResults"
 import { LoginForm } from "@/pages/login/login"
 import { SignUpForm } from "@/pages/login/signup"
 import { AuthTestPage } from "@/pages/auth-test"
+import { NavigationGuardTest } from "@/components/test/NavigationGuardTest"
 
 // Import authentication components
 import { AuthProvider } from "@/contexts/AuthContext"
@@ -103,6 +104,8 @@ function AppContent() {
         );
       case '/auth-test':
         return <AuthTestPage />;
+      case '/nav-guard-test':
+        return <NavigationGuardTest />;
       case '/quiz-countdown':
         return (
           <ProtectedPage>

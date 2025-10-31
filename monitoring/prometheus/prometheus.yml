@@ -1,0 +1,71 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  external_labels:
+    monitor: 'quiz-match-server'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Main API Server (Port 3000)
+  - job_name: 'api-server'
+    static_configs:
+      - targets: ['backend:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 4s
+
+  # Match Server Master (Port 3001)
+  - job_name: 'match-server-master'
+    static_configs:
+      - targets: ['matchserver:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 4s
+
+  # PostgreSQL Exporter
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 10s
+
+  # Redis Exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 10s
+
+  # Node Exporter (System metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 10s
+
+  # For horizontal scaling - add multiple match servers
+  # Uncomment and configure when deploying multiple servers
+  # - job_name: 'match-servers'
+  #   static_configs:
+  #     - targets:
+  #         - 'match-server-1:3001'
+  #         - 'match-server-2:3001'
+  #         - 'match-server-3:3001'
+  #         - 'match-server-4:3001'
+  #         - 'match-server-5:3001'
+  #         - 'match-server-6:3001'
+  #         - 'match-server-7:3001'
+  #         - 'match-server-8:3001'
+  #         - 'match-server-9:3001'
+  #         - 'match-server-10:3001'
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 5s

@@ -90,29 +90,42 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Create non-root user
-RUN addgroup -g 1001 -S nginx-user
-RUN adduser -u 1001 -S nginx-user -G nginx-user
+# Create a custom main nginx.conf that works without root user
+RUN echo 'pid /tmp/nginx.pid;' > /etc/nginx/nginx.conf && \
+    echo 'error_log /dev/stderr info;' >> /etc/nginx/nginx.conf && \
+    echo 'events { worker_connections 1024; }' >> /etc/nginx/nginx.conf && \
+    echo 'http {' >> /etc/nginx/nginx.conf && \
+    echo '  include /etc/nginx/mime.types;' >> /etc/nginx/nginx.conf && \
+    echo '  default_type application/octet-stream;' >> /etc/nginx/nginx.conf && \
+    echo '  access_log /dev/stdout;' >> /etc/nginx/nginx.conf && \
+    echo '  sendfile on;' >> /etc/nginx/nginx.conf && \
+    echo '  keepalive_timeout 65;' >> /etc/nginx/nginx.conf && \
+    echo '  server {' >> /etc/nginx/nginx.conf && \
+    echo '    listen 80;' >> /etc/nginx/nginx.conf && \
+    echo '    root /usr/share/nginx/html;' >> /etc/nginx/nginx.conf && \
+    echo '    index index.html;' >> /etc/nginx/nginx.conf && \
+    echo '    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''unsafe-inline'\'' '\''unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; font-src '\''self'\'' data:; img-src '\''self'\'' data: https:; connect-src '\''self'\'' ws: wss: http://localhost:* http://127.0.0.1:* https://api.quizdash.dpdns.org;" always;' >> /etc/nginx/nginx.conf && \
+    echo '    location /health { access_log off; return 200 "healthy\n"; add_header Content-Type text/plain; }' >> /etc/nginx/nginx.conf && \
+    echo '    location / { try_files $uri $uri/ /index.html; }' >> /etc/nginx/nginx.conf && \
+    echo '  }' >> /etc/nginx/nginx.conf && \
+    echo '}' >> /etc/nginx/nginx.conf
 
-# Create necessary directories with proper permissions
+# Create directories with proper permissions (no user creation, run as root)
 RUN mkdir -p /var/cache/nginx/client_temp && \
     mkdir -p /var/cache/nginx/proxy_temp && \
     mkdir -p /var/cache/nginx/fastcgi_temp && \
     mkdir -p /var/cache/nginx/uwsgi_temp && \
     mkdir -p /var/cache/nginx/scgi_temp && \
-    chown -R nginx-user:nginx-user /var/cache/nginx && \
-    chown -R nginx-user:nginx-user /usr/share/nginx/html && \
-    chown -R nginx-user:nginx-user /etc/nginx/conf.d
-
-# Switch to non-root user
-USER nginx-user
+    mkdir -p /tmp && \
+    chmod 777 /tmp && \
+    chmod -R 777 /var/cache/nginx
 
 # Expose port
 EXPOSE 80
 
 # Health check for production
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:80 || exit 1
+  CMD curl -f http://localhost:80/health || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

@@ -136,7 +136,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "max(pg_settings_server_version_num)",
+          "expr": "max(pg_settings_server_version_num{job=\"postgresql\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -226,7 +226,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "max(pg_replication_lag{instance=\"$Instance\"})",
+          "expr": "max(pg_replication_lag{job=\"postgresql\"})",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -317,7 +317,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum(pg_stat_activity_count{state=\"active\",instance=\"$Instance\"})",
+          "expr": "sum(pg_stat_activity_count{job=\"postgresql\", state=\"active\"})",
           "refId": "A"
         }
       ],
@@ -398,7 +398,7 @@
       "pluginVersion": "7.0.3",
       "targets": [
         {
-          "expr": "sum(pg_stat_database_blks_hit{instance=~\"$Instance\"})/(sum(pg_stat_database_blks_hit{instance=~\"$Instance\"})+sum(pg_stat_database_blks_read{instance=~\"$Instance\"}))*100",
+          "expr": "(sum(pg_stat_database_blks_hit{job=\"postgresql\"}) / (sum(pg_stat_database_blks_hit{job=\"postgresql\"}) + sum(pg_stat_database_blks_read{job=\"postgresql\"}))) * 100",
           "refId": "A"
         }
       ],
@@ -469,7 +469,7 @@
       "pluginVersion": "7.0.3",
       "targets": [
         {
-          "expr": "sum(pg_stat_database_numbackends)/max(pg_settings_max_connections)",
+          "expr": "sum(pg_stat_activity_count{job=\"postgresql\"}) / max(pg_settings_max_connections{job=\"postgresql\"})",
           "refId": "A"
         }
       ],
@@ -540,7 +540,7 @@
       "pluginVersion": "7.0.3",
       "targets": [
         {
-          "expr": "sum(pg_stat_database_xact_commit{instance=\"$Instance\"})/(sum(pg_stat_database_xact_commit{instance=\"$Instance\"}) + sum(pg_stat_database_xact_rollback{instance=\"$Instance\"}))",
+          "expr": "sum(pg_stat_database_xact_commit{job=\"postgresql\"}) / (sum(pg_stat_database_xact_commit{job=\"postgresql\"}) + sum(pg_stat_database_xact_rollback{job=\"postgresql\"}))",
           "refId": "A"
         }
       ],
@@ -620,7 +620,7 @@
       "tableColumn": "{instance=\"db01vp-nbg6a.obs.noris.net:9187\", job=\"postgres-exporter\", server=\"213.95.132.73:5432\"}",
       "targets": [
         {
-          "expr": "time()-(pg_postmaster_start_time_seconds{instance=\"$Instance\"})",
+          "expr": "time() - max(pg_postmaster_start_time_seconds{job=\"postgresql\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -710,7 +710,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"$Instance\"}[$Interval])))+sum((rate(pg_stat_database_xact_rollback{instance=\"$Instance\"}[$Interval])))",
+          "expr": "sum(rate(pg_stat_database_xact_commit{job=\"postgresql\"}[5m])) + sum(rate(pg_stat_database_xact_rollback{job=\"postgresql\"}[5m]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -801,7 +801,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum((rate(pg_stat_statements_calls{instance=\"$Instance\"}[$Interval])))",
+          "expr": "sum(rate(pg_stat_statements_calls{job=\"postgresql\"}[5m]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -893,7 +893,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum(pg_database_size{instance=\"$Instance\"})",
+          "expr": "sum(pg_database_size_bytes{job=\"postgresql\"})",
           "refId": "A"
         }
       ],
@@ -982,7 +982,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum((delta(pg_stat_statements_total_time_seconds{instance=\"$Instance\"}[$Interval])))/sum((delta(pg_stat_statements_calls{instance=\"$Instance\"}[$Interval])))",
+          "expr": "(sum(rate(pg_stat_statements_total_time_seconds{job=\"postgresql\"}[5m])) / clamp_min(sum(rate(pg_stat_statements_calls{job=\"postgresql\"}[5m])), 1))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"

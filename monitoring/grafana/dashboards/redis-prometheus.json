@@ -1,0 +1,107 @@
+{
+  "title": "Redis (Prometheus Exporter)",
+  "uid": "redis-prometheus",
+  "tags": ["redis", "prometheus"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Ops/sec",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(redis_commands_total{job=\"redis\"}[1m]))", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "type": "gauge",
+      "title": "Network (KB/s)",
+      "gridPos": {"h": 6, "w": 8, "x": 6, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(redis_net_input_bytes_total{job=\"redis\"}[1m]))/1024", "refId": "A", "legendFormat": "Input"},
+        {"expr": "sum(rate(redis_net_output_bytes_total{job=\"redis\"}[1m]))/1024", "refId": "B", "legendFormat": "Output"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "KBs"}}
+    },
+    {
+      "type": "bargauge",
+      "title": "Memory",
+      "gridPos": {"h": 6, "w": 10, "x": 14, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(redis_memory_used_bytes{job=\"redis\"})", "refId": "A", "legendFormat": "Used Memory"},
+        {"expr": "sum(redis_memory_max_bytes{job=\"redis\"})", "refId": "B", "legendFormat": "Memory Limit"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "type": "stat",
+      "title": "Uptime (max)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "max(max_over_time(redis_uptime_in_seconds{job=\"redis\"}[$__interval]))", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "type": "stat",
+      "title": "Connected Clients",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(redis_connected_clients{job=\"redis\"})", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Number of Keys",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(redis_db_keys{job=\"redis\"})", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Keys (Expired/Evicted per sec)",
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 11},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(irate(redis_expired_keys_total{job=\"redis\"}[5m]))", "refId": "A", "legendFormat": "Expired/s"},
+        {"expr": "sum(irate(redis_evicted_keys_total{job=\"redis\"}[5m]))", "refId": "B", "legendFormat": "Evicted/s"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Keyspace (Hits/Misses per sec)",
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 11},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(irate(redis_keyspace_hits_total{job=\"redis\"}[5m]))", "refId": "A", "legendFormat": "Hits/s"},
+        {"expr": "sum(irate(redis_keyspace_misses_total{job=\"redis\"}[5m]))", "refId": "B", "legendFormat": "Misses/s"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Commands/sec by Type",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(redis_commands_total{job=\"redis\"}[1m])) by (cmd)", "refId": "A", "legendFormat": "{{cmd}}"}
+      ]
+    }
+  ]
+}

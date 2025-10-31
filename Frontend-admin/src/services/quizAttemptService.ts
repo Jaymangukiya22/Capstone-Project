@@ -47,6 +47,15 @@ export interface StartQuizResponse {
   totalQuestions: number
 }
 
+export interface SubmitQuizResponse {
+  score: number
+  totalQuestions: number
+  correctAnswers: number
+  timeSpent: number
+  leaderboard?: any[]
+  attempt: QuizAttempt
+}
+
 // API Response types
 interface ApiResponse<T> {
   success: boolean
@@ -140,6 +149,52 @@ class QuizAttemptService {
     } catch (error) {
       console.error('Error submitting answer:', error)
       return false
+    }
+  }
+
+  /**
+   * Submit quiz attempt with answers (used by QuizInterface)
+   */
+  async submitQuizAttempt(
+    attemptId: number, 
+    submissionData: {
+      answers: {
+        questionId: number
+        selectedOptionIds: number[]
+      }[]
+    }
+  ): Promise<SubmitQuizResponse> {
+    try {
+      // First submit all answers
+      for (const answer of submissionData.answers) {
+        await this.submitAnswer(
+          attemptId,
+          answer.questionId,
+          answer.selectedOptionIds,
+          30 // Default time spent per question
+        )
+      }
+
+      // Then complete the attempt
+      const completedAttempt = await this.completeQuizAttempt(attemptId)
+      if (!completedAttempt) {
+        throw new Error('Failed to complete quiz attempt')
+      }
+
+      // Get leaderboard
+      const leaderboard = await this.getLeaderboard(completedAttempt.quizId, 10)
+
+      return {
+        score: completedAttempt.score,
+        totalQuestions: completedAttempt.totalQuestions,
+        correctAnswers: completedAttempt.correctAnswers,
+        timeSpent: completedAttempt.timeSpent || 0,
+        leaderboard,
+        attempt: completedAttempt
+      }
+    } catch (error) {
+      console.error('Error submitting quiz attempt:', error)
+      throw error
     }
   }
 

@@ -7,6 +7,7 @@ import { gameWebSocket } from '@/services/matchService';
 import { toast } from '@/lib/toast';
 import { Users, Wifi, WifiOff } from 'lucide-react';
 import { apiClient } from '@/services/api';
+import { useQuizNavigationGuard } from '@/hooks/useNavigationGuard';
 interface FriendMatchQuestion {
   id: number;
   questionText: string;
@@ -49,6 +50,10 @@ const FriendMatchInterface: React.FC = () => {
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [quizTitle, setQuizTitle] = useState('Friend Match');
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [isMatchCompleted, setIsMatchCompleted] = useState(false);
+  
+  // Navigation guard to prevent going back during friend match
+  const { disableGuard } = useQuizNavigationGuard(!isLoading && !isWaitingForPlayers, isMatchCompleted);
   
   // WebSocket connection ref
   const wsConnected = useRef(false);
@@ -787,6 +792,18 @@ const FriendMatchInterface: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-hidden">
+      {/* Navigation Warning Banner */}
+      {!isLoading && !isWaitingForPlayers && !isMatchCompleted && (
+        <div className="bg-amber-50 border-b border-amber-200 p-3">
+          <div className="container mx-auto flex items-center gap-2 text-amber-800">
+            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium">
+              Friend Match in Progress - Navigation is blocked until completion
+            </span>
+          </div>
+        </div>
+      )}
+      
       {/* Connection status indicator - Mobile optimized */}
       <div className="absolute top-2 right-2 z-50 flex items-center space-x-1 sm:space-x-2">
         {isConnected ? (

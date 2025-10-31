@@ -14,16 +14,32 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   className = ""
 }) => {
   const handleRetakeQuiz = () => {
+    // Clear all quiz-related session data
+    sessionStorage.removeItem('quizResults');
+    sessionStorage.removeItem('friendMatchResults');
+    sessionStorage.removeItem('currentQuiz');
+    
     onRetakeQuiz();
-    window.location.pathname = '/quiz-countdown';
+    // Replace history to prevent going back to results
+    window.history.replaceState(null, '', '/student-quiz');
+    window.location.pathname = '/student-quiz';
   };
 
   const handleBackToDashboard = () => {
+    // Clear all quiz-related session data
+    sessionStorage.removeItem('quizResults');
+    sessionStorage.removeItem('friendMatchResults');
+    sessionStorage.removeItem('currentQuiz');
+    
+    // Replace history to prevent going back to results
+    window.history.replaceState(null, '', '/student');
     window.location.pathname = '/student';
   };
 
   const handleViewQuizInterface = () => {
-    window.location.pathname = '/quiz-interface';
+    // Don't allow going back to quiz interface after completion
+    // Instead redirect to quiz selection
+    handleBackToDashboard();
   };
 
   return (

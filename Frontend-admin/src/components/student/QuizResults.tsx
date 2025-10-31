@@ -4,6 +4,7 @@ import ScoreDisplay from './quiz-results/ScoreDisplay';
 import Leaderboard from './quiz-results/Leaderboard';
 import FriendMatchLeaderboard from './quiz-results/FriendMatchLeaderboard';
 import ActionButtons from './quiz-results/ActionButtons';
+import { useResultsNavigationGuard } from '@/hooks/useNavigationGuard';
 
 export function QuizResults() {
   const [quizData, setQuizData] = useState<any>(null);
@@ -23,7 +24,13 @@ export function QuizResults() {
     return 'Current Student';
   };
 
+  // Prevent going back to quiz from results
+  useResultsNavigationGuard();
+
   useEffect(() => {
+    // Clear any remaining quiz session data to prevent re-entry
+    sessionStorage.removeItem('currentQuiz');
+    
     // Check for friend match results first
     const friendMatchResults = sessionStorage.getItem('friendMatchResults');
     if (friendMatchResults) {

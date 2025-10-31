@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { quizAttemptService, type QuizQuestion as BackendQuizQuestion } from '@/services/quizAttemptService';
 import { toast } from '@/lib/toast';
+import { useQuizNavigationGuard } from '@/hooks/useNavigationGuard';
+import { useQuizSession } from '@/utils/quizSessionManager';
 
 const QuizInterface: React.FC = () => {
   
@@ -24,6 +26,19 @@ const QuizInterface: React.FC = () => {
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [quizTitle, setQuizTitle] = useState('Quiz');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isQuizCompleted, setIsQuizCompleted] = useState(false);
+  
+  // Quiz session management
+  const {
+    getCurrentSession,
+    updateSession,
+    completeSession,
+    validateQuizAccess,
+    forceEndSession
+  } = useQuizSession();
+
+  // Navigation guard to prevent going back during quiz
+  const { disableGuard } = useQuizNavigationGuard(!isLoading && questions.length > 0, isQuizCompleted);
 
   // Get answered questions set for progress tracking
   const answeredQuestions = new Set(answers.keys());
@@ -32,19 +47,33 @@ const QuizInterface: React.FC = () => {
   useEffect(() => {
     const initializeQuiz = async () => {
       try {
-        const quizInfo = sessionStorage.getItem('currentQuiz');
-        if (!quizInfo) {
+        // Validate quiz access using session manager
+        const validation = validateQuizAccess();
+        if (!validation.canAccess) {
           toast({
             title: "Error",
-            description: "No quiz information found. Please start a quiz from the quiz selection page.",
+            description: validation.reason || "Cannot access quiz",
+            variant: "destructive"
+          });
+          window.location.pathname = validation.redirectTo || '/student-quiz';
+          return;
+        }
+
+        const currentSession = getCurrentSession();
+        if (!currentSession) {
+          toast({
+            title: "Error",
+            description: "No active quiz session found. Please start a quiz from the quiz selection page.",
             variant: "destructive"
           });
           window.location.pathname = '/student-quiz';
           return;
         }
 
-        const { quizId, quizName } = JSON.parse(quizInfo);
+        const { quizId, quizName, mode } = currentSession;
         setQuizTitle(quizName || 'Quiz');
+        
+        console.log(`🎯 Initializing ${mode} quiz:`, { quizId, quizName });
 
         // Start quiz attempt
         const startResponse = await quizAttemptService.startQuizAttempt(parseInt(quizId));
@@ -72,6 +101,10 @@ const QuizInterface: React.FC = () => {
         setTimeRemaining(startResponse.timeLimit * startResponse.totalQuestions); // Total quiz time
         setQuestionTimeRemaining(startResponse.timeLimit); // Per question time
         setQuestionStartTime(Date.now());
+        
+        // Update session with attempt ID
+        updateSession({ attemptId: startResponse.attemptId });
+        
         setIsLoading(false);
 
         toast({
@@ -159,32 +192,44 @@ const QuizInterface: React.FC = () => {
       // Submit current answer if not already submitted
       await submitCurrentAnswer();
 
-      // Complete the quiz attempt
-      const completedAttempt = await quizAttemptService.completeQuizAttempt(attemptId);
+      // Prepare submission data
+      const submissionData = {
+        answers: Array.from(answers.entries()).map(([questionId, optionIds]) => ({
+          questionId,
+          selectedOptionIds: optionIds
+        }))
+      };
+
+      // Submit the quiz attempt
+      const result = await quizAttemptService.submitQuizAttempt(attemptId, submissionData);
       
-      if (completedAttempt) {
-        // Store results in sessionStorage for results page
-        const quizResults = {
-          score: completedAttempt.correctAnswers,
-          totalQuestions: completedAttempt.totalQuestions,
-          timeSpent: completedAttempt.timeSpent || Math.floor((Date.now() - startTime) / 1000),
-          completedAt: completedAttempt.completedAt || new Date().toISOString(),
-          studentName: "Current Student",
-          attemptId: completedAttempt.id
-        };
+      // Store results in sessionStorage for results page
+      const quizResults = {
+        score: result.score,
+        totalQuestions: result.totalQuestions,
+        timeSpent: result.timeSpent,
+        completedAt: new Date().toISOString(),
+        studentName: "Current Student",
+        leaderboard: result.leaderboard || []
+      };
         
-        sessionStorage.setItem('quizResults', JSON.stringify(quizResults));
-        
-        toast({
-          title: "Quiz Completed!",
-          description: `You scored ${completedAttempt.correctAnswers}/${completedAttempt.totalQuestions}`,
-        });
-        
-        // Navigate to quiz results page
-        window.location.pathname = '/quiz-results';
-      } else {
-        throw new Error('Failed to complete quiz attempt');
-      }
+      // Mark quiz as completed and disable navigation guard
+      setIsQuizCompleted(true);
+      disableGuard();
+      
+      // Complete session using session manager
+      completeSession(quizResults);
+      
+      toast({
+        title: "Quiz Completed!",
+        description: `You scored ${result.score}/${result.totalQuestions}`,
+      });
+      
+      // Replace current history entry to prevent going back to quiz
+      window.history.replaceState(null, '', '/quiz-results');
+      
+      // Navigate to quiz results page
+      window.location.pathname = '/quiz-results';
     } catch (error) {
       console.error('Error submitting quiz:', error);
       toast({
@@ -358,6 +403,18 @@ const QuizInterface: React.FC = () => {
             quizTitle={quizTitle}
           />
         </div>
+
+        {/* Navigation Warning Banner */}
+        {!isLoading && questions.length > 0 && !isQuizCompleted && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-2 text-amber-800">
+              <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">
+                Quiz in Progress - Navigation is blocked until completion
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
           {/* Desktop Sidebar - Hidden on mobile */}

@@ -4,6 +4,8 @@ import { QuizBuilder } from "@/pages/QuizBuilder"
 import { QuizManagement } from "@/pages/QuizManagement"
 import { QuestionBank } from "@/pages/QuestionBank"
 import { Students } from "@/pages/Students"
+import { Profile } from "@/pages/Profile"
+import { MyResults } from "@/pages/MyResults"
 import { ThemeProvider } from "@/hooks/useTheme"
 import QuizCountdown from "@/components/student/QuizCountdown"
 import QuizInterface from "@/components/student/QuizInterface"
@@ -12,11 +14,14 @@ import QuizResults from "@/components/student/QuizResults"
 import { LoginForm } from "@/pages/login/login"
 import { SignUpForm } from "@/pages/login/signup"
 import { AuthTestPage } from "@/pages/auth-test"
+import React from 'react';
 import { NavigationGuardTest } from "@/components/test/NavigationGuardTest"
+import { StudentQuizContent } from "@/components/student/StudentQuizContent"
 
 // Import authentication components
 import { AuthProvider } from "@/contexts/AuthContext"
 import { useAuth } from "@/contexts/AuthContext"
+import { AdminRoute, StudentRoute } from "@/components/auth/ProtectedRoute"
 
 // Simple protected route component
 function ProtectedPage({ children }: { children: React.ReactNode }) {
@@ -44,10 +49,15 @@ function ProtectedPage({ children }: { children: React.ReactNode }) {
 
 // Simple public route component
 function PublicPage({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
-  // Debug logging
-  console.log('PublicPage - isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
+  React.useEffect(() => {
+    if (!isLoading && isAuthenticated && user) {
+      // Redirect based on role
+      const redirectPath = user.role === 'ADMIN' ? '/categories' : '/student-quiz';
+      window.location.replace(redirectPath);
+    }
+  }, [isAuthenticated, isLoading, user]);
 
   if (isLoading) {
     return (
@@ -58,11 +68,6 @@ function PublicPage({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
-    console.log('User is authenticated, redirecting to categories');
-    // Use setTimeout to avoid immediate redirect issues
-    setTimeout(() => {
-      window.location.href = '/categories';
-    }, 100);
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -128,35 +133,59 @@ function AppContent() {
         );
       case '/student':
         return (
-          <ProtectedPage>
+          <AdminRoute>
             <Students />
-          </ProtectedPage>
+          </AdminRoute>
+        );
+      case '/student-quiz':
+        return (
+          <StudentRoute>
+            <StudentQuizContent />
+          </StudentRoute>
+        );
+      case '/my-results':
+        return (
+          <StudentRoute>
+            <MyResults />
+          </StudentRoute>
         );
       case '/quiz-builder':
         return (
-          <ProtectedPage>
+          <AdminRoute>
             <QuizBuilder />
-          </ProtectedPage>
+          </AdminRoute>
         );
       case '/quiz-management':
         return (
-          <ProtectedPage>
+          <AdminRoute>
             <QuizManagement />
-          </ProtectedPage>
+          </AdminRoute>
         );
       case '/question-bank':
         return (
-          <ProtectedPage>
+          <AdminRoute>
             <QuestionBank />
+          </AdminRoute>
+        );
+      case '/faculties':
+        return (
+          <AdminRoute>
+            <Students />
+          </AdminRoute>
+        );
+      case '/profile':
+        return (
+          <ProtectedPage>
+            <Profile />
           </ProtectedPage>
         );
       case '/categories':
       case '/':
       default:
         return (
-          <ProtectedPage>
+          <AdminRoute>
             <Categories />
-          </ProtectedPage>
+          </AdminRoute>
         );
     }
   };

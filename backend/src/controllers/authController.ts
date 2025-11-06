@@ -40,7 +40,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       passwordHash,
       firstName,
       lastName,
-      role: role || UserRole.ADMIN  // Changed from PLAYER to ADMIN for testing
+      role: UserRole.PLAYER  // Changed from PLAYER to ADMIN for testing
     });
     console.log('User created successfully:', user.id);
 
@@ -91,9 +91,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
+    // Find user by email or username (email field can contain username)
     const user = await User.findOne({
-      where: { email }
+      where: {
+        [email.includes('@') ? 'email' : 'username']: email
+      }
     });
 
     if (!user || !user.isActive) {

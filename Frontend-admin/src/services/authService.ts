@@ -50,21 +50,29 @@ export class AuthService {
     try {
       const response = await apiClient.post<ApiResponse<AuthData>>(`${this.endpoint}/login`, credentials);
       
-      console.log('🔍 Login API Response:', response.data);
-      console.log('🔍 User Data from API:', response.data.data.user);
-      
-      // Store token and user data in localStorage
-      if (response.data.data.token) {
-        localStorage.setItem('authToken', response.data.data.token);
-        localStorage.setItem('refreshToken', response.data.data.refreshToken);
-        localStorage.setItem('user', JSON.stringify(response.data.data.user));
-        
-        console.log('✅ User data stored in localStorage:', JSON.stringify(response.data.data.user));
+      if (!response.data || !response.data.data) {
+        throw new Error('Invalid response from server');
       }
       
-      return response.data.data;
+      const authData = response.data.data;
+      
+      // Store token and user data in localStorage
+      if (authData.token) {
+        localStorage.setItem('authToken', authData.token);
+        localStorage.setItem('refreshToken', authData.refreshToken);
+        
+        const userJson = JSON.stringify(authData.user);
+        
+        // Store in multiple keys to ensure persistence
+        localStorage.setItem('user', userJson);
+        localStorage.setItem('quizmaster_user', userJson);
+        localStorage.setItem('currentUser', userJson);
+        localStorage.setItem('userId', authData.user.id.toString());
+      }
+      
+      return authData;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login failed:', error);
       throw error;
     }
   }
@@ -110,34 +118,46 @@ export class AuthService {
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('quizmaster_user');
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('userId');
   }
 
   /**
-   * Check if user is authenticated
+   * Check if user is authenticated (has both token AND user data)
    */
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('authToken');
-    return !!token;
+    const token = this.getToken();
+    const user = this.getCurrentUser();
+    return !!token && !!user;
   }
 
   /**
    * Get current user from localStorage
    */
   getCurrentUser(): User | null {
-    const userStr = localStorage.getItem('user');
-    console.log('🔍 Raw user string from localStorage:', userStr);
+    // Try multiple keys - check user first
+    let userStr = localStorage.getItem('user');
+    
+    if (!userStr) {
+      // Only log and try other keys if user key is empty
+      userStr = localStorage.getItem('quizmaster_user');
+      
+      if (!userStr) {
+        userStr = localStorage.getItem('currentUser');
+      }
+    }
     
     if (userStr) {
       try {
         const parsedUser = JSON.parse(userStr);
-        console.log('🔍 Parsed user data:', parsedUser);
         return parsedUser;
       } catch (error) {
         console.error('Error parsing user data:', error);
         return null;
       }
     }
-    console.log('❌ No user data found in localStorage');
+    
     return null;
   }
 

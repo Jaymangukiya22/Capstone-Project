@@ -1,4 +1,4 @@
-import { QuizAttempt, Quiz, User, QuizAttemptAnswer, QuestionBankItem, QuestionBankOption, AttemptStatus } from '../models';
+import { QuizAttempt, Quiz, User, QuizAttemptAnswer, QuestionBankItem, QuestionBankOption, AttemptStatus, Category } from '../models';
 import { logInfo, logError } from '../utils/logger';
 import { Op } from 'sequelize';
 
@@ -217,7 +217,17 @@ export class QuizAttemptService {
         QuizAttempt.findAll({
           where: { userId },
           include: [
-            { model: Quiz, as: 'quiz' }
+            { 
+              model: Quiz, 
+              as: 'quiz',
+              include: [
+                {
+                  model: Category,
+                  as: 'category',
+                  attributes: ['id', 'name']
+                }
+              ]
+            }
           ],
           order: [['createdAt', 'DESC']],
           offset: skip,

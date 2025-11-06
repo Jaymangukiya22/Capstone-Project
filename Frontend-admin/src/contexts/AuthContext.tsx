@@ -29,17 +29,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = () => {
       try {
-        console.log('🔄 Initializing auth...');
+        // Get token and user data
+        const token = authService.getToken();
         const currentUser = authService.getCurrentUser();
-        const isAuth = authService.isAuthenticated();
         
-        console.log('🔍 Auth check - isAuth:', isAuth, 'currentUser:', currentUser);
-        
-        if (isAuth && currentUser) {
-          console.log('✅ Setting user in AuthContext:', currentUser);
+        // Only set user if we have both token AND user data
+        if (token && currentUser) {
           setUser(currentUser);
         } else {
-          console.log('❌ No valid auth data found');
+          setUser(null);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);

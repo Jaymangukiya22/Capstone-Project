@@ -44,8 +44,15 @@ export function SignUpForm() {
     setIsSubmitting(true);
     
     try {
-      // Generate username from email if not provided
-      const username = formData.username || formData.email.split('@')[0];
+      // Generate username from email - ensure it's alphanumeric only
+      let username = formData.username || formData.email.split('@')[0];
+      // Remove any non-alphanumeric characters to pass validation
+      username = username.replace(/[^a-zA-Z0-9]/g, '');
+      
+      // Ensure username is at least 3 characters
+      if (username.length < 3) {
+        username = username + '123'; // Add numbers if too short
+      }
       
       await register({
         username,
@@ -53,11 +60,11 @@ export function SignUpForm() {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        role: 'ADMIN' // Default to ADMIN for admin panel
+        role: 'PLAYER' // Default role for new users
       });
       
-      // Redirect will be handled by the app after successful registration
-      window.location.href = '/categories';
+      // Redirect to student quiz page for PLAYER users
+      window.location.href = '/student-quiz';
     } catch (error) {
       // Error is handled by the auth context
       console.error('Registration failed:', error);

@@ -5,10 +5,13 @@ import {
   GraduationCap,
   Settings,
   HelpCircle,
-  ClipboardList
+  ClipboardList,
+  LogOut,
+  User
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
+import { Button } from "@/components/ui/button"
 
 // Helper function to generate user initials
 function getUserInitials(firstName?: string, lastName?: string, username?: string, email?: string): string {
@@ -43,19 +46,19 @@ function getDisplayName(firstName?: string, lastName?: string, username?: string
 
 // User Profile Component
 function UserProfile() {
-  const { user } = useAuth();
-
-  console.log('🔍 UserProfile component - user data:', user);
+  const { user, logout } = useAuth();
 
   if (!user) {
     return (
-      <div className="flex items-center space-x-3 px-3 py-2">
-        <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">?</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">Loading...</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Please wait</div>
+      <div className="space-y-2">
+        <div className="flex items-center space-x-3 px-3 py-2">
+          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">?</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">Loading...</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Please wait</div>
+          </div>
         </div>
       </div>
     );
@@ -64,28 +67,49 @@ function UserProfile() {
   const initials = getUserInitials(user.firstName, user.lastName, user.username, user.email);
   const displayName = getDisplayName(user.firstName, user.lastName, user.username);
 
-  console.log('🔍 UserProfile - initials:', initials, 'displayName:', displayName);
-  console.log('🔍 UserProfile - user fields:', {
-    firstName: user.firstName,
-    lastName: user.lastName,
-    username: user.username,
-    email: user.email
-  });
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
 
   return (
-    <div className="flex items-center space-x-3 px-3 py-2">
-      <div className="h-8 w-8 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
-        <span className="text-xs font-medium text-white">{initials}</span>
+    <div className="space-y-2">
+      {/* User Info */}
+      <div className="flex items-center space-x-3 px-3 py-2">
+        <div className="h-8 w-8 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
+          <span className="text-xs font-medium text-white">{initials}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
+
+      {/* Action Buttons */}
+      <div className="space-y-1">
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          onClick={() => window.location.href = '/profile'}
+        >
+          <User className="mr-3 h-4 w-4 text-gray-400 dark:text-gray-500" />
+          Profile
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+          onClick={handleLogout}
+        >
+          <LogOut className="mr-3 h-4 w-4" />
+          Logout
+        </Button>
       </div>
     </div>
   );
 }
 
-const navigation = [
+// Admin navigation items
+const adminNavigation = [
   {
     name: "Categories",
     href: "/categories",
@@ -100,17 +124,30 @@ const navigation = [
     name: "Quiz Management",
     href: "/quiz-management",
     icon: ClipboardList,
-    current: false,
+  },
+  {
+    name: "Question Bank",
+    href: "/question-bank",
+    icon: FileQuestion,
   },
   {
     name: "Faculties",
     href: "/faculties",
     icon: Users,
   },
+]
+
+// Student navigation items
+const studentNavigation = [
   {
-    name: "Students",
-    href: "/student",
+    name: "Available Quizzes",
+    href: "/student-quiz",
     icon: GraduationCap,
+  },
+  {
+    name: "My Results",
+    href: "/my-results",
+    icon: ClipboardList,
   },
 ]
 
@@ -128,8 +165,13 @@ const bottomNavigation = [
 ]
 
 export function Sidebar() {
-  // Get current path to determine active navigation item
-  const currentPath = window.location.pathname
+  const { user } = useAuth();
+  const currentPath = window.location.pathname;
+  
+  // Determine which navigation to show based on user role
+  const navigation = user?.role === 'ADMIN' ? adminNavigation : studentNavigation;
+  const panelTitle = user?.role === 'ADMIN' ? 'Admin Panel' : 'Student Portal';
+  
   return (
     <div className="flex h-screen w-full lg:w-64 flex-col bg-white dark:bg-gray-900 lg:border-r border-gray-200 dark:border-gray-800">
       {/* Header */}
@@ -140,7 +182,7 @@ export function Sidebar() {
           </div>
           <div>
             <span className="font-semibold text-gray-900 dark:text-white text-base">QuizMaster</span>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Admin Panel</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{panelTitle}</div>
           </div>
         </div>
       </div>
@@ -148,7 +190,7 @@ export function Sidebar() {
       {/* Main Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
         <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-          Overview
+          {user?.role === 'ADMIN' ? 'Management' : 'My Dashboard'}
         </div>
         {navigation.map((item) => {
           const Icon = item.icon
@@ -174,30 +216,6 @@ export function Sidebar() {
             </a>
           )
         })}
-
-        <div className="pt-6">
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-            Content Management
-          </div>
-          <a
-            href="/question-bank"
-            className={cn(
-              "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150",
-              currentPath === '/question-bank'
-                ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-r-2 border-blue-600"
-                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
-            )}
-          >
-            <FileQuestion className={cn(
-              "mr-3 h-5 w-5",
-              currentPath === '/question-bank'
-                ? "text-blue-600 dark:text-blue-400" 
-                : "text-gray-400 dark:text-gray-500"
-            )} />
-            Question Bank
-          </a>
-        </div>
-
       </nav>
 
       {/* Bottom Navigation */}

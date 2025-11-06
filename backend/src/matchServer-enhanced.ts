@@ -630,13 +630,15 @@ class EnhancedMatchService {
           socket.join(matchId);
           socket.emit('friend_match_created', { matchId, joinCode });
 
-          // Store match in Redis/InMemory with player data
+          // Store match in Redis/InMemory with player data AND questions
           const matchDataToStore = {
             id: matchId,
             quizId: data.quizId,
             joinCode,
             status: match.status,
             createdAt: match.createdAt,
+            questions: questions,
+            timeLimit: match.timeLimit,
             players: Array.from(match.players.values()).map(p => ({
               userId: p.userId,
               username: p.username,
@@ -651,7 +653,10 @@ class EnhancedMatchService {
             playersData: matchDataToStore.players
           });
           
+          // Store match data
           await store.set(`match:${matchId}`, JSON.stringify(matchDataToStore));
+          // CRITICAL: Store joinCode mapping so friend can find the match
+          await store.set(`joinCode:${joinCode}`, matchId);
 
           logInfo('Friend match created', { 
             matchId, 
@@ -700,8 +705,10 @@ class EnhancedMatchService {
             // Parse stored match data and create match object
             const storedMatch = JSON.parse(matchData);
             
-            // Load quiz questions
-            const questions = await this.loadQuizQuestions(storedMatch.quizId);
+            // Use stored questions if available, otherwise load from DB
+            const questions = storedMatch.questions && storedMatch.questions.length > 0 
+              ? storedMatch.questions 
+              : await this.loadQuizQuestions(storedMatch.quizId);
             
             // Create match in memory
             match = {
@@ -715,27 +722,29 @@ class EnhancedMatchService {
               questions,
               currentQuestionIndex: 0,
               questionStartTime: 0,
-              timeLimit: 30,
+              timeLimit: storedMatch.timeLimit || 30,
               createdAt: new Date(storedMatch.createdAt),
               matchType: 'FRIEND_1V1'
             };
             
-            // Add creator if exists
+            // IMPORTANT: Restore creator from Redis but mark as disconnected
+            // They'll update their socket when they reconnect
             if (storedMatch.players && storedMatch.players.length > 0) {
-              const creator = storedMatch.players[0];
-              const creatorPlayer: MatchPlayer = {
-                userId: creator.userId,
-                username: creator.username,
-                firstName: creator.firstName || '',
-                lastName: creator.lastName || '',
-                socketId: '',
-                score: 0,
-                currentQuestionIndex: 0,
-                isReady: false,
-                isAI: false,
-                answers: []
-              };
-              match.players.set(creator.userId, creatorPlayer);
+              for (const storedPlayer of storedMatch.players) {
+                const restoredPlayer: MatchPlayer = {
+                  userId: storedPlayer.userId,
+                  username: storedPlayer.username,
+                  firstName: storedPlayer.firstName || '',
+                  lastName: storedPlayer.lastName || '',
+                  socketId: '', // Empty socket - they're disconnected
+                  score: 0,
+                  currentQuestionIndex: 0,
+                  isReady: false,
+                  isAI: false,
+                  answers: []
+                };
+                match.players.set(storedPlayer.userId, restoredPlayer);
+              }
             }
             
             // Store in memory maps
@@ -745,8 +754,24 @@ class EnhancedMatchService {
             }
           }
           
-          if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
-            socket.emit('error', { message: 'Match not available' });
+          if (!match) {
+            socket.emit('error', { message: 'Match not found' });
+            return;
+          }
+          
+          if (match.status !== 'WAITING') {
+            socket.emit('error', { message: 'Match already started or completed' });
+            return;
+          }
+          
+          if (match.players.size >= match.maxPlayers && !match.players.has(socket.data.userId)) {
+            socket.emit('error', { message: 'Match is full' });
+            return;
+          }
+          
+          // Validate questions exist
+          if (!match.questions || match.questions.length === 0) {
+            socket.emit('error', { message: 'No questions available for this quiz' });
             return;
           }
 
@@ -853,6 +878,8 @@ class EnhancedMatchService {
             joinCode: match.joinCode,
             status: match.status,
             createdAt: match.createdAt,
+            questions: match.questions, // Include questions
+            timeLimit: match.timeLimit,
             players: Array.from(match.players.values()).map(p => ({
               userId: p.userId,
               username: p.username,
@@ -896,10 +923,18 @@ class EnhancedMatchService {
             // Parse stored match data and create match object
             const storedMatch = JSON.parse(matchData);
             
-            // Load quiz questions
-            const questions = await this.loadQuizQuestions(storedMatch.quizId);
+            // Use stored questions if available, otherwise load from DB
+            const questions = storedMatch.questions && storedMatch.questions.length > 0 
+              ? storedMatch.questions 
+              : await this.loadQuizQuestions(storedMatch.quizId);
             
-            // Create match in memory
+            // Validate questions exist
+            if (!questions || questions.length === 0) {
+              socket.emit('error', { message: 'No questions available for this quiz' });
+              return;
+            }
+            
+            // Create match in memory - restore status and progress from stored data
             match = {
               id: data.matchId,
               quizId: storedMatch.quizId,
@@ -907,11 +942,11 @@ class EnhancedMatchService {
               joinCode: storedMatch.joinCode,
               players: new Map(),
               maxPlayers: 2,
-              status: 'WAITING',
+              status: storedMatch.status || 'WAITING',
               questions,
-              currentQuestionIndex: 0,
-              questionStartTime: 0,
-              timeLimit: 30,
+              currentQuestionIndex: storedMatch.currentQuestionIndex || 0,
+              questionStartTime: storedMatch.questionStartTime || 0,
+              timeLimit: storedMatch.timeLimit || 30,
               createdAt: new Date(storedMatch.createdAt),
               matchType: 'FRIEND_1V1'
             };
@@ -975,17 +1010,52 @@ class EnhancedMatchService {
               roomSize: this.io.sockets.adapter.rooms.get(data.matchId)?.size || 0
             });
             
-            socket.emit('match_connected', { 
-              matchId: data.matchId,
-              joinCode: match.joinCode,
-              players: Array.from(match.players.values()).map(p => ({
-                userId: p.userId,
-                username: p.username,
-                firstName: p.firstName,
-                lastName: p.lastName,
-                isReady: p.isReady
-              }))
-            });
+            // Check if match is in progress and send current state
+            if (match.status === 'IN_PROGRESS') {
+              // Calculate time elapsed for current question
+              const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+              const currentQuestion = match.questions[match.currentQuestionIndex];
+              
+              if (currentQuestion) {
+                const questionForPlayer = {
+                  id: currentQuestion.id,
+                  questionText: currentQuestion.questionText,
+                  options: currentQuestion.options.map((opt: any) => ({
+                    id: opt.id,
+                    optionText: opt.optionText
+                  })),
+                  timeLimit: match.timeLimit
+                };
+                
+                // Send current match state to reconnecting player
+                socket.emit('match_started', {
+                  question: questionForPlayer,
+                  questionIndex: match.currentQuestionIndex,
+                  totalQuestions: match.questions.length,
+                  timeElapsed: timeElapsed // Send time elapsed to sync timer
+                });
+                
+                logInfo('Sent match state to reconnecting player', {
+                  matchId: data.matchId,
+                  userId: socket.data.userId,
+                  currentQuestion: match.currentQuestionIndex + 1,
+                  timeElapsed
+                });
+              }
+            } else {
+              // Match not started yet, send normal connection
+              socket.emit('match_connected', { 
+                matchId: data.matchId,
+                joinCode: match.joinCode,
+                players: Array.from(match.players.values()).map(p => ({
+                  userId: p.userId,
+                  username: p.username,
+                  firstName: p.firstName,
+                  lastName: p.lastName,
+                  isReady: p.isReady
+                }))
+              });
+            }
 
             // Broadcast updated player list to all players in the match
             this.io.to(data.matchId).emit('player_list_updated', {
@@ -1054,6 +1124,8 @@ class EnhancedMatchService {
               joinCode: match.joinCode,
               status: match.status,
               createdAt: match.createdAt,
+              questions: match.questions, // Include questions
+              timeLimit: match.timeLimit,
               players: Array.from(match.players.values()).map(p => ({
                 userId: p.userId,
                 username: p.username,
@@ -1231,6 +1303,26 @@ class EnhancedMatchService {
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
+
+    // Update match in Redis with new status
+    await store.set(`match:${matchId}`, JSON.stringify({
+      id: matchId,
+      quizId: match.quizId,
+      joinCode: match.joinCode,
+      status: match.status,
+      currentQuestionIndex: match.currentQuestionIndex,
+      questionStartTime: match.questionStartTime,
+      createdAt: match.createdAt,
+      questions: match.questions,
+      timeLimit: match.timeLimit,
+      players: Array.from(match.players.values()).map(p => ({
+        userId: p.userId,
+        username: p.username,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        isReady: p.isReady
+      }))
+    }));
 
     // Send first question
     const currentQuestion = match.questions[0];

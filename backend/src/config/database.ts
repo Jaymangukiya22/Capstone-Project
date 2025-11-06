@@ -49,9 +49,10 @@ export const connectDatabase = async (): Promise<void> => {
     
     // Sync models in development - preserve existing data
     if (process.env.NODE_ENV === 'development') {
-      // Use alter: true to update schema without losing data
-      await sequelize.sync({ alter: true });
-      logInfo('Database models synchronized with alter: true - schema updated, data preserved');
+      // Use force: false and alter: false to avoid constraint conflicts
+      // Just sync without altering to prevent duplicate constraint errors
+      await sequelize.sync({ force: false, alter: false });
+      logInfo('Database models synchronized - schema validation only');
       
       // Only seed if tables are empty (first time setup)
       const userCount = await User.count();
@@ -72,7 +73,7 @@ export const connectDatabase = async (): Promise<void> => {
       }
     } else {
       // Production: only sync without altering
-      await sequelize.sync();
+      await sequelize.sync({ force: false, alter: false });
       logInfo('Database models synchronized - production mode');
     }
   } catch (error) {

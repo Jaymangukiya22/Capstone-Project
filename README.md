@@ -298,6 +298,21 @@ docker-compose logs -f
 - Error rates and response times
 - Business metrics (matches, users, quizzes)
 
+### Dashboards & Prometheus jobs
+- Grafana dashboards live in `monitoring/grafana/dashboards/`.
+- Preferred dashboards:
+  - `match-server-performance.json`
+  - `bottleneck-detection.json`
+  - `working-metrics-dashboard.json`
+  - `postgresql-exporter.json` or `postgresql-prometheus.json`
+  - `redis-prometheus.json`
+- Prometheus jobs expected by dashboards:
+  - `job="match-server-master"` for match server (`GET /metrics`)
+  - `job="postgresql"` for postgres-exporter
+  - `job="redis"` for redis-exporter
+
+See `monitoring/README.md` for scrape config examples and troubleshooting.
+
 ## 🤝 Contributing
 
 ### Development Workflow

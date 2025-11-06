@@ -131,6 +131,10 @@ export function StudentQuizContent() {
     if (!selectedQuiz) return
 
     try {
+      // CRITICAL: Clear old match state before creating new match
+      localStorage.removeItem('friendMatchState');
+      sessionStorage.removeItem('friendMatchState');
+      
       // Get the actual match details from backend using the join code
       const match = await friendMatchService.findMatchByCode(joinCode)
       
@@ -174,6 +178,10 @@ export function StudentQuizContent() {
   const handleJoinFriendGame = (joinCode: string) => {
     console.log('🎮 handleJoinFriendGame called with code:', joinCode)
     if (!selectedQuiz) return
+
+    // CRITICAL: Clear old match state before joining new match
+    localStorage.removeItem('friendMatchState');
+    sessionStorage.removeItem('friendMatchState');
 
     // Store friend match info in sessionStorage
     const friendMatchInfo = {

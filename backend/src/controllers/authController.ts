@@ -40,7 +40,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       passwordHash,
       firstName,
       lastName,
-      role: role || UserRole.ADMIN  // Changed from PLAYER to ADMIN for testing
+      role: UserRole.PLAYER  // Changed from PLAYER to ADMIN for testing
     });
     console.log('User created successfully:', user.id);
 

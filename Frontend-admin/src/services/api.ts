@@ -76,7 +76,7 @@ export const apiClient = axios.create({
 // Add auth token to requests if available
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -92,10 +92,15 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Unauthorized - clear token and redirect to login
-      localStorage.removeItem('token');
+      // Unauthorized - clear all auth data and redirect to login
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      if (window.location.pathname !== '/login') {
+      localStorage.removeItem('quizmaster_user');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userId');
+      
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
         window.location.href = '/login';
       }
     }

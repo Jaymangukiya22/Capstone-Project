@@ -10,7 +10,8 @@ import {
   getQuizStats,
   getPopularQuizzes
 } from '../controllers/quizController';
-import { authenticateToken, requireAdmin, requirePlayer } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
+import { requireAdmin } from '../middleware/roleAuth';
 import { validateRequest } from '../middleware/validation';
 import {
   createQuizSchema,
@@ -20,7 +21,7 @@ import {
 const router = Router();
 
 // All routes require authentication
-// router.use(authenticateToken);
+router.use(authenticateToken);
 
 // Public routes (for all authenticated users)
 router.get('/search', searchQuizzes);
@@ -30,10 +31,10 @@ router.get('/:id', getQuizById);
 router.get('/:id/play', getQuizForPlay);
 router.get('/:id/stats', getQuizStats);
 
-// Admin-only routes (Auth temporarily disabled)
-router.post('/', validateRequest(createQuizSchema), createQuiz);
-router.put('/:id', validateRequest(createQuizSchema), updateQuiz);
-router.delete('/:id', deleteQuiz);
-router.post('/:id/questions', validateRequest(assignQuestionsSchema), assignQuestionsToQuiz);
+// Admin-only routes
+router.post('/', requireAdmin, validateRequest(createQuizSchema), createQuiz);
+router.put('/:id', requireAdmin, validateRequest(createQuizSchema), updateQuiz);
+router.delete('/:id', requireAdmin, deleteQuiz);
+router.post('/:id/questions', requireAdmin, validateRequest(assignQuestionsSchema), assignQuestionsToQuiz);
 
 export default router;

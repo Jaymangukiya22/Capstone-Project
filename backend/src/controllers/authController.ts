@@ -91,9 +91,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
+    // Find user by email or username (email field can contain username)
     const user = await User.findOne({
-      where: { email }
+      where: {
+        [email.includes('@') ? 'email' : 'username']: email
+      }
     });
 
     if (!user || !user.isActive) {

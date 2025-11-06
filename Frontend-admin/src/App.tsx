@@ -4,6 +4,8 @@ import { QuizBuilder } from "@/pages/QuizBuilder"
 import { QuizManagement } from "@/pages/QuizManagement"
 import { QuestionBank } from "@/pages/QuestionBank"
 import { Students } from "@/pages/Students"
+import { Profile } from "@/pages/Profile"
+import { MyResults } from "@/pages/MyResults"
 import { ThemeProvider } from "@/hooks/useTheme"
 import QuizCountdown from "@/components/student/QuizCountdown"
 import QuizInterface from "@/components/student/QuizInterface"
@@ -87,7 +89,7 @@ function AppContent() {
   console.log('AppContent - currentPath:', currentPath);
   
   // Check if current page should be full-screen (without layout)
-  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/friend-match', '/quiz-results', '/login', '/signup', '/auth-test', '/student-quiz'].includes(currentPath);
+  const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/friend-match', '/quiz-results', '/login', '/signup', '/auth-test'].includes(currentPath);
   
   console.log('AppContent - isFullScreenPage:', isFullScreenPage);
 
@@ -141,6 +143,12 @@ function AppContent() {
             <StudentQuizContent />
           </StudentRoute>
         );
+      case '/my-results':
+        return (
+          <StudentRoute>
+            <MyResults />
+          </StudentRoute>
+        );
       case '/quiz-builder':
         return (
           <AdminRoute>
@@ -164,6 +172,12 @@ function AppContent() {
           <AdminRoute>
             <Students />
           </AdminRoute>
+        );
+      case '/profile':
+        return (
+          <ProtectedPage>
+            <Profile />
+          </ProtectedPage>
         );
       case '/categories':
       case '/':

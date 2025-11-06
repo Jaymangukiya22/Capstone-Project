@@ -5,10 +5,13 @@ import {
   GraduationCap,
   Settings,
   HelpCircle,
-  ClipboardList
+  ClipboardList,
+  LogOut,
+  User
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
+import { Button } from "@/components/ui/button"
 
 // Helper function to generate user initials
 function getUserInitials(firstName?: string, lastName?: string, username?: string, email?: string): string {
@@ -43,19 +46,19 @@ function getDisplayName(firstName?: string, lastName?: string, username?: string
 
 // User Profile Component
 function UserProfile() {
-  const { user } = useAuth();
-
-  console.log('🔍 UserProfile component - user data:', user);
+  const { user, logout } = useAuth();
 
   if (!user) {
     return (
-      <div className="flex items-center space-x-3 px-3 py-2">
-        <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">?</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">Loading...</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Please wait</div>
+      <div className="space-y-2">
+        <div className="flex items-center space-x-3 px-3 py-2">
+          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">?</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">Loading...</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Please wait</div>
+          </div>
         </div>
       </div>
     );
@@ -64,22 +67,42 @@ function UserProfile() {
   const initials = getUserInitials(user.firstName, user.lastName, user.username, user.email);
   const displayName = getDisplayName(user.firstName, user.lastName, user.username);
 
-  console.log('🔍 UserProfile - initials:', initials, 'displayName:', displayName);
-  console.log('🔍 UserProfile - user fields:', {
-    firstName: user.firstName,
-    lastName: user.lastName,
-    username: user.username,
-    email: user.email
-  });
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
 
   return (
-    <div className="flex items-center space-x-3 px-3 py-2">
-      <div className="h-8 w-8 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
-        <span className="text-xs font-medium text-white">{initials}</span>
+    <div className="space-y-2">
+      {/* User Info */}
+      <div className="flex items-center space-x-3 px-3 py-2">
+        <div className="h-8 w-8 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
+          <span className="text-xs font-medium text-white">{initials}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
+
+      {/* Action Buttons */}
+      <div className="space-y-1">
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          onClick={() => window.location.href = '/profile'}
+        >
+          <User className="mr-3 h-4 w-4 text-gray-400 dark:text-gray-500" />
+          Profile
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+          onClick={handleLogout}
+        >
+          <LogOut className="mr-3 h-4 w-4" />
+          Logout
+        </Button>
       </div>
     </div>
   );
@@ -117,9 +140,14 @@ const adminNavigation = [
 // Student navigation items
 const studentNavigation = [
   {
-    name: "My Quizzes",
+    name: "Available Quizzes",
     href: "/student-quiz",
     icon: GraduationCap,
+  },
+  {
+    name: "My Results",
+    href: "/my-results",
+    icon: ClipboardList,
   },
 ]
 

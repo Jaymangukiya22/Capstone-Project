@@ -19,7 +19,18 @@ export interface QuizAttempt {
   timeSpent?: number
   startedAt?: string
   completedAt?: string
-  answers: QuizAttemptAnswer[]
+  createdAt?: string
+  answers?: QuizAttemptAnswer[]
+  quiz?: {
+    id: number
+    title: string
+    description?: string
+    difficulty?: string
+    category?: {
+      id: number
+      name: string
+    }
+  }
 }
 
 export interface QuizQuestion {

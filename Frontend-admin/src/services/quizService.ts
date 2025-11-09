@@ -56,8 +56,11 @@ export class QuizService {
    */
   async createQuiz(quizData: CreateQuizDto): Promise<Quiz> {
     try {
-      const response = await apiClient.post<ApiResponse<Quiz>>(this.endpoint, quizData);
-      return response.data.data;
+      const response = await apiClient.post<ApiResponse<{ quiz: Quiz }>>(this.endpoint, quizData);
+      if (!response.data.data) {
+        throw new Error('No data returned from server');
+      }
+      return response.data.data.quiz;
     } catch (error) {
       console.error('Error creating quiz:', error);
       throw error;
@@ -69,8 +72,11 @@ export class QuizService {
    */
   async updateQuiz(id: number, quizData: UpdateQuizDto): Promise<Quiz> {
     try {
-      const response = await apiClient.put<ApiResponse<Quiz>>(`${this.endpoint}/${id}`, quizData);
-      return response.data.data;
+      const response = await apiClient.put<ApiResponse<{ quiz: Quiz }>>(`${this.endpoint}/${id}`, quizData);
+      if (!response.data.data) {
+        throw new Error('No data returned from server');
+      }
+      return response.data.data.quiz;
     } catch (error) {
       console.error(`Error updating quiz ${id}:`, error);
       throw error;
@@ -124,6 +130,22 @@ export class QuizService {
       return response.data.data;
     } catch (error) {
       console.error(`Error fetching ${difficulty} quizzes:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Assign questions to a quiz
+   */
+  async assignQuestionsToQuiz(quizId: number, questionIds: number[]): Promise<any> {
+    try {
+      const response = await apiClient.post<ApiResponse<any>>(
+        `${this.endpoint}/${quizId}/questions`,
+        { questionIds }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error assigning questions to quiz ${quizId}:`, error);
       throw error;
     }
   }

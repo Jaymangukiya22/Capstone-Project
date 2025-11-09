@@ -103,8 +103,9 @@ export class QuestionBankService {
    */
   async getQuestionById(id: number): Promise<QuestionBankItem> {
     try {
-      const response = await apiClient.get<ApiResponse<QuestionBankItem>>(`${this.endpoint}/${id}`);
-      return response.data.data;
+      const response = await apiClient.get<ApiResponse<any>>(`${this.endpoint}/${id}`);
+      // Backend returns data: { question: {...} }
+      return response.data.data.question || response.data.data;
     } catch (error) {
       console.error(`Error fetching question ${id}:`, error);
       throw error;
@@ -117,9 +118,10 @@ export class QuestionBankService {
   async createQuestion(questionData: CreateQuestionBankDto): Promise<QuestionBankItem> {
     try {
       console.log('🔄 Creating question with data:', questionData);
-      const response = await apiClient.post<ApiResponse<QuestionBankItem>>(this.endpoint, questionData);
+      const response = await apiClient.post<ApiResponse<any>>(this.endpoint, questionData);
       console.log('✅ Question created successfully:', response.data);
-      return response.data.data;
+      // Backend returns data: { question: {...} }
+      return response.data.data.question || response.data.data;
     } catch (error) {
       console.error('❌ Error creating question:', error);
       throw error;
@@ -132,9 +134,10 @@ export class QuestionBankService {
   async updateQuestion(id: number, questionData: UpdateQuestionBankDto): Promise<QuestionBankItem> {
     try {
       console.log(`🔄 Updating question ${id} with data:`, questionData);
-      const response = await apiClient.put<ApiResponse<QuestionBankItem>>(`${this.endpoint}/${id}`, questionData);
+      const response = await apiClient.put<ApiResponse<any>>(`${this.endpoint}/${id}`, questionData);
       console.log(`✅ Question ${id} updated successfully:`, response.data);
-      return response.data.data;
+      // Backend returns data: { question: {...} }
+      return response.data.data.question || response.data.data;
     } catch (error) {
       console.error(`❌ Error updating question ${id}:`, error);
       throw error;

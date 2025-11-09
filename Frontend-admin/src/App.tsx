@@ -3,6 +3,7 @@ import { Categories } from "@/pages/Categories"
 import { QuizBuilder } from "@/pages/QuizBuilder"
 import { QuizManagement } from "@/pages/QuizManagement"
 import { QuestionBank } from "@/pages/QuestionBank"
+import QuizPerformance from "@/pages/QuizPerformance"
 import { Students } from "@/pages/Students"
 import { Profile } from "@/pages/Profile"
 import { MyResults } from "@/pages/MyResults"
@@ -165,6 +166,12 @@ function AppContent() {
         return (
           <AdminRoute>
             <QuestionBank />
+          </AdminRoute>
+        );
+      case '/quiz-performance':
+        return (
+          <AdminRoute>
+            <QuizPerformance />
           </AdminRoute>
         );
       case '/faculties':

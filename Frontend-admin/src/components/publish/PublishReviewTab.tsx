@@ -26,14 +26,14 @@ interface QuizFormData {
 }
 
 interface PublishReviewTabProps {
-  quizId?: string
+  quizId?: number | null
   quizData: QuizFormData
   questions: Question[]
   settings: QuizSettings
 }
 
 export function PublishReviewTab({ 
-  quizId = "default", 
+  quizId, 
   quizData, 
   questions, 
   settings 

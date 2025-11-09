@@ -216,13 +216,50 @@ export class QuizService {
         ]
       });
 
-      if (quiz) {
-        logInfo('Retrieved quiz by ID', { quizId: id });
-      } else {
+      if (!quiz) {
         logInfo('Quiz not found', { quizId: id });
+        return null;
       }
 
-      return quiz;
+      // Get questions assigned to this quiz
+      const quizQuestions = await QuizQuestion.findAll({
+        where: { quizId: id },
+        include: [
+          {
+            model: QuestionBankItem,
+            as: 'question',
+            include: [
+              {
+                model: QuestionBankOption,
+                as: 'options'
+              }
+            ]
+          }
+        ],
+        order: [['order', 'ASC']]
+      });
+
+      // Transform questions to include in the response
+      const questions = quizQuestions.map(qq => ({
+        id: qq.question.id,
+        questionId: qq.questionId,
+        order: qq.order,
+        questionText: qq.question.questionText,
+        difficulty: qq.question.difficulty,
+        categoryId: qq.question.categoryId,
+        options: qq.question.options.map(opt => ({
+          id: opt.id,
+          optionText: opt.optionText,
+          isCorrect: opt.isCorrect
+        }))
+      }));
+
+      logInfo('Retrieved quiz by ID with questions', { quizId: id, questionCount: questions.length });
+
+      return {
+        ...quiz.toJSON(),
+        questions
+      };
     } catch (error) {
       logError('Failed to retrieve quiz', error as Error, { quizId: id });
       throw error;

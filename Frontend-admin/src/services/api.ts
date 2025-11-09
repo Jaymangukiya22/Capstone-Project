@@ -31,7 +31,7 @@ const getWebSocketUrl = (): string => {
   
   // Check if we're running through Cloudflare tunnel
   if (hostname.includes('quizdash.dpdns.org')) {
-    return 'wss://ws.quizdash.dpdns.org';
+    return 'wss://match.quizdash.dpdns.org';
   }
   
   // Check if we're running through Tunnelmole (legacy support)

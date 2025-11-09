@@ -7,7 +7,8 @@ import {
   HelpCircle,
   ClipboardList,
   LogOut,
-  User
+  User,
+  BarChart
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
@@ -129,6 +130,11 @@ const adminNavigation = [
     name: "Question Bank",
     href: "/question-bank",
     icon: FileQuestion,
+  },
+  {
+    name: "Quiz Performance",
+    href: "/quiz-performance",
+    icon: BarChart,
   },
   {
     name: "Faculties",

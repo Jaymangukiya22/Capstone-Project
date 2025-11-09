@@ -58,7 +58,8 @@ export function QuizBuilder() {
   })
   const [currentTagInput, setCurrentTagInput] = useState("")
   const [editingQuizId, setEditingQuizId] = useState<number | null>(null)
-  const [questions] = useState<Question[]>([]) // setQuestions will be used when question management is implemented
+  const [currentQuizId, setCurrentQuizId] = useState<number | null>(null) // Track the current quiz being built
+  const [questions, setQuestions] = useState<Question[]>([]) // Will be updated from QuestionsTab
   const [quizSettings, setQuizSettings] = useState<QuizSettings>(defaultQuizSettings)
   
   // Use quiz management hook
@@ -100,6 +101,7 @@ export function QuizBuilder() {
         // Store the quiz ID for updating instead of creating new
         if (quizData.id) {
           setEditingQuizId(quizData.id)
+          setCurrentQuizId(quizData.id) // Also set currentQuizId for the Questions tab
         }
         
         // Clear the editing data after loading
@@ -267,24 +269,20 @@ export function QuizBuilder() {
         // Update existing quiz
         savedQuiz = await updateQuiz(editingQuizId, quizData)
         console.log('Quiz updated successfully:', savedQuiz)
-        alert(`Quiz "${savedQuiz.title}" updated successfully!`)
+        setCurrentQuizId(savedQuiz.id) // Set the current quiz ID
+        alert(`Quiz "${savedQuiz.title}" updated successfully! You can now add questions.`)
       } else {
         // Create new quiz
         savedQuiz = await createQuiz(quizData)
         console.log('Quiz created successfully:', savedQuiz)
-        alert(`Quiz "${savedQuiz.title}" created successfully!`)
+        setCurrentQuizId(savedQuiz.id) // Set the current quiz ID
+        setEditingQuizId(savedQuiz.id) // Set editing ID for future updates
+        alert(`Quiz "${savedQuiz.title}" created successfully! You can now add questions.`)
       }
       
-      // Reset form after successful save
-      setFormData({
-        title: "",
-        description: "",
-        tags: [],
-        categoryId: "",
-        subcategoryId: "",
-      })
+      // Don't reset form - keep it for editing
+      // Just clear the tag input
       setCurrentTagInput("")
-      setEditingQuizId(null)
       
     } catch (err) {
       console.error('Failed to save quiz:', err)
@@ -579,16 +577,23 @@ export function QuizBuilder() {
         </TabsContent>
 
         <TabsContent value="questions" className="space-y-6">
-          <QuestionsTab quizId="current-quiz" />
+          <QuestionsTab 
+            quizId={currentQuizId} 
+            onQuestionsChange={setQuestions}
+          />
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6">
-          <QuizSettingsTab quizId="current-quiz" totalQuestions={questions.length} />
+          <QuizSettingsTab 
+            quizId={currentQuizId} 
+            totalQuestions={questions.length}
+            onSettingsChange={setQuizSettings}
+          />
         </TabsContent>
 
         <TabsContent value="publish" className="space-y-6">
           <PublishReviewTab 
-            quizId="current-quiz"
+            quizId={currentQuizId}
             quizData={{
               ...formData,
               tags: formData.tags.join(', ') // Convert array back to string for compatibility

@@ -20,6 +20,7 @@ import quizAttemptRoutes from "./routes/quizAttemptRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import matchRoutes from "./routes/matchRoutes";
 import friendMatchRoutes from "./routes/friendMatchRoutes";
+import performanceRoutes from "./routes/performanceRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
 import { logInfo, logError } from "./utils/logger";
@@ -203,6 +204,7 @@ app.use("/api/quiz-attempts", quizAttemptRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/matches", matchRoutes);
 app.use("/api/friend-matches", friendMatchRoutes);
+app.use("/api/performance", performanceRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {

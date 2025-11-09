@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -226,6 +227,9 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Import Questions from CSV/XLSX</DialogTitle>
+          <DialogDescription>
+            Upload a CSV or Excel file containing questions to import them into your quiz.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden">

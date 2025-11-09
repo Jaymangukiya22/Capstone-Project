@@ -1,0 +1,29 @@
+{
+  "name": "quizdash-stress-tests",
+  "version": "1.0.0",
+  "description": "Stress testing suite for QuizDash - 2000 concurrent matches",
+  "scripts": {
+    "seed": "node seed-users.js",
+    "stress:small": "node stress-test-matches.js 10",
+    "stress:medium": "node stress-test-matches.js 100",
+    "stress:large": "node stress-test-matches.js 500",
+    "stress:full": "node stress-test-matches.js 2000",
+    "monitor": "node real-time-monitor.js",
+    "dashboard": "node metrics-dashboard.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "bcrypt": "^5.1.1",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.3",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "playwright": "^1.40.0",
+    "socket.io-client": "^4.5.4",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}

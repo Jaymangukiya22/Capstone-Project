@@ -14,7 +14,7 @@ export interface TokenPayload {
 }
 
 export const hashPassword = async (password: string): Promise<string> => {
-  const saltRounds = 12;
+  const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || '10');  // 10 is faster, still secure
   return bcrypt.hash(password, saltRounds);
 };
 

@@ -336,7 +336,14 @@ interface MatchPlayer {
   currentQuestionIndex: number;
   isReady: boolean;
   isAI: boolean;
-  answers: any[];
+  hasSubmittedCurrent?: boolean; // Track if player submitted current question
+  answers: Array<{
+    questionId: number;
+    selectedOptions: number[];
+    isCorrect: boolean;
+    timeSpent: number;
+    points: number;
+  }>;
 }
 
 interface MatchRoom {
@@ -741,6 +748,7 @@ class EnhancedMatchService {
                   currentQuestionIndex: 0,
                   isReady: false,
                   isAI: false,
+                  hasSubmittedCurrent: false,
                   answers: []
                 };
                 match.players.set(storedPlayer.userId, restoredPlayer);
@@ -813,6 +821,7 @@ class EnhancedMatchService {
             currentQuestionIndex: 0,
             isReady: false,
             isAI: false,
+            hasSubmittedCurrent: false,
             answers: []
           };
 
@@ -960,14 +969,21 @@ class EnhancedMatchService {
                   firstName: storedPlayer.firstName || '',
                   lastName: storedPlayer.lastName || '',
                   socketId: '', // Will be updated when they reconnect
-                  score: 0,
-                  currentQuestionIndex: 0,
+                  score: storedPlayer.score || 0, // Restore score
+                  currentQuestionIndex: storedPlayer.currentQuestionIndex || 0,
                   isReady: storedPlayer.isReady || false,
                   isAI: false,
-                  answers: []
+                  hasSubmittedCurrent: storedPlayer.hasSubmittedCurrent || false,
+                  answers: storedPlayer.answers || [] // Restore answers
                 };
                 match.players.set(storedPlayer.userId, restoredPlayer);
               }
+            }
+            
+            // CRITICAL FIX: Restore questionStartTime to prevent timer loop on reconnection
+            // If questionStartTime was recently updated, keep it to prevent timer reset
+            if (storedMatch.questionStartTime) {
+              match.questionStartTime = storedMatch.questionStartTime;
             }
             
             // Store in memory maps
@@ -994,6 +1010,7 @@ class EnhancedMatchService {
                 currentQuestionIndex: 0,
                 isReady: false,
                 isAI: false,
+                hasSubmittedCurrent: false,
                 answers: []
               };
               match.players.set(socket.data.userId, player);
@@ -1027,19 +1044,39 @@ class EnhancedMatchService {
                   timeLimit: match.timeLimit
                 };
                 
-                // Send current match state to reconnecting player
-                socket.emit('match_started', {
-                  question: questionForPlayer,
-                  questionIndex: match.currentQuestionIndex,
-                  totalQuestions: match.questions.length,
-                  timeElapsed: timeElapsed // Send time elapsed to sync timer
+                // Add 15 seconds bonus for reconnection
+                const reconnectionBonus = 15000; // 15 seconds in ms
+                const newTimeLimit = match.timeLimit + 15;
+                match.questionStartTime = Date.now() - (timeElapsed - reconnectionBonus);
+                
+                // Notify ALL players about time extension
+                this.io.to(data.matchId).emit('time_extended', {
+                  message: `${socket.data.username} reconnected - 15 seconds added`,
+                  newTimeLimit,
+                  reconnectedPlayer: socket.data.username
                 });
                 
-                logInfo('Sent match state to reconnecting player', {
+                // Restore player's state if they have answers
+                const player = match.players.get(socket.data.userId);
+                if (player) {
+                  // Send current match state to reconnecting player
+                  socket.emit('match_reconnected', {
+                    question: questionForPlayer,
+                    questionIndex: match.currentQuestionIndex,
+                    totalQuestions: match.questions.length,
+                    timeElapsed: 0, // Reset to 0 with bonus time
+                    playerScore: player.score,
+                    playerAnswers: player.answers,
+                    hasSubmittedCurrent: player.hasSubmittedCurrent
+                  });
+                }
+                
+                logInfo('Player reconnected with 15s bonus', {
                   matchId: data.matchId,
                   userId: socket.data.userId,
                   currentQuestion: match.currentQuestionIndex + 1,
-                  timeElapsed
+                  bonusAdded: '15 seconds',
+                  playerScore: player?.score || 0
                 });
               }
             } else {
@@ -1173,6 +1210,18 @@ class EnhancedMatchService {
           const currentQuestion = match.questions[match.currentQuestionIndex];
           if (!currentQuestion || currentQuestion.id !== data.questionId) return;
 
+          // CRITICAL FIX: Prevent duplicate answer submissions for the same questionId
+          const alreadyAnswered = player.answers.some(answer => answer.questionId === data.questionId);
+          if (alreadyAnswered) {
+            logInfo('Duplicate answer rejected - player already answered this question', {
+              matchId,
+              userId: socket.data.userId,
+              questionId: data.questionId,
+              currentAnswers: player.answers.length
+            });
+            return; // Reject duplicate submission
+          }
+
           // Check if answer is correct
           const correctOptionIds = currentQuestion.options
             .filter((opt: any) => opt.isCorrect)
@@ -1195,6 +1244,9 @@ class EnhancedMatchService {
             timeSpent: data.timeSpent,
             points
           });
+          
+          // Mark player as submitted for current question
+          player.hasSubmittedCurrent = true;
 
           // Notify player of result
           socket.emit('answer_result', {
@@ -1203,11 +1255,21 @@ class EnhancedMatchService {
             correctOptions: correctOptionIds,
             totalScore: player.score
           });
+          
+          // Save match state to Redis for reconnection
+          await this.saveMatchState(matchId, match);
 
-          // Check if all players have answered the current question
+          // Check if ALL players have submitted their answer for the CURRENT question
+          // This prevents question skipping - both players MUST answer before advancing
           const allAnswered = Array.from(match.players.values()).every(
-            p => p.answers.length > match.currentQuestionIndex
+            p => p.hasSubmittedCurrent === true && p.answers.length > match.currentQuestionIndex
           );
+          
+          // Notify other players that this player submitted
+          socket.to(matchId).emit('opponent_submitted', {
+            userId: socket.data.userId,
+            username: socket.data.username
+          });
 
           logInfo('Answer submission check:', {
             matchId,
@@ -1244,6 +1306,16 @@ class EnhancedMatchService {
               this.nextQuestion(matchId);
             }
           } else {
+            // Let current player know they're waiting
+            const waitingFor = Array.from(match.players.values())
+              .filter(p => p.answers.length <= match.currentQuestionIndex)
+              .map(p => p.username);
+            
+            socket.emit('waiting_for_opponent', {
+              message: `Waiting for ${waitingFor.join(', ')} to answer...`,
+              waitingFor
+            });
+            
             logInfo('Waiting for other players to answer', {
               matchId,
               playersWhoAnswered: Array.from(match.players.values())
@@ -1303,37 +1375,14 @@ class EnhancedMatchService {
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
+    
+    // Reset submission flags
+    Array.from(match.players.values()).forEach(p => {
+      p.hasSubmittedCurrent = false;
+    });
 
-    // Update match in Redis with new status
-    await store.set(`match:${matchId}`, JSON.stringify({
-      id: matchId,
-      quizId: match.quizId,
-      joinCode: match.joinCode,
-      status: match.status,
-      currentQuestionIndex: match.currentQuestionIndex,
-      questionStartTime: match.questionStartTime,
-      createdAt: match.createdAt,
-      questions: match.questions,
-      timeLimit: match.timeLimit,
-      players: Array.from(match.players.values()).map(p => ({
-        userId: p.userId,
-        username: p.username,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        isReady: p.isReady
-      }))
-    }));
-
-    // Send first question
+    // Send first question to all players
     const currentQuestion = match.questions[0];
-    if (!currentQuestion) {
-      logError('First question is undefined', new Error(`Match ${matchId} has undefined first question`));
-      this.io.to(matchId).emit('error', {
-        message: 'Unable to load the first question. Please try again.'
-      });
-      return;
-    }
-
     const questionForPlayers = {
       id: currentQuestion.id,
       questionText: currentQuestion.questionText,
@@ -1349,13 +1398,17 @@ class EnhancedMatchService {
       questionIndex: 0,
       totalQuestions: match.questions.length
     });
+    
+    // Save initial match state
+    await this.saveMatchState(matchId, match);
 
-    // Set timer for question
-    setTimeout(() => {
-      this.nextQuestion(matchId);
-    }, match.timeLimit * 1000);
+    logInfo('Match started - waiting for both players to submit', { 
+      matchId, 
+      playerCount: match.players.size,
+      message: 'NO AUTO-ADVANCE - Questions advance only when both players submit'
+    });
 
-    logInfo('Match started', { matchId, players: match.players.size });
+    // NO AUTO-ADVANCE TIMER - Questions only advance when both players submit
   }
 
   private async nextQuestion(matchId: string) {
@@ -1369,6 +1422,11 @@ class EnhancedMatchService {
       this.endMatch(matchId);
       return;
     }
+    
+    // Reset submission flags for all players
+    Array.from(match.players.values()).forEach(p => {
+      p.hasSubmittedCurrent = false;
+    });
 
     // Send next question
     const currentQuestion = match.questions[match.currentQuestionIndex];
@@ -1389,13 +1447,50 @@ class EnhancedMatchService {
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
     });
+    
+    // Save state after advancing question
+    await this.saveMatchState(matchId, match);
 
-    // Set timer for question
-    setTimeout(() => {
-      this.nextQuestion(matchId);
-    }, match.timeLimit * 1000);
+    // NO AUTO-ADVANCE TIMER - Questions only advance when both players submit
+    logInfo('Next question sent - waiting for both players to submit', {
+      matchId,
+      questionIndex: match.currentQuestionIndex,
+      totalQuestions: match.questions.length
+    });
   }
 
+  private async saveMatchState(matchId: string, match: any) {
+    try {
+      const matchState = {
+        id: matchId,
+        quizId: match.quizId,
+        joinCode: match.joinCode,
+        status: match.status,
+        currentQuestionIndex: match.currentQuestionIndex,
+        questionStartTime: match.questionStartTime,
+        timeLimit: match.timeLimit,
+        createdAt: match.createdAt,
+        questions: match.questions,
+        players: Array.from(match.players.values()).map((p: any) => ({
+          userId: p.userId,
+          username: p.username,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          score: p.score,
+          currentQuestionIndex: p.currentQuestionIndex,
+          isReady: p.isReady,
+          hasSubmittedCurrent: p.hasSubmittedCurrent,
+          answers: p.answers
+        }))
+      };
+      
+      await store.set(`match:${matchId}`, JSON.stringify(matchState));
+      logInfo('Match state saved for reconnection', { matchId, questionIndex: match.currentQuestionIndex });
+    } catch (error) {
+      logError('Failed to save match state', error as Error);
+    }
+  }
+  
   private async endMatch(matchId: string) {
     const match = this.matches.get(matchId);
     if (!match) {
@@ -1407,7 +1502,8 @@ class EnhancedMatchService {
 
     // Calculate final results for ALL players
     const results = Array.from(match.players.values()).map(player => {
-      // Calculate accuracy
+      // Calculate accuracy - use total questions from quiz, not just answered questions
+      const totalQuestions = match.questions.length;
       const totalAnswers = player.answers.length;
       const correctAnswers = player.answers.filter(answer => answer.isCorrect).length;
       const accuracy = totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0;
@@ -1421,6 +1517,7 @@ class EnhancedMatchService {
         answers: player.answers,
         correctAnswers,
         totalAnswers,
+        totalQuestions,  // Add total questions from quiz for correct results display
         accuracy
       };
     });
@@ -1507,7 +1604,7 @@ app.post('/matches/friend', async (req, res) => {
       quizId,
       creatorId: userId,
       creatorName: username,
-      status: 'waiting',
+      status: 'WAITING',
       players: [{
         userId,
         username,

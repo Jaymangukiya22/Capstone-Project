@@ -41,7 +41,22 @@ const metricsMiddleware = promBundle({
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://static.cloudflareinsights.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 // CORS Configuration
 const allowedOrigins = [
   `http://${IP_ADD}:5173`,
@@ -99,12 +114,32 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
 app.use(
   cors({
-    origin: true, // Allow all origins for testing
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in the allowed list (from env + hardcoded)
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS: Blocked origin: ${origin}`);
+        console.warn(`CORS: Allowed origins:`, allowedOrigins);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    exposedHeaders: ["Content-Range", "X-Content-Range"],
+    maxAge: 86400 // Cache preflight for 24 hours
   })
 );
+
+// Log CORS configuration on startup
+console.log('🌐 CORS Configuration:');
+console.log('   NODE_ENV:', process.env.NODE_ENV);
+console.log('   CORS_ORIGIN env:', process.env.CORS_ORIGIN);
+console.log('   Allowed Origins:', allowedOrigins);
 
 app.use(compression());
 app.use(metricsMiddleware);

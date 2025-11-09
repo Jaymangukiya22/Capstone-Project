@@ -58,7 +58,8 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set fetch-timeout 300000
 
 # Install dependencies with retry logic - production only
-RUN npm ci --only=production --verbose || npm ci --only=production --verbose || npm ci --only=production --verbose
+# RUN npm ci --only=production --verbose || npm ci --only=production --verbose || npm ci --only=production --verbose
+RUN npm ci --verbose || npm install --verbose
 
 # Copy source code
 COPY . .

@@ -11,9 +11,37 @@ import { logInfo, logError } from './utils/logger';
 // Load environment variables
 const app = express();
 const server = createServer(app);
+// WebSocket CORS - use same origins as HTTP API
+const wsAllowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "https://quizdash.dpdns.org",
+  "https://www.quizdash.dpdns.org"
+];
+
+// Add from environment
+const envOrigins = process.env.CORS_ORIGIN?.split(",") || [];
+wsAllowedOrigins.push(...envOrigins);
+
+console.log('🔌 WebSocket CORS Configuration:');
+console.log('   Allowed Origins:', wsAllowedOrigins);
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: "*",
+    origin: function (origin: any, callback: any) {
+      // Allow requests with no origin
+      if (!origin) return callback(null, true);
+      
+      if (wsAllowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`WebSocket CORS: Blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
     methods: ["GET", "POST"]
   }
 });

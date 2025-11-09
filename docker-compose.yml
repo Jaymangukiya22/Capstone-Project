@@ -49,6 +49,8 @@ services:
       dockerfile: Dockerfile
       target: ${NODE_ENV:-development}
     container_name: quizup_backend
+    env_file:
+      - ./backend/.env.${NODE_ENV:-production}
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: ${BACKEND_PORT:-3000}
@@ -61,6 +63,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ENABLE_SWAGGER: ${ENABLE_SWAGGER:-true}
       SERVICE_TYPE: backend
+      MATCH_SERVICE_URL: http://matchserver:3001
       # Database connection variables for Sequelize
       DB_HOST: postgres
       DB_PORT: 5432

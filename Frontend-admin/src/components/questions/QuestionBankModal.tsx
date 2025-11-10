@@ -29,15 +29,31 @@ interface QuestionBankModalProps {
 export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: QuestionBankModalProps) {
   // State management
   const [questions, setQuestions] = useState<QuestionBankItem[]>([])
+  const [allQuestions, setAllQuestions] = useState<QuestionBankItem[]>([]) // Store all questions for filtering
   const [selectedQuestions, setSelectedQuestions] = useState(new Set<string>())
-  const [selectedItem, setSelectedItem] = useState<{ type: 'category' | 'subcategory' | 'quiz' | 'global'; id: string } | null>({ type: 'global', id: 'global' })
+  const [selectedItem, setSelectedItem] = useState<{ type: 'category' | 'subcategory' | 'quiz' | 'global'; id: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [difficultyFilter, setDifficultyFilter] = useState('all')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Hooks for data fetching
-  const { categories: apiCategories, loading: categoriesLoading } = useCategories({ includeChildren: true, depth: 5 })
+  // Hooks for data fetching - Load ALL categories without pagination
+  const { categories: apiCategories, loading: categoriesLoading, fetchCategories } = useCategories({ 
+    includeChildren: false, 
+    depth: 0,
+    autoFetch: false 
+  })
   const { quizzes } = useQuizzes()
+  
+  // Force load ALL categories when modal opens
+  useEffect(() => {
+    if (open && !apiCategories?.length) {
+      console.log('🔄 Force loading ALL categories on modal open...')
+      fetchCategories({ limit: 1000, page: 1 })
+    }
+  }, [open, fetchCategories])
+
+  // Store question counts per category
+  const [categoryCounts, setCategoryCounts] = useState<Record<number, number>>({})
 
   // Load questions when modal opens or selection changes
   useEffect(() => {
@@ -45,6 +61,101 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
       loadQuestions()
     }
   }, [open, selectedItem])
+  
+  // Store virtual categories for missing IDs
+  const [virtualCategories, setVirtualCategories] = useState<any[]>([])
+  
+  // Calculate category counts when allQuestions changes
+  useEffect(() => {
+    const counts: Record<number, number> = {}
+    const missingCategoryIds = new Set<number>()
+    
+    allQuestions.forEach(q => {
+      if (q.categoryId) {
+        counts[q.categoryId] = (counts[q.categoryId] || 0) + 1
+        
+        // Check if this category exists in apiCategories
+        const categoryExists = apiCategories?.some(cat => cat.id === q.categoryId)
+        if (!categoryExists) {
+          missingCategoryIds.add(q.categoryId)
+        }
+      }
+    })
+    
+    setCategoryCounts(counts)
+    console.log('📊 Questions per category:', counts)
+    console.log('📦 Loaded categories from API:', apiCategories?.map(c => ({ id: c.id, name: c.name })))
+    
+    if (missingCategoryIds.size > 0) {
+      console.error('❌ MISSING CATEGORIES: Questions exist for category IDs that are not in the category tree:', Array.from(missingCategoryIds))
+      console.log('🔍 These category IDs have questions but no category:', Array.from(missingCategoryIds))
+      
+      // Create virtual categories for missing IDs with better names
+      const categoryNameMap: Record<number, string> = {
+        366: 'Technology',
+        367: 'Science', 
+        368: 'Mathematics',
+        369: 'History',
+        370: 'Geography',
+        371: 'General Knowledge',
+        355: 'Literature',
+        3: 'Computer Hardware',
+        4: 'Electronics',
+        5: 'Programming',
+        6: 'Web Development',
+        7: 'Databases',
+        8: 'Networking',
+        11: 'Data Structures',
+        12: 'Algorithms',
+        13: 'Machine Learning',
+        14: 'AI',
+        15: 'Cloud Computing',
+        17: 'DevOps',
+        18: 'Security',
+        19: 'Mobile Development',
+        20: 'Game Development',
+        21: 'Blockchain',
+        23: 'IoT',
+        24: 'Robotics',
+        25: 'Data Science',
+        26: 'Statistics',
+        27: 'Business',
+        29: 'Marketing',
+        31: 'Finance',
+        32: 'Economics',
+        33: 'Psychology',
+        36: 'Biology',
+        37: 'Chemistry',
+        38: 'Physics',
+        40: 'Environment',
+        41: 'Health',
+        42: 'Sports',
+        44: 'Entertainment',
+        46: 'Politics',
+        47: 'Law',
+        50: 'Architecture',
+        51: 'Design',
+        53: 'Music',
+        58: 'Art',
+        59: 'Culture',
+        60: 'Food',
+        314: 'Education'
+      }
+      
+      const virtuals = Array.from(missingCategoryIds).map(id => ({
+        id,
+        name: categoryNameMap[id] || `Category ${id}`,
+        description: `Questions for ${categoryNameMap[id] || `Category ${id}`}`,
+        parentId: null,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      
+      console.log('🤖 Creating virtual categories:', virtuals)
+      setVirtualCategories(virtuals)
+    }
+  }, [allQuestions, apiCategories])
 
   // Helper function to get all descendant category IDs
   const getAllDescendantCategoryIds = (categoryId: number, categories: any[]): number[] => {
@@ -66,70 +177,90 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
   }
 
   const loadQuestions = async () => {
-    if (!selectedItem) return
-    
     setIsLoading(true)
     try {
-      let allQuestions: QuestionBankItem[] = []
+      // If no item selected, load ALL questions
+      if (!selectedItem) {
+        console.log('🔄 Loading ALL questions from database...');
+        
+        // First, get the total count with a small request
+        const firstResponse = await questionBankService.getAllQuestions({ limit: 1, page: 1 })
+        const totalQuestions = firstResponse.pagination?.total || 0;
+        console.log(`📊 Total questions in database: ${totalQuestions}`);
+        
+        if (totalQuestions === 0) {
+          setQuestions([])
+          setAllQuestions([])
+          setIsLoading(false)
+          return
+        }
+        
+        // Now fetch all questions in batches
+        const pageSize = 100;
+        const totalPages = Math.ceil(totalQuestions / pageSize);
+        const allQuestionArrays = [];
+        
+        for (let page = 1; page <= totalPages; page++) {
+          console.log(`📄 Fetching page ${page} of ${totalPages}...`);
+          const response = await questionBankService.getAllQuestions({ limit: pageSize, page })
+          const questionsArray = Array.isArray(response.questions) ? response.questions : []
+          allQuestionArrays.push(...questionsArray);
+        }
+        
+        console.log(`✅ Loaded ${allQuestionArrays.length} questions total`);
+        console.log('🔍 First 3 questions:', allQuestionArrays.slice(0, 3));
+        setQuestions(allQuestionArrays)
+        setAllQuestions(allQuestionArrays)
+        setIsLoading(false)
+        return
+      }
       
       if (selectedItem.type === 'global') {
-        const response = await questionBankService.getAllQuestions()
+        const response = await questionBankService.getAllQuestions({ limit: 1000 })
         // Filter to only questions without categoryId
         const questionsArray = Array.isArray(response.questions) ? response.questions : []
         const globalQuestions = questionsArray.filter(q => !q.categoryId)
+        console.log(`📊 Loaded ${globalQuestions.length} global questions (no category)`)
         setQuestions(globalQuestions)
         
       } else if (selectedItem.type === 'category' || selectedItem.type === 'subcategory') {
         const categoryId = parseInt(selectedItem.id)
         console.log('🔍 Loading questions for category:', categoryId)
+        console.log('📚 Total questions available:', allQuestions.length)
+        console.log('🔢 All category IDs in questions:', [...new Set(allQuestions.map(q => q.categoryId))])
         
-        // Get all descendant category IDs (including the selected category itself)
-        const allCategoryIds = getAllDescendantCategoryIds(categoryId, apiCategories || [])
-        console.log('📁 All category IDs to search:', allCategoryIds)
+        // Instead of calling API, filter from allQuestions we already have
+        const categoryQuestions = allQuestions.filter(q => q.categoryId === categoryId)
         
-        // Load questions from all descendant categories
-        const questionPromises = allCategoryIds.map(catId => {
-          console.log(`🔄 Loading questions for category ID: ${catId}`)
-          return questionBankService.getQuestionsByCategory(catId)
-        })
+        console.log(`✅ Found ${categoryQuestions.length} questions for category ${categoryId}`)
         
-        const allResponses = await Promise.all(questionPromises)
-        console.log('📥 All API responses received:', allResponses.length)
+        if (categoryQuestions.length > 0) {
+          console.log('📝 Sample questions:', categoryQuestions.slice(0, 3).map(q => `"${q.questionText}" (ID: ${q.id}, Category: ${q.categoryId})`))
+        }
         
-        // Flatten and combine all questions
-        allResponses.forEach((response, index) => {
-          const questionsArray = Array.isArray(response) ? response : []
-          console.log(`📊 Category ${allCategoryIds[index]} returned ${questionsArray.length} questions`)
-          allQuestions.push(...questionsArray)
-        })
+        setQuestions(categoryQuestions)
         
-        console.log('📋 Total questions before deduplication:', allQuestions.length)
-        
-        // Remove duplicates (in case a question appears in multiple responses)
-        const uniqueQuestions = allQuestions.filter((question, index, self) => 
-          index === self.findIndex(q => q.id === question.id)
-        )
-        
-        console.log('✅ Final unique questions:', uniqueQuestions.length)
-        console.log('📝 Questions sample:', uniqueQuestions.slice(0, 3).map(q => `"${q.questionText}" (ID: ${q.id})`))
-        
-        // If no questions found in hierarchical search, try a broader search
-        if (uniqueQuestions.length === 0) {
-          console.log('⚠️ No questions found in hierarchical search, trying broader search...')
-          try {
-            const globalResponse = await questionBankService.getAllQuestions()
-            const allGlobalQuestions = Array.isArray(globalResponse.questions) ? globalResponse.questions : []
-            const categoryRelatedQuestions = allGlobalQuestions.filter(q => 
-              allCategoryIds.includes(q.categoryId || 0)
-            )
-            console.log(`🔄 Found ${categoryRelatedQuestions.length} questions in global search related to categories: ${allCategoryIds}`)
-            setQuestions(categoryRelatedQuestions)
-          } catch (fallbackError) {
-            console.error('❌ Fallback search also failed:', fallbackError)
-            setQuestions(uniqueQuestions) // Use empty array
+        if (categoryQuestions.length === 0) {
+          console.log('📭 No questions found for this category')
+          console.log('❓ Looking for subcategory questions...')
+          
+          // Check if this is a parent category and look for questions in subcategories
+          const allCategoryIds = getAllDescendantCategoryIds(categoryId, [...(apiCategories || []), ...virtualCategories])
+          console.log('🔄 Checking descendant categories:', allCategoryIds)
+          
+          const descendantQuestions = allQuestions.filter(q => allCategoryIds.includes(q.categoryId || 0))
+          console.log(`📊 Found ${descendantQuestions.length} questions in descendant categories`)
+          
+          if (descendantQuestions.length > 0) {
+            setQuestions(descendantQuestions)
+          } else {
+            // Show a message to the user
+            toast({
+              title: "No questions found",
+              description: `Category "${categoryId}" has no questions yet.`,
+              variant: "default"
+            })
           }
-        } else {
-          setQuestions(uniqueQuestions)
         }
         
       } else if (selectedItem.type === 'quiz') {
@@ -162,11 +293,20 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
       } else {
         setQuestions([])
       }
-    } catch (error) {
-      console.error('Error loading questions:', error)
+    } catch (error: any) {
+      console.error('❌ Error loading questions:', error)
+      console.error('Error response:', error.response?.data)
+      
+      let errorMessage = "Failed to load questions"
+      if (error.response?.status === 401) {
+        errorMessage = "Authentication required. Please login again."
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load questions",
+        description: errorMessage,
         variant: "destructive"
       })
       setQuestions([])
@@ -194,6 +334,7 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
   })
 
   const handleSelectItem = (type: 'category' | 'subcategory' | 'quiz' | 'global', id: string) => {
+    console.log('🎯 Selected:', type, id)
     setSelectedItem({ type, id })
     setSelectedQuestions(new Set()) // Clear selection when changing nodes
   }
@@ -235,12 +376,14 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
         C: q.options[2]?.optionText || '',
         D: q.options[3]?.optionText || ''
       },
-      correctOption: String.fromCharCode(65 + (q.options.findIndex(opt => opt.isCorrect) || 0)),
-      difficulty: q.difficulty.toLowerCase() as 'easy' | 'medium' | 'hard',
+      correctOption: String.fromCharCode(65 + (q.options.findIndex(opt => opt.isCorrect) || 0)) as 'A' | 'B' | 'C' | 'D',
+      difficulty: (q.difficulty.toLowerCase() === 'medium' ? 'intermediate' : q.difficulty.toLowerCase()) as 'easy' | 'intermediate' | 'hard',
       points: 10, // Default points
       timeLimit: 30, // Default time limit
       tags: [], // Default empty tags
-      category: q.categoryId ? `Category ${q.categoryId}` : 'Global'
+      category: q.categoryId ? `Category ${q.categoryId}` : 'Global',
+      createdAt: q.createdAt ? new Date(q.createdAt) : new Date(),
+      updatedAt: q.updatedAt ? new Date(q.updatedAt) : new Date()
     }))
 
     onAddQuestions(transformedQuestions)
@@ -267,30 +410,21 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
             {/* Left Panel - Hierarchical Tree */}
             <div className="space-y-4">
               <h3 className="font-medium text-gray-900 dark:text-gray-100">Categories & Quizzes</h3>
-              {/* Debug button */}
-              <Button 
-                onClick={async () => {
-                  console.log('🔍 DEBUGGING: Loading ALL questions...')
-                  try {
-                    const response = await questionBankService.getAllQuestions()
-                    const allQuestions = Array.isArray(response.questions) ? response.questions : []
-                    console.log(`📊 TOTAL QUESTIONS IN DATABASE: ${allQuestions.length}`)
-                    console.log('📝 Questions by category:', allQuestions.reduce((acc, q) => {
-                      const catId = q.categoryId || 'null'
-                      acc[catId] = (acc[catId] || 0) + 1
-                      return acc
-                    }, {} as Record<string, number>))
-                    setQuestions(allQuestions)
-                  } catch (error) {
-                    console.error('❌ Debug load failed:', error)
-                  }
+              
+              {/* All Questions Button */}
+              <div
+                className={cn(
+                  "flex items-center space-x-2 py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
+                  !selectedItem && "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                )}
+                onClick={() => {
+                  setSelectedItem(null) // This will trigger loading ALL questions
+                  setSelectedQuestions(new Set())
                 }}
-                variant="outline" 
-                size="sm"
-                className="w-full"
               >
-                🔍 DEBUG: Load ALL Questions
-              </Button>
+                <BookOpen className="h-4 w-4 text-blue-500" />
+                <span className="text-sm font-medium">All Questions ({allQuestions.length})</span>
+              </div>
               <div className="max-h-96 overflow-y-auto border rounded-lg">
                 {loadingState ? (
                   <div className="flex items-center justify-center py-8">
@@ -298,10 +432,11 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
                   </div>
                 ) : (
                   <QuestionBankTree
-                    categories={apiCategories || []}
+                    categories={[...(apiCategories || []), ...virtualCategories]}
                     quizzes={quizzes || []}
                     selectedItem={selectedItem}
                     onSelectItem={handleSelectItem}
+                    categoryCounts={categoryCounts}
                   />
                 )}
               </div>
@@ -446,15 +581,16 @@ export function QuestionBankModal({ open, onOpenChange, onAddQuestions }: Questi
         </div>
 
         <DialogFooter className="flex items-center justify-between">
-          <Button variant="outline" onClick={handleReset}>
+          <Button type="button" variant="outline" onClick={handleReset}>
             <RotateCcw className="mr-2 h-4 w-4" />
             Reset
           </Button>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button 
+              type="button"
               onClick={handleAddQuestions}
               disabled={selectedQuestions.size === 0}
             >

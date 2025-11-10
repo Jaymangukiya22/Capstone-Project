@@ -77,6 +77,6 @@ Thumbs.db
 *coverage/
 *dist/
 *logs/
-
+backend/dist/
 Frontend-admin/docs/
 backend/docs/

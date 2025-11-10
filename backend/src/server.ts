@@ -69,6 +69,10 @@ const allowedOrigins = [
   "http://localhost:8090",
   "http://10.80.5.18",
   "https://jv7ot4-ip-157-32-46-222.tunnelmole.net",
+  "https://quizdash.dpdns.org",
+  "https://api.quizdash.dpdns.org",
+  "https://ws.quizdash.dpdns.org",
+  "https://match.quizdash.dpdns.org",
 ];
 
 // Add environment-based origins

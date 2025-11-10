@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Download, ChevronDown, ChevronUp, Trophy, Clock, Target, Users } from 'lucide-react';
+import { Search, Download, ChevronDown, ChevronUp, Trophy, Clock, Target, Users, Swords, Bot } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +22,8 @@ interface QuizPerformanceData {
   attempts: StudentAttempt[];
   statistics: {
     totalAttempts: number;
+    soloAttempts: number;
+    friendMatches: number;
     completedAttempts: number;
     averageScore: number;
     highestScore: number;
@@ -32,7 +34,9 @@ interface QuizPerformanceData {
 }
 
 interface StudentAttempt {
-  id: number;
+  id: number | string;
+  type: 'SOLO_VS_AI' | 'PLAY_WITH_FRIEND';
+  matchId?: string;
   user: {
     id: number;
     username: string;
@@ -49,6 +53,7 @@ interface StudentAttempt {
   completedAt: string;
   createdAt: string;
   rank?: number;
+  isWinner?: boolean;
 }
 
 export default function QuizPerformance() {
@@ -62,6 +67,8 @@ export default function QuizPerformance() {
   const [summary, setSummary] = useState({
     totalQuizzes: 0,
     totalAttempts: 0,
+    soloAttempts: 0,
+    friendMatches: 0,
     totalUniqueStudents: 0
   });
 
@@ -93,6 +100,8 @@ export default function QuizPerformance() {
       setSummary(response.data.summary || {
         totalQuizzes: 0,
         totalAttempts: 0,
+        soloAttempts: 0,
+        friendMatches: 0,
         totalUniqueStudents: 0
       });
     } catch (error) {
@@ -187,7 +196,7 @@ export default function QuizPerformance() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -207,6 +216,28 @@ export default function QuizPerformance() {
                 <p className="text-2xl font-bold">{summary.totalAttempts}</p>
               </div>
               <Clock className="h-8 w-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Solo VS AI</p>
+                <p className="text-2xl font-bold">{summary.soloAttempts}</p>
+              </div>
+              <Bot className="h-8 w-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Friend Matches</p>
+                <p className="text-2xl font-bold">{summary.friendMatches}</p>
+              </div>
+              <Swords className="h-8 w-8 text-pink-500" />
             </div>
           </CardContent>
         </Card>
@@ -291,8 +322,20 @@ export default function QuizPerformance() {
                           {quizData.quiz.difficulty}
                         </Badge>
                         <span className="text-sm text-gray-500">
-                          {quizData.statistics.totalAttempts} attempts
+                          {quizData.statistics.totalAttempts} total
                         </span>
+                        {quizData.statistics.soloAttempts > 0 && (
+                          <span className="text-sm text-orange-600 flex items-center gap-1">
+                            <Bot className="h-3 w-3" />
+                            {quizData.statistics.soloAttempts} solo
+                          </span>
+                        )}
+                        {quizData.statistics.friendMatches > 0 && (
+                          <span className="text-sm text-pink-600 flex items-center gap-1">
+                            <Swords className="h-3 w-3" />
+                            {quizData.statistics.friendMatches} friend
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -341,6 +384,7 @@ export default function QuizPerformance() {
                         <thead>
                           <tr className="border-b">
                             <th className="text-left py-2 px-4">Rank</th>
+                            <th className="text-left py-2 px-4">Type</th>
                             <th className="text-left py-2 px-4">Student</th>
                             <th className="text-left py-2 px-4">Status</th>
                             <th className="text-left py-2 px-4">Score</th>
@@ -373,6 +417,20 @@ export default function QuizPerformance() {
                                 )}
                                 {attempt.rank && attempt.rank > 3 && (
                                   <span className="pl-5">{attempt.rank}</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4">
+                                {attempt.type === 'SOLO_VS_AI' ? (
+                                  <Badge variant="outline" className="gap-1 bg-orange-50 text-orange-700 border-orange-200">
+                                    <Bot className="h-3 w-3" />
+                                    Solo VS AI
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="gap-1 bg-pink-50 text-pink-700 border-pink-200">
+                                    <Swords className="h-3 w-3" />
+                                    Friend
+                                    {attempt.isWinner && ' 🏆'}
+                                  </Badge>
                                 )}
                               </td>
                               <td className="py-3 px-4">

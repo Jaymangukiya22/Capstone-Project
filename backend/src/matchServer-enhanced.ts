@@ -7,7 +7,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import { Server as SocketIOServer } from 'socket.io';
-import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption } from './models/index';
+import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, MatchPlayer as MatchPlayerModel } from './models/index';
+import { MatchType } from './types/enums';
 import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
 import { logInfo, logError } from './utils/logger';
@@ -979,13 +980,13 @@ class EnhancedMatchService {
                 match.players.set(storedPlayer.userId, restoredPlayer);
               }
             }
-            
+                        
             // CRITICAL FIX: Restore questionStartTime to prevent timer loop on reconnection
             // If questionStartTime was recently updated, keep it to prevent timer reset
             if (storedMatch.questionStartTime) {
               match.questionStartTime = storedMatch.questionStartTime;
             }
-            
+
             // Store in memory maps
             this.matches.set(data.matchId, match);
             this.joinCodeToMatch.set(storedMatch.joinCode, data.matchId);
@@ -1259,10 +1260,11 @@ class EnhancedMatchService {
           // Save match state to Redis for reconnection
           await this.saveMatchState(matchId, match);
 
-          // Check if ALL players have submitted their answer for the CURRENT question
-          // This prevents question skipping - both players MUST answer before advancing
+          // Check if all players have answered the current question
+          // FIX: Use hasSubmittedCurrent flag instead of comparing answer count
+          // This prevents counting questions twice and skipping questions
           const allAnswered = Array.from(match.players.values()).every(
-            p => p.hasSubmittedCurrent === true && p.answers.length > match.currentQuestionIndex
+            p => p.hasSubmittedCurrent === true
           );
           
           // Notify other players that this player submitted
@@ -1308,7 +1310,7 @@ class EnhancedMatchService {
           } else {
             // Let current player know they're waiting
             const waitingFor = Array.from(match.players.values())
-              .filter(p => p.answers.length <= match.currentQuestionIndex)
+              .filter(p => !p.hasSubmittedCurrent)
               .map(p => p.username);
             
             socket.emit('waiting_for_opponent', {
@@ -1502,11 +1504,13 @@ class EnhancedMatchService {
 
     // Calculate final results for ALL players
     const results = Array.from(match.players.values()).map(player => {
-      // Calculate accuracy - use total questions from quiz, not just answered questions
-      const totalQuestions = match.questions.length;
+      // Calculate accuracy
       const totalAnswers = player.answers.length;
       const correctAnswers = player.answers.filter(answer => answer.isCorrect).length;
       const accuracy = totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0;
+      
+      // Calculate total time spent
+      const totalTimeSpent = player.answers.reduce((sum, answer) => sum + (answer.timeSpent || 0), 0);
 
       return {
         userId: player.userId,
@@ -1517,13 +1521,15 @@ class EnhancedMatchService {
         answers: player.answers,
         correctAnswers,
         totalAnswers,
-        totalQuestions,  // Add total questions from quiz for correct results display
-        accuracy
+        accuracy,
+        timeSpent: totalTimeSpent
       };
     });
 
     // Sort by score (highest first)
     results.sort((a, b) => b.score - a.score);
+    
+    const winnerId = results.length > 0 ? results[0].userId : null;
 
     logInfo('Match completed - final results calculated', {
       matchId,
@@ -1534,7 +1540,8 @@ class EnhancedMatchService {
         score: r.score,
         correctAnswers: r.correctAnswers,
         totalAnswers: r.totalAnswers,
-        accuracy: r.accuracy
+        accuracy: r.accuracy,
+        timeSpent: r.timeSpent
       })),
       winner: results[0] ? { 
         userId: results[0].userId, 
@@ -1543,6 +1550,92 @@ class EnhancedMatchService {
         accuracy: results[0].accuracy
       } : null
     });
+
+    // 🔥 SAVE TO DATABASE
+    try {
+      // Find or create match record
+      let dbMatch = await Match.findOne({ where: { matchId } });
+      
+      if (!dbMatch) {
+        // Create new match record
+        dbMatch = await Match.create({
+          matchId,
+          quizId: match.quizId,
+          type: MatchType.FRIEND_MATCH,
+          status: 'COMPLETED',
+          maxPlayers: 2,
+          startedAt: match.createdAt || new Date(),
+          endedAt: new Date(),
+          winnerId
+        });
+        
+        logInfo('Match record created in database', { matchId, dbMatchId: dbMatch.id });
+      } else {
+        // Update existing match
+        await dbMatch.update({
+          status: 'COMPLETED',
+          endedAt: new Date(),
+          winnerId
+        });
+        
+        logInfo('Match record updated in database', { matchId, dbMatchId: dbMatch.id });
+      }
+
+      // Save player results
+      for (const result of results) {
+        let playerRecord = await MatchPlayerModel.findOne({
+          where: {
+            matchId: dbMatch.id,
+            userId: result.userId
+          }
+        });
+
+        if (!playerRecord) {
+          // Create new player record
+          await MatchPlayerModel.create({
+            matchId: dbMatch.id,
+            userId: result.userId,
+            status: 'FINISHED',
+            score: result.score,
+            correctAnswers: result.correctAnswers,
+            timeSpent: result.timeSpent,
+            joinedAt: new Date(Date.now() - (result.timeSpent || 0) * 1000),
+            finishedAt: new Date()
+          });
+          
+          logInfo('Player record created in database', { 
+            matchId, 
+            userId: result.userId, 
+            score: result.score,
+            correctAnswers: result.correctAnswers
+          });
+        } else {
+          // Update existing player record
+          await playerRecord.update({
+            status: 'FINISHED',
+            score: result.score,
+            correctAnswers: result.correctAnswers,
+            timeSpent: result.timeSpent,
+            finishedAt: new Date()
+          });
+          
+          logInfo('Player record updated in database', { 
+            matchId, 
+            userId: result.userId, 
+            score: result.score 
+          });
+        }
+      }
+
+      logInfo('✅ Match data saved to database successfully', { 
+        matchId, 
+        dbMatchId: dbMatch.id,
+        playersCount: results.length 
+      });
+    } catch (dbError) {
+      logError('❌ Failed to save match data to database', dbError as Error);
+      // Continue with broadcast even if DB save fails
+    }
 
     // Create the complete match data that ALL players will receive
     const completionData = {

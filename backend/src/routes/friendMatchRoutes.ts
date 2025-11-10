@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { logInfo, logError } from '../utils/logger';
-import { getMatchResults } from '../controllers/matchResultsController';
 
 // Simple HTTP client instead of axios
 const httpClient = {
@@ -197,11 +196,5 @@ router.get('/:matchId', async (req: Request, res: Response) => {
     });
   }
 });
-
-/**
- * Get match results from database
- * GET /api/friend-matches/:matchId/results
- */
-router.get('/:matchId/results', getMatchResults);
 
 export default router;

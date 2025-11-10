@@ -27,7 +27,7 @@ while true; do
       docker compose up -d
 
       echo "[2/3] Waiting for services to initialize..."
-      sleep 15
+      sleep 5
 
       echo "[3/3] Starting Cloudflare Tunnel..."
       echo

@@ -27,6 +27,7 @@ export enum MatchStatus {
 export enum MatchType {
   SOLO = 'SOLO',
   MULTIPLAYER = 'MULTIPLAYER',
+  FRIEND_MATCH = 'FRIEND_MATCH',
   TOURNAMENT = 'TOURNAMENT'
 }
 

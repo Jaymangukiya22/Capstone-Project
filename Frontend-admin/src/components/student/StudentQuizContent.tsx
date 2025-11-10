@@ -72,8 +72,8 @@ export function StudentQuizContent() {
 
   const handleQuizSelect = (quiz: StudentQuiz) => {
     setSelectedQuiz(quiz)
-    // On mobile, show quiz details view
-    if (window.innerWidth < 768) {
+    // On mobile/tablet (< lg breakpoint), show quiz details sheet
+    if (window.innerWidth < 1024) {
       setShowQuizDetails(true)
     }
   }
@@ -534,6 +534,46 @@ export function StudentQuizContent() {
           onJoinFriendGame={handleJoinFriendGame}
         />
       </div>
+
+      {/* Mobile Quiz Details Sheet - Opens when a quiz is selected on mobile */}
+      <Sheet open={showQuizDetails} onOpenChange={setShowQuizDetails}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 overflow-y-auto">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle>Quiz Details</SheetTitle>
+          </SheetHeader>
+          <div className="h-full">
+            <QuizOverviewPanel
+              selectedQuiz={selectedQuiz ? {
+                id: selectedQuiz.id.toString(),
+                name: selectedQuiz.title,
+                description: selectedQuiz.description || '',
+                category: selectedQuiz.categoryName || 'Uncategorized',
+                subcategory: '',
+                difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
+                          selectedQuiz.difficulty === 'MEDIUM' ? 'intermediate' as const : 'hard' as const,
+                questionCounts: {
+                  easy: 5,
+                  intermediate: 5,
+                  hard: 5,
+                  total: 15
+                },
+                estimatedDuration: Math.floor((selectedQuiz.timeLimit || 30) / 60),
+                passingScore: 70,
+                timePerQuestion: 30,
+                maxPlayers: 4,
+                lastUpdated: new Date(),
+                isActive: true
+              } : null}
+              onPlayQuiz={(quizId, mode, gameCode) => {
+                handlePlayQuiz(quizId, mode, gameCode)
+                setShowQuizDetails(false) // Close sheet after starting quiz
+              }}
+              onCreateFriendGame={handleCreateFriendGame}
+              onJoinFriendGame={handleJoinFriendGame}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

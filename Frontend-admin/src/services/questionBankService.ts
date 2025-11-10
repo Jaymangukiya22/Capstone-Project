@@ -86,12 +86,31 @@ export class QuestionBankService {
       if (params?.search) queryParams.append('search', params.search);
 
       const url = queryParams.toString() ? `${this.endpoint}?${queryParams}` : this.endpoint;
-      const response = await apiClient.get<ApiResponse<QuestionBankItem[]>>(url);
+      const response = await apiClient.get<ApiResponse<any>>(url);
       
-      return {
-        questions: response.data.data,
-        pagination: response.data.pagination
-      };
+      console.log('📦 Raw API response for getAllQuestions:', response.data);
+      
+      // Handle different response structures
+      if (response.data.data && response.data.data.questions) {
+        // Structure: { data: { questions: [...], pagination: {...} } }
+        return {
+          questions: response.data.data.questions || [],
+          pagination: response.data.data.pagination
+        };
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        // Structure: { data: [...] }
+        return {
+          questions: response.data.data || [],
+          pagination: (response.data as any).pagination
+        };
+      } else {
+        // Fallback
+        console.warn('⚠️ Unexpected response structure in getAllQuestions:', response.data);
+        return {
+          questions: [],
+          pagination: null
+        };
+      }
     } catch (error) {
       console.error('Error fetching questions:', error);
       throw error;
@@ -174,10 +193,19 @@ export class QuestionBankService {
       if (params.page) queryParams.append('page', params.page.toString());
       if (params.limit) queryParams.append('limit', params.limit.toString());
 
-      const response = await apiClient.get<ApiResponse<QuestionBankItem[]>>(`${this.endpoint}/search?${queryParams}`);
+      const response = await apiClient.get<ApiResponse<any>>(`${this.endpoint}/search?${queryParams}`);
+      
+      // Handle nested response structure
+      if (response.data.data && response.data.data.questions) {
+        return {
+          questions: response.data.data.questions || [],
+          pagination: response.data.data.pagination
+        };
+      }
+      
       return {
-        questions: response.data.data,
-        pagination: response.data.pagination
+        questions: response.data.data || [],
+        pagination: (response.data as any).pagination
       };
     } catch (error) {
       console.error('Error searching questions:', error);
@@ -190,23 +218,31 @@ export class QuestionBankService {
    */
   async getQuestionsByCategory(categoryId: number): Promise<QuestionBankItem[]> {
     try {
-      const response = await apiClient.get<ApiResponse<{ questions: QuestionBankItem[]; pagination?: any }>>(`${this.endpoint}/category/${categoryId}`);
+      const response = await apiClient.get<ApiResponse<{ questions: QuestionBankItem[]; pagination?: any }>>(`${this.endpoint}/category/${categoryId}?limit=1000`);
       console.log('🔍 API Response for category', categoryId, ':', response.data);
       
       // Handle the nested structure: response.data.data.questions
       if (response.data && response.data.data && response.data.data.questions) {
+        console.log(`✅ Found ${response.data.data.questions.length} questions for category ${categoryId}`);
         return response.data.data.questions;
       }
       
       // Fallback for direct array
       if (Array.isArray(response.data.data)) {
+        console.log(`✅ Found ${response.data.data.length} questions for category ${categoryId} (direct array)`);
         return response.data.data;
       }
       
-      console.warn('Unexpected API response structure:', response.data);
+      console.warn('⚠️ Unexpected API response structure:', response.data);
+      console.warn('📊 No questions found for category', categoryId);
       return [];
-    } catch (error) {
-      console.error(`Error fetching questions for category ${categoryId}:`, error);
+    } catch (error: any) {
+      console.error(`❌ Error fetching questions for category ${categoryId}:`, error);
+      // Don't throw error, just return empty array so UI can show "no questions"
+      if (error.response?.status === 404 || error.response?.status === 500) {
+        console.log(`📭 Category ${categoryId} has no questions yet`);
+        return [];
+      }
       throw error;
     }
   }
@@ -261,7 +297,7 @@ export class QuestionBankService {
       );
 
       console.log('✅ Excel upload successful:', response.data);
-      return response.data.data;
+      return response.data.data as ExcelUploadResult;
     } catch (error) {
       console.error('❌ Error uploading Excel file:', error);
       throw error;
@@ -276,7 +312,7 @@ export class QuestionBankService {
       const response = await apiClient.post<ApiResponse<QuestionBankItem[]>>(`${this.endpoint}/bulk`, {
         questions
       });
-      return response.data.data;
+      return response.data.data || [];
     } catch (error) {
       console.error('Error bulk creating questions:', error);
       throw error;

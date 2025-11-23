@@ -30,31 +30,47 @@ export class QuestionBankItem extends Model {
   id!: number;
 
   @AllowNull(false)
-  @Column(DataType.TEXT)
+  @Column({ type: DataType.TEXT, field: 'question_text' })
   questionText!: string;
+
+  @Column(DataType.TEXT)
+  explanation?: string;
 
   @ForeignKey(() => Category)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'category_id' })
   categoryId!: number;
 
   @Default(Difficulty.MEDIUM)
   @Column(DataType.ENUM(...Object.values(Difficulty)))
   difficulty!: Difficulty;
 
+  @Default('MCQ')
+  @Column({ type: DataType.STRING(20), field: 'question_type' })
+  questionType!: string;
+
+  @Column({ type: DataType.ARRAY(DataType.TEXT), field: 'tags' })
+  tags?: string[];
+
+  @Default(0)
+  @Column({ type: DataType.INTEGER, field: 'usage_count' })
+  usageCount!: number;
+
   @ForeignKey(() => User)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'created_by_id' })
   createdById!: number;
 
   @Default(true)
-  @Column(DataType.BOOLEAN)
+  @Column({ type: DataType.BOOLEAN, field: 'is_active' })
   isActive!: boolean;
 
   @CreatedAt
+  @Column({ type: DataType.DATE, field: 'created_at' })
   createdAt!: Date;
 
   @UpdatedAt
+  @Column({ type: DataType.DATE, field: 'updated_at' })
   updatedAt!: Date;
 
   // Associations

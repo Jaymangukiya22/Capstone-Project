@@ -53,6 +53,8 @@ const FriendMatchInterface: React.FC = () => {
   const [quizTitle, setQuizTitle] = useState('Friend Match');
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [isMatchCompleted, setIsMatchCompleted] = useState(false);
+  const [isWaitingForOpponent, setIsWaitingForOpponent] = useState(false);
+  const [waitingForOpponentName, setWaitingForOpponentName] = useState('opponent');
   
   // Navigation guard to prevent going back during friend match
   const { disableGuard } = useQuizNavigationGuard(!isLoading && !isWaitingForPlayers, isMatchCompleted);
@@ -60,6 +62,7 @@ const FriendMatchInterface: React.FC = () => {
   // WebSocket connection ref
   const wsConnected = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSubmittedCurrentQuestion = useRef(false); // Prevent double submission
 
   // Get answered questions set for progress tracking
   const answeredQuestions = new Set(answers.keys());
@@ -115,7 +118,12 @@ const FriendMatchInterface: React.FC = () => {
           return;
         }
 
-        const { mode, joinCode, matchId: storedMatchId, websocketUrl } = JSON.parse(matchInfo);
+        const { mode, joinCode, matchId: storedMatchId, websocketUrl, quizName } = JSON.parse(matchInfo);
+        
+        // Set quiz title from sessionStorage
+        if (quizName) {
+          setQuizTitle(quizName);
+        }
         
         // Check if we're reconnecting - if we have a saved matchId, we should reconnect
         const savedState = matchStateManager.getMatchState();
@@ -137,7 +145,7 @@ const FriendMatchInterface: React.FC = () => {
           return;
         }
 
-        console.log('🎮 Initializing friend match:', { mode, joinCode, matchId: storedMatchId });
+        console.log('🎮 Initializing friend match:', { mode, joinCode, matchId: storedMatchId, quizName });
 
         // Clear ALL previous match session data to allow replay
         Object.keys(sessionStorage).forEach(key => {
@@ -463,6 +471,9 @@ const FriendMatchInterface: React.FC = () => {
     gameWebSocket.on('match_started', (data: any) => {
       console.log('🎮 MATCH_STARTED event:', data);
       
+      // CRITICAL: Reset submission flag for first question
+      hasSubmittedCurrentQuestion.current = false;
+      
       // Validate question data exists
       if (!data.question || !data.question.questionText) {
         console.error('❌ Match started but no question data received!', data);
@@ -537,19 +548,36 @@ const FriendMatchInterface: React.FC = () => {
     gameWebSocket.on('next_question', (data: any) => {
       console.log('📝 NEXT QUESTION EVENT:', data);
       
-      // Reset timer and update question
+      // CRITICAL: Reset submission flag for new question
+      hasSubmittedCurrentQuestion.current = false;
+      
+      // Reset waiting state
+      setIsWaitingForOpponent(false);
+      setWaitingForOpponentName('opponent');
+      
+      // Update question data
       setCurrentQuestionData(data.question);
-      setCurrentQuestion(data.questionIndex + 1); // Use server's question index
+      setCurrentQuestion(data.questionIndex + 1);
       setQuestionTimeRemaining(data.question.timeLimit || 30);
       setQuestionStartTime(Date.now());
-      setIsSubmitting(false);
       
-      // Update totalQuestions if provided in the event
       if (data.totalQuestions) {
         setTotalQuestions(data.totalQuestions);
       }
       
+      // CRITICAL: Unlock UI after all state updates
+      setIsSubmitting(false);
+      
       console.log(`📝 Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
+    });
+
+    // Question timeout - auto-advance when 30 seconds pass
+    gameWebSocket.on('question_timeout', (data: any) => {
+      console.log('⏱️ QUESTION TIMEOUT:', data);
+      toast({
+        title: "Time's Up!",
+        description: data.message || "Moving to next question...",
+      });
     });
 
     // Individual player progression (for independent advancement)
@@ -581,14 +609,32 @@ const FriendMatchInterface: React.FC = () => {
 
     // Answer result
     gameWebSocket.on('answer_result', (data: any) => {
-      console.log('Answer result:', data);
-      // Show feedback to user
+      console.log('✅ Answer result received:', data);
       if (data.isCorrect) {
         toast({
-          title: "Correct!",
-          description: `+${data.points} points`,
+          title: "Correct! ✓",
+          description: `+${data.points} points (Total: ${data.totalScore})`,
+        });
+      } else {
+        toast({
+          title: "Incorrect",
+          description: `0 points (Total: ${data.totalScore})`,
+          variant: "destructive"
         });
       }
+    });
+
+    // Waiting for opponent
+    gameWebSocket.on('waiting_for_opponent', (data: any) => {
+      console.log('⏳ Waiting for opponent:', data);
+      setIsWaitingForOpponent(true);
+      if (data.waitingFor && data.waitingFor.length > 0) {
+        setWaitingForOpponentName(data.waitingFor[0]);
+      }
+      toast({
+        title: "Waiting...",
+        description: data.message || `Waiting for ${data.waitingFor.join(', ')}...`,
+      });
     });
 
     // Player answered
@@ -712,12 +758,28 @@ const FriendMatchInterface: React.FC = () => {
 
   // Submit current answer
   const submitCurrentAnswer = () => {
+    // CRITICAL: Prevent double submission
+    if (hasSubmittedCurrentQuestion.current) {
+      console.log('⚠️ Already submitted this question, ignoring duplicate submission');
+      return;
+    }
+
     if (!currentQuestionData) {
       console.log('❌ No current question data to submit');
       return;
     }
 
     const selectedOptions = answers.get(currentQuestion) || [];
+    if (selectedOptions.length === 0) {
+      toast({
+        title: "Please Select an Answer",
+        description: "You must select an option before submitting.",
+        variant: "destructive"
+      });
+      console.log('❌ No options selected - cannot submit');
+      return;
+    }
+
     const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
 
     console.log('📤 Submitting answer:', {
@@ -728,19 +790,26 @@ const FriendMatchInterface: React.FC = () => {
     });
 
     try {
-      if (selectedOptions.length > 0) {
-        gameWebSocket.submitAnswer(currentQuestionData.id, selectedOptions, timeSpent);
-      } else {
-        console.log('⚠️ No options selected, submitting empty answer');
-        gameWebSocket.submitAnswer(currentQuestionData.id, [], timeSpent);
-      }
+      setIsSubmitting(true);
+      // Mark as submitted immediately to prevent double-clicks
+      hasSubmittedCurrentQuestion.current = true;
       
-      // Save state immediately after submitting answer
-      setTimeout(() => {
-        saveCurrentState();
-      }, 100);
+      gameWebSocket.submitAnswer(currentQuestionData.id, selectedOptions, timeSpent);
+      
+      // Safety timeout: If server doesn't respond in 5 seconds, unlock the UI
+      const safetyTimer = setTimeout(() => {
+        console.log("⚠️ Safety timeout triggered - Server didn't respond in 5 seconds, unlocking UI");
+        setIsSubmitting(false);
+        hasSubmittedCurrentQuestion.current = false;
+      }, 5000);
+      
+      // Store timer ID for cleanup if needed
+      timerRef.current = safetyTimer;
+
     } catch (error) {
       console.error('❌ Error submitting answer:', error);
+      setIsSubmitting(false);
+      hasSubmittedCurrentQuestion.current = false;
       toast({
         title: "Submission Error",
         description: "Failed to submit answer. Please try again.",
@@ -752,8 +821,12 @@ const FriendMatchInterface: React.FC = () => {
   // Auto-advance to next question when time runs out
   const handleQuestionTimeUp = async () => {
     console.log('⏰ Question time up! Auto-advancing...');
-    // Submit current answer (even if empty)
-    await submitCurrentAnswer();
+    
+    // Only submit if not already submitted
+    if (!hasSubmittedCurrentQuestion.current) {
+      // Submit current answer (even if empty)
+      await submitCurrentAnswer();
+    }
     
     const isLastQuestion = currentQuestion === totalQuestions;
     if (isLastQuestion) {
@@ -1093,6 +1166,8 @@ const FriendMatchInterface: React.FC = () => {
                 onNext={handleNext}
                 onSubmit={handleSubmit}
                 isSubmitting={isSubmitting}
+                isWaitingForOpponent={isWaitingForOpponent}
+                opponentName={waitingForOpponentName}
               />
             </div>
           </div>

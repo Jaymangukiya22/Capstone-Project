@@ -20,7 +20,7 @@ const seedCategoriesWithHierarchy = async () => {
       adminUser = await User.create({
         username: 'admin',
         email: 'admin@example.com',
-        password: 'admin123',
+        password: '1234567890',
         role: UserRole.ADMIN,
         isActive: true
       });

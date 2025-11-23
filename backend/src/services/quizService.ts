@@ -243,7 +243,7 @@ export class QuizService {
       const questions = quizQuestions.map(qq => ({
         id: qq.question.id,
         questionId: qq.questionId,
-        order: qq.order,
+        order: (qq as any).orderIndex || (qq as any).order,
         questionText: qq.question.questionText,
         difficulty: qq.question.difficulty,
         categoryId: qq.question.categoryId,

@@ -22,11 +22,22 @@ const getApiBaseUrl = (): string => {
     return 'http://localhost:8090/api';
   }
   
-  // For network access, use nginx load balancer port
+  // For network access (LAN), use nginx load balancer port
+  if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+    return `${protocol}//${hostname}:8090/api`;
+  }
+  
+  // Default: use current hostname with nginx port
   return `${protocol}//${hostname}:8090/api`;
 };
 
 const getWebSocketUrl = (): string => {
+  // FIXED VERSION: ALWAYS USE LOCALHOST FOR WEBSOCKET IN DEVELOPMENT
+  if (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+    console.log('🔌 Using local WebSocket: ws://localhost:3001');
+    return 'ws://localhost:3001';
+  }
+  
   const { protocol, hostname } = window.location;
   
   // Check if we're running through Cloudflare tunnel
@@ -44,11 +55,6 @@ const getWebSocketUrl = (): string => {
   if (hostname.includes('loca.lt')) {
     const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
     return `${wsProtocol}//${hostname}/socket.io`;
-  }
-  
-  // If accessing from localhost
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'ws://localhost:3001';
   }
   
   // For network access

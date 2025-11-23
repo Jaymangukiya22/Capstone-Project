@@ -159,11 +159,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
+    console.error('Detailed login error:', error);
     logError('Login error', error as Error);
     res.status(500).json({
       success: false,
       error: 'Login failed',
-      message: 'An error occurred during login'
+      message: 'An error occurred during login',
+      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     });
   }
 };

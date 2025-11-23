@@ -1,59 +1,50 @@
 tunnel: quizdash-tunnel
-credentials-file: C:\Users\aryan\.cloudflared\260b3937-da0e-4802-bd8b-219e47806139.json
+tunnel: 260b3937-da0e-4802-bd8b-219e47806139
+credentials-file: ./260b3937-da0e-4802-bd8b-219e47806139.json
 
-# Ingress rules - order matters!
+# Use HTTP/2 protocol for stability
+protocol: http2
+
 ingress:
-  # Frontend (Production Build)
+  # All traffic goes through Nginx Load Balancer
   - hostname: quizdash.dpdns.org
-    service: http://localhost:5174
+    service: http://localhost:8090  # ✅ Nginx port
     originRequest:
-      httpHostHeader: localhost:5174
-      connectTimeout: 30s
-      tlsTimeout: 30s
-      tcpKeepAlive: 30s
-      keepAliveConnections: 10
-      keepAliveTimeout: 90s
+      httpHostHeader: quizdash.dpdns.org
+      noTLSVerify: true
       
-  # Backend API
-  - hostname: api.quizdash.dpdns.org  
-    service: http://localhost:3000
+  - hostname: api.quizdash.dpdns.org
+    service: http://localhost:8090  # ✅ Nginx port
     originRequest:
-      httpHostHeader: localhost:3000
-      connectTimeout: 30s
-      tlsTimeout: 30s
-      tcpKeepAlive: 30s
-      keepAliveConnections: 10
-      keepAliveTimeout: 90s
+      httpHostHeader: api.quizdash.dpdns.org
+      noTLSVerify: true
       
-  # Grafana Monitoring
+  - hostname: match.quizdash.dpdns.org
+    service: http://localhost:8090  # ✅ Nginx port
+    originRequest:
+      httpHostHeader: match.quizdash.dpdns.org
+      noTLSVerify: true
+      
+  # Adminer - can go direct (not load balanced)
+  - hostname: adminer.quizdash.dpdns.org
+    service: http://localhost:8080
+    originRequest:
+      httpHostHeader: adminer.quizdash.dpdns.org
+      noTLSVerify: true
+      
+  # Prometheus - can go direct
+  - hostname: prometheus.quizdash.dpdns.org
+    service: http://localhost:9090
+    originRequest:
+      httpHostHeader: prometheus.quizdash.dpdns.org
+      noTLSVerify: true
+      
+  # Grafana - FIXED PORT
   - hostname: grafana.quizdash.dpdns.org
-    service: http://localhost:3003
+    service: http://localhost:3003  # ✅ Grafana port (was wrong)
     originRequest:
-      httpHostHeader: localhost:3003
-      connectTimeout: 30s
-      tlsTimeout: 30s
-      tcpKeepAlive: 30s
-      keepAliveConnections: 10
-      keepAliveTimeout: 90s
-      
-  # Match Server WebSocket
-  - hostname: ws.quizdash.dpdns.org
-    service: http://localhost:3001
-    originRequest:
-      httpHostHeader: localhost:3001
-      connectTimeout: 30s
-      tlsTimeout: 30s
-      tcpKeepAlive: 30s
-      keepAliveConnections: 10
-      keepAliveTimeout: 90s
-      
+      httpHostHeader: grafana.quizdash.dpdns.org
+      noTLSVerify: true
+
   # Catch-all rule (must be last)
   - service: http_status:404
-
-# Performance optimizations
-retries: 3
-grace-period: 30s
-compression: gzip
-
-# Logging
-loglevel: info

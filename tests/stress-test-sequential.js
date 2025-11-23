@@ -6,8 +6,8 @@
 const { chromium } = require('playwright');
 const axios = require('axios');
 
-const BASE_URL = process.env.BASE_URL || 'https://quizdash.dpdns.org';
-const API_URL = process.env.API_URL || 'https://api.quizdash.dpdns.org';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
+const API_URL = process.env.API_URL || 'http://localhost:8090';
 
 console.log('🌐 URLs:');
 console.log('  BASE_URL:', BASE_URL);
@@ -55,7 +55,7 @@ async function playSingleMatch(browser, matchNum) {
     console.log('🌐 Logging in Player 1...');
     await page1.goto(`${BASE_URL}/login`);
     await page1.waitForSelector('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', { timeout: 10000 });
-    await page1.fill('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', 'arjun.sharma@student.edu');
+    await page1.fill('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', 'stresstest_1@test.com');
     await page1.fill('input[type="password"]', '1234567890');
     await page1.click('button:has-text("Sign in"), button[type="submit"]');
     await sleep(3000); // Wait for redirect
@@ -64,28 +64,64 @@ async function playSingleMatch(browser, matchNum) {
     console.log('🌐 Logging in Player 2...');
     await page2.goto(`${BASE_URL}/login`);
     await page2.waitForSelector('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', { timeout: 10000 });
-    await page2.fill('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', 'priya.patel@student.edu');
+    await page2.fill('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', 'stresstest_2@test.com');
     await page2.fill('input[type="password"]', '1234567890');
     await page2.click('button:has-text("Sign in"), button[type="submit"]');
     await sleep(3000); // Wait for redirect
     
     console.log('✅ Both players logged in');
     
-    // === STEP 3: Player 1 - Select a quiz and open game mode ===
-    console.log('📋 Player 1: Selecting quiz...');
-    // Click on first quiz card
-    await page1.click('div.rounded-lg.border-2, div[class*="border"][class*="rounded"]', { timeout: 10000 });
-    await sleep(1000);
+    // === STEP 3: Ensure we're on the right page and check current state ===
+    console.log('🌐 Player 1 current URL:', page1.url());
+    console.log('🌐 Player 2 current URL:', page2.url());
     
-    // === STEP 4: Player 1 - Select "Play with Friend" from dropdown ===
+    // Make sure we're on student-quiz page
+    if (!page1.url().includes('student-quiz')) {
+      console.log('📍 Player 1: Navigating to student-quiz page...');
+      await page1.goto(`${BASE_URL}/student-quiz`, { waitUntil: 'networkidle' });
+      await sleep(2000);
+    }
+    
+    // === STEP 4: Player 1 - Select a quiz first, then game mode ===
+    console.log('📋 Player 1: Selecting a quiz first...');
+    
+    // Wait for page to be fully loaded
+    await sleep(3000);
+    
+    // Select the first quiz card to enable game mode options
+    const quizCards1 = await page1.$$('div[class*="border"][class*="rounded"], div.rounded-lg.border-2');
+    if (quizCards1.length > 0) {
+      await quizCards1[0].click();
+      console.log('✅ Player 1: Quiz selected');
+      await sleep(2000); // Wait for quiz details to load
+    } else {
+      throw new Error('No quiz cards found for Player 1');
+    }
+    
     console.log('🎮 Player 1: Opening game mode selector...');
-    // Click the game mode dropdown (in Quiz Overview section on right)
-    await page1.waitForSelector('button:has-text("Choose how you want to play")', { timeout: 10000 });
-    await page1.click('button:has-text("Choose how you want to play")');
-    await sleep(1000);
     
-    // Click "Play with Friend" option
-    await page1.click('[role="option"]:has-text("Play with Friend"), div:has-text("Play with Friend")', { timeout: 5000 });
+    // Find and click the game mode selector
+    const selector1 = await page1.$('button:has-text("Choose how you want to play")');
+    if (selector1) {
+      const isVisible = await selector1.isVisible();
+      const isEnabled = await selector1.isEnabled();
+      console.log(`✅ Player 1: Found selector (visible: ${isVisible}, enabled: ${isEnabled})`);
+      
+      if (isVisible && isEnabled) {
+        await selector1.click();
+        console.log('✅ Player 1: Clicked game mode selector');
+        await sleep(1000);
+        
+        // Click "Play with Friend" option
+        console.log('🎯 Player 1: Selecting Play with Friend...');
+        await page1.click('[role="option"]:has-text("Play with Friend"), div:has-text("Play with Friend")', { timeout: 5000 });
+        console.log('✅ Player 1: Selected Play with Friend');
+      } else {
+        throw new Error('Game mode selector not clickable');
+      }
+    } else {
+      throw new Error('Game mode selector not found');
+    }
     await sleep(500);
     
     // === STEP 5: Player 1 - Click PLAY button (in QuizOverviewPanel) ===
@@ -104,10 +140,20 @@ async function playSingleMatch(browser, matchNum) {
     await page1.waitForSelector('[role="dialog"], [data-state="open"], .fixed.inset-0', { timeout: 10000 });
     await sleep(1000);
     
+    // Check if "Generate Code" tab is already selected (default), if not select it
+    console.log('📋 Player 1: Ensuring Generate Code tab is selected...');
+    try {
+      await page1.click('button:has-text("Generate Code")', { timeout: 2000 });
+      await sleep(500);
+    } catch {
+      console.log('   Generate Code tab already selected');
+    }
+    
     // Look for "Generate Game Code" button inside modal
     await page1.waitForSelector('button:has-text("Generate Game Code")', { timeout: 5000 });
+    console.log('🎲 Player 1: Clicking Generate Game Code...');
     await page1.click('button:has-text("Generate Game Code")');
-    await sleep(3000); // Wait for API call
+    await sleep(3000); // Wait for API call and code generation
     
     // === STEP 7: Player 1 - Extract the generated code ===
     console.log('📝 Player 1: Extracting game code...');
@@ -116,23 +162,52 @@ async function playSingleMatch(browser, matchNum) {
     
     metrics.matchesCreated++;
     
-    // === STEP 8: Player 1 - Click "Start Game & Wait for Friend" ===
-    console.log('⏳ Player 1: Starting game and waiting...');
+    // === STEP 8: Player 1 - Click "Start Game & Wait for Friend" (same button, now changed text) ===
+    console.log('⏳ Player 1: Clicking Start Game & Wait for Friend...');
+    await page1.waitForSelector('button:has-text("Start Game & Wait for Friend")', { timeout: 5000 });
     await page1.click('button:has-text("Start Game & Wait for Friend")');
     await sleep(2000);
     
-    // === STEP 9: Player 2 - Open quiz and game mode (same as Player 1) ===
-    console.log('📋 Player 2: Selecting quiz...');
-    await page2.click('div.rounded-lg.border-2, div[class*="border"][class*="rounded"]', { timeout: 10000 });
-    await sleep(1000);
+    // === STEP 9: Player 2 - Select quiz first, then game mode ===
+    console.log('📋 Player 2: Selecting a quiz first...');
+    
+    // Wait for page to be fully loaded
+    await sleep(2000);
+    
+    // Select the first quiz card to enable game mode options
+    const quizCards2 = await page2.$$('div[class*="border"][class*="rounded"], div.rounded-lg.border-2');
+    if (quizCards2.length > 0) {
+      await quizCards2[0].click();
+      console.log('✅ Player 2: Quiz selected');
+      await sleep(2000); // Wait for quiz details to load
+    } else {
+      throw new Error('No quiz cards found for Player 2');
+    }
     
     console.log('🎮 Player 2: Opening game mode selector...');
-    await page2.waitForSelector('button:has-text("Choose how you want to play")', { timeout: 10000 });
-    await page2.click('button:has-text("Choose how you want to play")');
-    await sleep(1000);
     
-    // Click "Play with Friend" option (same as Player 1)
-    await page2.click('[role="option"]:has-text("Play with Friend"), div:has-text("Play with Friend")', { timeout: 5000 });
+    // Find and click the game mode selector
+    const selector2 = await page2.$('button:has-text("Choose how you want to play")');
+    if (selector2) {
+      const isVisible2 = await selector2.isVisible();
+      const isEnabled2 = await selector2.isEnabled();
+      console.log(`✅ Player 2: Found selector (visible: ${isVisible2}, enabled: ${isEnabled2})`);
+      
+      if (isVisible2 && isEnabled2) {
+        await selector2.click();
+        console.log('✅ Player 2: Clicked game mode selector');
+        await sleep(1000);
+        
+        // Click "Play with Friend" option
+        console.log('🎯 Player 2: Selecting Play with Friend...');
+        await page2.click('[role="option"]:has-text("Play with Friend"), div:has-text("Play with Friend")', { timeout: 5000 });
+        console.log('✅ Player 2: Selected Play with Friend');
+      } else {
+        throw new Error('Player 2: Game mode selector not clickable');
+      }
+    } else {
+      throw new Error('Player 2: Game mode selector not found');
+    }
     await sleep(500);
     
     console.log('▶️ Player 2: Clicking PLAY button...');
@@ -140,33 +215,82 @@ async function playSingleMatch(browser, matchNum) {
     await playButton2.click({ force: true });
     await sleep(4000);
     
+    // Wait for Player 2's modal to appear
+    await page2.waitForSelector('[role="dialog"], [data-state="open"], .fixed.inset-0', { timeout: 10000 });
+    await sleep(1000);
+    
     // === STEP 10: Player 2 - Switch to "Enter Code" tab ===
     console.log('🔑 Player 2: Switching to Enter Code tab...');
-    await page2.click('button:has-text("Enter Code")', { timeout: 5000 });
+    await page2.waitForSelector('button:has-text("Enter Code")', { timeout: 5000 });
+    await page2.click('button:has-text("Enter Code")');
     await sleep(500);
     
     // === STEP 11: Player 2 - Enter code and join ===
     console.log(`🔢 Player 2: Entering code ${gameCode}...`);
+    await page2.waitForSelector('input[placeholder*="Enter"][placeholder*="code"], input[id="joinCode"]', { timeout: 5000 });
     await page2.fill('input[placeholder*="Enter"][placeholder*="code"], input[id="joinCode"]', gameCode);
     await sleep(500);
     
     console.log('🚀 Player 2: Clicking Join Game...');
+    await page2.waitForSelector('button:has-text("Join Game")', { timeout: 5000 });
     await page2.click('button:has-text("Join Game")');
     await sleep(3000);
     
     console.log('✅ Both players joined match!');
     
-    // === STEP 12: Wait for quiz to start (auto-starts, no Ready button!) ===
+    // === STEP 12: Wait for quiz to start ===
     console.log('⏳ Waiting for quiz to start...');
-    await sleep(3000);
+    await sleep(5000); // Wait longer for quiz initialization
+    
+    // Debug: Check what's on the page after joining
+    console.log('🔍 Checking page state after joining...');
+    await page1.screenshot({ path: `debug-after-join-p1-match${matchNum}.png` });
+    await page2.screenshot({ path: `debug-after-join-p2-match${matchNum}.png` });
+    
+    // Check for any "Start" or "Ready" buttons that might need to be clicked
+    console.log('🔍 Looking for start/ready buttons...');
+    const startButtons = [
+      'button:has-text("Start")',
+      'button:has-text("Ready")', 
+      'button:has-text("Begin")',
+      'button:has-text("Start Quiz")',
+      'button:has-text("Continue")',
+      'button:has-text("Next")'
+    ];
+    
+    for (const selector of startButtons) {
+      const button1 = await page1.$(selector);
+      const button2 = await page2.$(selector);
+      if (button1) {
+        console.log(`🎯 Found button on Player 1: ${selector}`);
+        try {
+          await button1.click();
+          console.log('✅ Clicked start button on Player 1');
+          await sleep(2000);
+        } catch (e) {
+          console.log('❌ Failed to click start button on Player 1');
+        }
+      }
+      if (button2) {
+        console.log(`🎯 Found button on Player 2: ${selector}`);
+        try {
+          await button2.click();
+          console.log('✅ Clicked start button on Player 2');
+          await sleep(2000);
+        } catch (e) {
+          console.log('❌ Failed to click start button on Player 2');
+        }
+      }
+    }
     
     // Wait for first question to appear
+    console.log('🔍 Waiting for quiz questions to load...');
     const quizStarted = await Promise.race([
       Promise.all([
-        page1.waitForSelector('input[type="radio"]', { timeout: 15000 }).then(() => true),
-        page2.waitForSelector('input[type="radio"]', { timeout: 15000 }).then(() => true)
+        page1.waitForSelector('input[type="radio"]', { timeout: 20000 }).then(() => true),
+        page2.waitForSelector('input[type="radio"]', { timeout: 20000 }).then(() => true)
       ]).then(() => true),
-      sleep(20000).then(() => false)
+      sleep(25000).then(() => false)
     ]);
     
     if (!quizStarted) {

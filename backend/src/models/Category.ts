@@ -33,20 +33,29 @@ export class Category extends Model {
   description?: string;
 
   @ForeignKey(() => Category)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'parent_id' })
   parentId?: number;
+
+  @Column({ type: DataType.INTEGER, field: 'level' })
+  level?: number;
+
+  @Column({ type: DataType.STRING(500), field: 'path' })
+  path?: string;
 
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
-    defaultValue: true
+    defaultValue: true,
+    field: 'is_active'
   })
   isActive!: boolean;
 
   @CreatedAt
+  @Column({ type: DataType.DATE, field: 'created_at' })
   createdAt!: Date;
 
   @UpdatedAt
+  @Column({ type: DataType.DATE, field: 'updated_at' })
   updatedAt!: Date;
 
   // Self-referencing associations for nested categories

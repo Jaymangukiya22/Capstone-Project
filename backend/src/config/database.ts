@@ -13,9 +13,9 @@ import { logInfo, logError } from '../utils/logger';
 // Environment variables should be loaded automatically
 // Database configuration
 const sequelize = new Sequelize({
-  database: process.env.DB_NAME || 'quiz_app',
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'quizup_app',
+  username: process.env.DB_USER || 'quizup_user',
+  password: process.env.DB_PASSWORD || 'quizup_password',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   dialect: 'postgres',
@@ -41,17 +41,34 @@ const sequelize = new Sequelize({
 
 });
 
-// Test database connection
+// Test database connection with retry logic
 export const connectDatabase = async (): Promise<void> => {
+  const maxRetries = 30;
+  let retries = 0;
+  
+  while (retries < maxRetries) {
+    try {
+      await sequelize.authenticate();
+      logInfo('Database connection established successfully');
+      break;
+    } catch (error) {
+      retries++;
+      if (retries < maxRetries) {
+        logInfo(`Database connection failed (attempt ${retries}/${maxRetries}), retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        throw error;
+      }
+    }
+  }
+  
   try {
-    await sequelize.authenticate();
-    logInfo('Database connection established successfully');
     
     // Sync models in development - preserve existing data
     if (process.env.NODE_ENV === 'development') {
       // Use force: false and alter: false to avoid constraint conflicts
       // Just sync without altering to prevent duplicate constraint errors
-      await sequelize.sync({ force: false, alter: false });
+      await sequelize.sync({ alter: true });
       logInfo('Database models synchronized - schema validation only');
       
       // Only seed if tables are empty (first time setup)
@@ -73,7 +90,7 @@ export const connectDatabase = async (): Promise<void> => {
       }
     } else {
       // Production: only sync without altering
-      await sequelize.sync({ force: false, alter: false });
+      await sequelize.sync({ force: false });
       logInfo('Database models synchronized - production mode');
     }
   } catch (error) {

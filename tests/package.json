@@ -7,6 +7,7 @@
     "debug": "node debug-ui-selectors.js",
     "check-db": "node check-database-matches.js",
     "monitor": "node resource-monitor.js",
+    "monitor:enhanced": "node resource-monitor-enhanced.js",
     "test:10": "node stress-test-ultimate.js 10",
     "test:15": "node stress-test-ultimate.js 15",
     "test:20": "node stress-test-ultimate.js 20",
@@ -18,7 +19,16 @@
     "test:1000": "node stress-test-ultimate.js 1000",
     "test:2000": "node stress-test-ultimate.js 2000",
     "seq:5": "node stress-test-sequential.js 5",
-    "seq:30": "node stress-test-sequential.js 30"
+    "seq:30": "node stress-test-sequential.js 30",
+    "multi:localhost": "node multi-environment-stress-test.js",
+    "multi:network": "DEPLOYMENT_MODE=network node multi-environment-stress-test.js",
+    "multi:hosted": "DEPLOYMENT_MODE=hosted node multi-environment-stress-test.js",
+    "run:localhost": "node run-stress-tests.js localhost",
+    "run:network": "node run-stress-tests.js network",
+    "run:hosted": "node run-stress-tests.js hosted",
+    "run:all": "node run-stress-tests.js all",
+    "comprehensive": "node comprehensive-test-suite.js",
+    "comprehensive:quick": "node comprehensive-test-suite.js --matches=3 --monitor-duration=300"
   },
   "dependencies": {
     "axios": "^1.6.2",

@@ -30,12 +30,12 @@ export class QuizAttempt extends Model {
 
   @ForeignKey(() => User)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'user_id' })
   userId!: number;
 
   @ForeignKey(() => Quiz)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'quiz_id' })
   quizId!: number;
 
   @Default(AttemptStatus.IN_PROGRESS)
@@ -47,26 +47,37 @@ export class QuizAttempt extends Model {
   score!: number;
 
   @Default(0)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'max_score' })
+  maxScore!: number;
+
+  @Default(0)
+  @Column({ type: DataType.INTEGER, field: 'correct_answers' })
+  correctAnswers!: number;
+
+  @Default(0)
+  @Column({ type: DataType.INTEGER, field: 'total_questions' })
   totalQuestions!: number;
 
   @Default(0)
-  @Column(DataType.INTEGER)
-  correctAnswers!: number;
+  @Column({ type: DataType.INTEGER, field: 'time_spent' })
+  timeSpent!: number;
 
-  @Column(DataType.INTEGER)
-  timeSpent?: number;
+  @Default(0.00)
+  @Column({ type: DataType.DECIMAL(5,2), field: 'completion_percentage' })
+  completionPercentage!: number;
 
-  @Column(DataType.DATE)
+  @Column({ type: DataType.DATE, field: 'started_at' })
   startedAt?: Date;
 
-  @Column(DataType.DATE)
+  @Column({ type: DataType.DATE, field: 'completed_at' })
   completedAt?: Date;
 
   @CreatedAt
+  @Column({ type: DataType.DATE, field: 'created_at' })
   createdAt!: Date;
 
   @UpdatedAt
+  @Column({ type: DataType.DATE, field: 'updated_at' })
   updatedAt!: Date;
 
   // Associations

@@ -9,6 +9,7 @@ export { QuizAttempt } from './QuizAttempt';
 export { QuizAttemptAnswer } from './QuizAttemptAnswer';
 export { Match } from './Match';
 export { MatchPlayer } from './MatchPlayer';
+export { Leaderboard } from './Leaderboard';
 
 // Export all enums from shared location
 export { 

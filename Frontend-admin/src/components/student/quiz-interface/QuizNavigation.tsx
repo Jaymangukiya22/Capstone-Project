@@ -9,6 +9,8 @@ interface QuizNavigationProps {
   onNext: () => void;
   onSubmit: () => void;
   isSubmitting?: boolean;
+  isWaitingForOpponent?: boolean;
+  opponentName?: string;
 }
 
 const QuizNavigation: React.FC<QuizNavigationProps> = ({
@@ -17,7 +19,9 @@ const QuizNavigation: React.FC<QuizNavigationProps> = ({
   hasAnswer: _hasAnswer, // Acknowledge but don't use for now
   onNext,
   onSubmit,
-  isSubmitting = false
+  isSubmitting = false,
+  isWaitingForOpponent = false,
+  opponentName = 'opponent'
 }) => {
   const isLastQuestion = currentQuestion === totalQuestions;
 
@@ -45,18 +49,32 @@ const QuizNavigation: React.FC<QuizNavigationProps> = ({
           </div>
         </div>
 
+        {/* Waiting for opponent message */}
+        {isWaitingForOpponent && (
+          <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-sm text-blue-700">
+              ⏳ Waiting for {opponentName} to answer...
+            </p>
+          </div>
+        )}
+
         {/* Navigation Button - Full width on mobile */}
         <div className="flex justify-end">
           {isLastQuestion ? (
             <Button
               onClick={onSubmit}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto sm:min-w-[140px] bg-green-600 hover:bg-green-700"
+              disabled={isSubmitting || isWaitingForOpponent}
+              className="w-full sm:w-auto sm:min-w-[140px] bg-green-600 hover:bg-green-700 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Submitting...
+                </>
+              ) : isWaitingForOpponent ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Waiting...
                 </>
               ) : (
                 <>
@@ -68,10 +86,20 @@ const QuizNavigation: React.FC<QuizNavigationProps> = ({
           ) : (
             <Button
               onClick={onNext}
-              className="w-full sm:w-auto sm:min-w-[140px]"
+              disabled={isWaitingForOpponent}
+              className="w-full sm:w-auto sm:min-w-[140px] disabled:opacity-50"
             >
-              Next Question
-              <ChevronRight className="h-4 w-4 ml-2" />
+              {isWaitingForOpponent ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                  Waiting...
+                </>
+              ) : (
+                <>
+                  Next Question
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </>
+              )}
             </Button>
           )}
         </div>

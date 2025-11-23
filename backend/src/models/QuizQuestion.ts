@@ -6,7 +6,9 @@ import {
   PrimaryKey,
   AutoIncrement,
   AllowNull,
+  Default,
   CreatedAt,
+  UpdatedAt,
   BelongsTo,
   ForeignKey,
 } from 'sequelize-typescript';
@@ -25,19 +27,32 @@ export class QuizQuestion extends Model {
 
   @ForeignKey(() => Quiz)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'quiz_id' })
   quizId!: number;
 
   @ForeignKey(() => QuestionBankItem)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'question_id' })
   questionId!: number;
 
+  @AllowNull(false)
+  @Column({ type: DataType.INTEGER, field: 'order_index' })
+  orderIndex!: number;
+
+  @Default(100)
   @Column(DataType.INTEGER)
-  order?: number;
+  points!: number;
+
+  @Column({ type: DataType.INTEGER, field: 'time_limit' })
+  timeLimit?: number;
 
   @CreatedAt
+  @Column({ type: DataType.DATE, field: 'created_at' })
   createdAt!: Date;
+
+  @UpdatedAt
+  @Column({ type: DataType.DATE, field: 'updated_at' })
+  updatedAt!: Date;
 
   // Associations
   @BelongsTo(() => Quiz, 'quizId')

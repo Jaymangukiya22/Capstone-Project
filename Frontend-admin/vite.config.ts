@@ -4,6 +4,41 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+// Dynamic configuration based on environment
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const isCloudflareHosted = process.env.VITE_CLOUDFLARE_HOSTED === 'true';
+const isNetworkMode = process.env.VITE_NETWORK_MODE === 'true';
+const networkIP = process.env.VITE_NETWORK_IP || 'localhost';
+
+// HMR configuration - supports localhost, network, and hosted environments
+const getHMRConfig = () => {
+  if (isCloudflareHosted || process.env.VITE_USE_PRODUCTION_HMR === 'true') {
+    // Production/Hosted configuration
+    return {
+      protocol: 'wss' as const,
+      host: 'quizdash.dpdns.org',
+      clientPort: 443,
+    };
+  } else if (isNetworkMode) {
+    // Network access configuration
+    return {
+      protocol: 'ws' as const,
+      host: networkIP,
+      port: 5173,
+    };
+  } else {
+    // Local development configuration - disable HMR in Docker to avoid connection issues
+    // Browser will use the current URL for HMR connection
+    return false;
+  }
+};
+
+console.log('🔧 Vite Config - Environment:', {
+  isDevelopment,
+  isCloudflareHosted,
+  hmrConfig: getHMRConfig()
+});
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -19,12 +54,10 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: ['.dpdns.org'],
-    hmr: {
-      protocol: 'wss',
-      host: 'quizdash.dpdns.org',
-      clientPort: 443,
-    }
+    // Dynamic HMR configuration based on environment
+    hmr: getHMRConfig(),
+    // Allow connections from production domain
+    allowedHosts: ['.dpdns.org', 'localhost', '127.0.0.1'],
   },
   
   build: {

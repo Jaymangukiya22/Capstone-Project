@@ -112,9 +112,10 @@ export function PlayWithFriendModal({
     try {
       const match = await friendMatchService.findMatchByCode(joinCode.trim())
       if (match) {
+        // Match found - show success and proceed to join
         toast({
           title: "Match Found!",
-          description: `Joining "${match.quiz.title}" match...`,
+          description: `Joining match with code ${joinCode.trim().toUpperCase()}...`,
         })
         console.log('🎯 CALLING onJoinGame with code:', joinCode.trim().toUpperCase())
         onJoinGame(joinCode.trim().toUpperCase())

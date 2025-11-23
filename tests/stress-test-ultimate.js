@@ -148,9 +148,16 @@ async function playSingleMatch(browser, matchNum, users) {
     // === MATCH CREATION PHASE ===
     const createStart = Date.now();
     
-    // Player 1: Select quiz and create match
-    await page1.click('div.rounded-lg.border-2, div[class*="border"][class*="rounded"]', { timeout: 10000 });
-    await sleep(1000);
+    // Player 1: Select quiz first to make game mode selector appear
+    console.log('📋 Player 1: Selecting quiz...');
+    const quizCards1 = await page1.$$('div[class*="border"][class*="rounded"], div.rounded-lg.border-2');
+    if (quizCards1.length > 0) {
+      await quizCards1[0].click();
+      console.log('✅ Player 1: Quiz selected');
+    } else {
+      throw new Error('No quiz cards found for Player 1');
+    }
+    await sleep(2000); // Wait for quiz details to load
     
     await page1.waitForSelector('button:has-text("Choose how you want to play")', { timeout: 10000 });
     await page1.click('button:has-text("Choose how you want to play")');
@@ -181,9 +188,16 @@ async function playSingleMatch(browser, matchNum, users) {
     // === MATCH JOIN PHASE ===
     const joinStart = Date.now();
     
-    // Player 2: Join match
-    await page2.click('div.rounded-lg.border-2, div[class*="border"][class*="rounded"]', { timeout: 10000 });
-    await sleep(1000);
+    // Player 2: Select quiz first to make game mode selector appear
+    console.log('📋 Player 2: Selecting quiz...');
+    const quizCards2 = await page2.$$('div[class*="border"][class*="rounded"], div.rounded-lg.border-2');
+    if (quizCards2.length > 0) {
+      await quizCards2[0].click();
+      console.log('✅ Player 2: Quiz selected');
+    } else {
+      throw new Error('No quiz cards found for Player 2');
+    }
+    await sleep(2000); // Wait for quiz details to load
     
     await page2.waitForSelector('button:has-text("Choose how you want to play")', { timeout: 10000 });
     await page2.click('button:has-text("Choose how you want to play")');

@@ -1,404 +1,577 @@
 import cluster from 'cluster';
 import express from 'express';
 import { createServer } from 'http';
-import cors from 'cors';
+import { Server as SocketIOServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import { logInfo, logError } from './utils/logger';
-import { MatchWorkerPool } from './matchWorkerPool';
-import { Quiz } from './models/index';
-import { createClient } from 'redis';
-import { metricsMiddleware, getPrometheusMetrics, getDetailedMetrics } from './middleware/metricsMiddleware';
+import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
+import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
 
-// Load environment variables
-dotenv.config();
+dotenv.config();  
 
-const port = process.env.MATCH_SERVICE_PORT || 3001;
+const MASTER_PORT = parseInt(process.env.MASTER_PORT || '3001', 10);
 
-// Store interface
-interface StoreInterface {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string, ttl?: number): Promise<void>;
-  del(key: string): Promise<void>;
-  exists(key: string): Promise<boolean>;
-}
-
-class InMemoryStore implements StoreInterface {
-  private data: Map<string, string> = new Map();
-
-  async get(key: string): Promise<string | null> {
-    return this.data.get(key) || null;
-  }
-
-  async set(key: string, value: string, ttl?: number): Promise<void> {
-    this.data.set(key, value);
-    if (ttl) {
-      setTimeout(() => this.data.delete(key), ttl * 1000);
-    }
-  }
-
-  async del(key: string): Promise<void> {
-    this.data.delete(key);
-  }
-
-  async exists(key: string): Promise<boolean> {
-    return this.data.has(key);
-  }
-}
-
-let store: StoreInterface;
-let isRedisConnected = false;
-
-async function initializeStore(): Promise<void> {
+// Initialize Redis and start master
+(async () => {
   try {
-    const redis = createClient({ 
-      url: process.env.REDIS_URL || 'redis://localhost:6379',
-      socket: {
-        connectTimeout: 3000
-      }
-    });
+    await initializeRedis();
     
-    redis.on('error', () => {});
-
-    await Promise.race([
-      redis.connect(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connection timeout')), 3000))
-    ]);
-    
-    await redis.ping();
-    
-    store = redis as any;
-    isRedisConnected = true;
-    logInfo('Master connected to Redis');
-  } catch (error) {
-    logInfo('Master using in-memory store');
-    store = new InMemoryStore();
-    isRedisConnected = false;
-  }
-}
-
-// CORS configuration
-const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    if (!origin) return callback(null, true);
-    if (process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
-    
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174'
-    ];
-    
-    const networkIP = process.env.NETWORK_IP;
-    if (networkIP) {
-      allowedOrigins.push(`http://${networkIP}:5173`);
-      allowedOrigins.push(`http://${networkIP}:5174`);
-    }
-    
-    if (origin.match(/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d{4,5}$/)) {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
+    if (cluster.isPrimary) {
+      startMaster();
     } else {
-      callback(new Error('Not allowed by CORS'));
+      require('./matchServerWorker');
     }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-};
+  } catch (error) {
+    logError('Failed to initialize Redis', error as Error);
+    process.exit(1);
+  }
+})();
 
-// Master process
-if (cluster.isPrimary) {
+async function startMaster() {
+  logInfo('Starting Master Process', { pid: process.pid });
+
+  // Initialize Redis
+  const { pub, sub } = getRedisPubSub();
+  const redisClient = getRedisClient();
+
+  // Express app
   const app = express();
   const server = createServer(app);
-  
+
+  // Socket.IO with Redis Adapter
+  const io = new SocketIOServer(server, {
+    cors: {
+      origin: true, // Nginx handles CORS filtering
+      credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    adapter: createAdapter(pub, sub)
+  });
+
   // Middleware
   app.use(helmet());
   app.use(compression());
-  app.use(cors(corsOptions));
   app.use(express.json());
-  app.use(metricsMiddleware); // Track all API requests
 
-  let workerPool: MatchWorkerPool;
+  // Initialize Worker Pool
+  const workerPool = new EnhancedWorkerPool(io, redisClient);
 
-  async function startMaster() {
-    await initializeStore();
+  // ===== HTTP ENDPOINTS =====
 
-    // Initialize worker pool
-    workerPool = new MatchWorkerPool();
-
-    // Health check endpoint
-    app.get('/health', (req, res) => {
-      const stats = workerPool.getStats();
-      res.status(200).json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        service: 'Match Service Master',
-        version: '3.0.0 (Worker Pool)',
-        environment: process.env.NODE_ENV || 'development',
-        store: isRedisConnected ? 'Redis' : 'In-Memory',
-        workerPool: stats
-      });
+  // Health check
+  app.get('/health', (req, res) => {
+    const stats = workerPool.getStats();
+    res.json({
+      status: 'OK',
+      service: 'Match Service Master',
+      version: '4.0.0',
+      timestamp: new Date().toISOString(),
+      workers: stats,
+      matches: workerPool.getTotalMatches(),
+      players: workerPool.getTotalPlayers()
     });
+  });
 
-    // Prometheus metrics endpoint
-    app.get('/metrics', (req, res) => {
-      try {
-        const stats = workerPool.getStats();
-        
-        let metrics = getPrometheusMetrics(); // Get comprehensive metrics
-        
-        // Add worker pool specific metrics
-        metrics += `
-# HELP matchserver_active_workers Total number of active worker processes
-# TYPE matchserver_active_workers gauge
-matchserver_active_workers ${stats.activeWorkers}
-
-# HELP matchserver_total_workers Total number of worker processes
+  // Prometheus metrics
+  app.get('/metrics', async (req, res) => {
+    const stats = workerPool.getStats();
+    const metrics = `
+# HELP matchserver_total_workers Total worker processes
 # TYPE matchserver_total_workers gauge
 matchserver_total_workers ${stats.totalWorkers}
 
-# HELP matchserver_active_matches_total Total number of active matches across all workers
-# TYPE matchserver_active_matches_total gauge
-matchserver_active_matches_total ${stats.totalMatches}
+# HELP matchserver_active_workers Active worker processes
+# TYPE matchserver_active_workers gauge
+matchserver_active_workers ${stats.activeWorkers}
 
-# HELP matchserver_idle_workers Number of idle workers
+# HELP matchserver_idle_workers Idle worker processes
 # TYPE matchserver_idle_workers gauge
 matchserver_idle_workers ${stats.idleWorkers}
 
-# HELP matchserver_uptime_seconds Uptime of the master server in seconds
+# HELP matchserver_total_matches Total active matches
+# TYPE matchserver_total_matches gauge
+matchserver_total_matches ${workerPool.getTotalMatches()}
+
+# HELP matchserver_total_players Total connected players
+# TYPE matchserver_total_players gauge
+matchserver_total_players ${workerPool.getTotalPlayers()}
+
+# HELP matchserver_matches_created_total Total matches created
+# TYPE matchserver_matches_created_total counter
+matchserver_matches_created_total ${workerPool.getMatchesCreated()}
+
+# HELP matchserver_uptime_seconds Master uptime
 # TYPE matchserver_uptime_seconds counter
 matchserver_uptime_seconds ${Math.floor(process.uptime())}
-
-# HELP matchserver_memory_usage_bytes Memory usage in bytes
-# TYPE matchserver_memory_usage_bytes gauge
-matchserver_memory_usage_bytes ${process.memoryUsage().heapUsed}
-
-# HELP matchserver_store_type Store type being used (1=Redis, 0=InMemory)
-# TYPE matchserver_store_type gauge
-matchserver_store_type ${isRedisConnected ? 1 : 0}
 `.trim();
+    
+    res.set('Content-Type', 'text/plain');
+    res.send(metrics);
+  });
 
-        res.set('Content-Type', 'text/plain');
-        res.send(metrics);
-      } catch (error) {
-        logError('Error generating metrics', error as Error);
-        res.status(500).send('Error generating metrics');
-      }
-    });
+  // Create friend match (HTTP API)
+  app.post('/matches/friend', async (req, res) => {
+    try {
+      const { quizId, userId, username } = req.body;
 
-    // Get match by join code
-    app.get('/matches/code/:joinCode', async (req, res) => {
-      try {
-        const { joinCode } = req.params;
-        
-        const matchId = await store.get(`joinCode:${joinCode.toUpperCase()}`);
-        
-        if (!matchId) {
-          return res.status(404).json({
-            success: false,
-            error: 'No match found with that join code'
-          });
-        }
-        
-        const matchData = await store.get(`match:${matchId}`);
-        
-        if (!matchData) {
-          return res.status(404).json({
-            success: false,
-            error: 'Match data not found'
-          });
-        }
-        
-        const match = JSON.parse(matchData);
-        
-        let quizDetails = null;
-        try {
-          const quiz = await Quiz.findByPk(match.quizId);
-          if (quiz) {
-            quizDetails = {
-              id: quiz.id,
-              title: quiz.title,
-              description: quiz.description,
-              difficulty: quiz.difficulty,
-              timeLimit: quiz.timeLimit
-            };
-          }
-        } catch (error) {
-          logError('Failed to fetch quiz details', error as Error);
-        }
-        
-        return res.json({
-          success: true,
-          data: {
-            match: {
-              id: matchId,
-              matchId,
-              joinCode: match.joinCode,
-              quizId: match.quizId,
-              quiz: quizDetails || {
-                id: match.quizId,
-                title: `Quiz ${match.quizId}`,
-                description: 'Quiz description',
-                difficulty: 'MEDIUM',
-                timeLimit: 30
-              },
-              status: match.status,
-              playerCount: match.players ? match.players.length : 0,
-              maxPlayers: 2,
-              matchType: 'FRIEND',
-              players: match.players,
-              createdAt: match.createdAt
-            }
-          }
-        });
-      } catch (error) {
-        logError('Failed to get match by code', error as Error);
-        return res.status(500).json({
+      if (!quizId || !userId) {
+        return res.status(400).json({
           success: false,
-          error: 'Failed to get match by code'
+          error: 'Missing required fields: quizId, userId'
         });
+      }
+
+      // Store match request in Redis
+      const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const joinCode = generateJoinCode();
+
+      await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify({
+        matchId,
+        joinCode,
+        quizId,
+        creatorId: userId,
+        creatorName: username,
+        status: 'WAITING',
+        players: [],
+        createdAt: new Date().toISOString()
+      }));
+
+      await redisClient.setex(`joinCode:${joinCode}`, 3600, matchId);
+
+      logInfo('Friend match created', { matchId, joinCode, quizId, userId });
+
+      res.json({
+        success: true,
+        data: { matchId, joinCode }
+      });
+    } catch (error) {
+      logError('Failed to create friend match', error as Error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create match'
+      });
+    }
+    return;
+  });
+
+  // Get match by join code
+  app.get('/matches/code/:joinCode', async (req, res) => {
+    try {
+      const { joinCode } = req.params;
+      const matchId = await redisClient.get(`joinCode:${joinCode.toUpperCase()}`);
+
+      if (!matchId) {
+        return res.status(404).json({
+          success: false,
+          error: 'Match not found'
+        });
+      }
+
+      const matchData = await redisClient.get(`match:${matchId}`);
+      if (!matchData) {
+        return res.status(404).json({
+          success: false,
+          error: 'Match data not found'
+        });
+      }
+
+      const match = JSON.parse(matchData);
+      res.json({
+        success: true,
+        data: { match }
+      });
+    } catch (error) {
+      logError('Failed to get match by code', error as Error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get match'
+      });
+    }
+    return;
+  });
+
+  // Worker stats
+  app.get('/workers/stats', (req, res) => {
+    res.json({
+      success: true,
+      data: workerPool.getDetailedStats()
+    });
+  });
+
+  // ===== SOCKET.IO HANDLERS =====
+
+  io.on('connection', (socket) => {
+    logInfo('Client connected to master', { socketId: socket.id });
+
+    // Authenticate
+    socket.on('authenticate', async (data) => {
+      try {
+        const userId = data.userId || data.id;
+        const username = data.username || `Player${userId}`;
+
+        socket.data.userId = userId;
+        socket.data.username = username;
+
+        socket.emit('authenticated', { 
+          user: { id: userId, username } 
+        });
+
+        logInfo('User authenticated', { userId, username, socketId: socket.id });
+      } catch (error) {
+        socket.emit('auth_error', { message: 'Authentication failed' });
+        logError('Authentication error', error as Error);
       }
     });
 
-    // Friend match creation (HTTP API)
-    app.post('/matches/friend', async (req, res) => {
+    // Create friend match (DO NOT assign worker yet - wait for first player to join)
+    socket.on('create_friend_match', async (data) => {
       try {
-        const { quizId, userId, username } = req.body;
-        
-        logInfo('Friend match request received on master', { quizId, userId, username });
-        
+        if (!socket.data.userId) {
+          return socket.emit('error', { message: 'Not authenticated' });
+        }
+
+        const { quizId } = data;
         const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const joinCode = Math.random().toString(36).substr(2, 6).toUpperCase();
-        
-        const matchInfo = {
+        const joinCode = generateJoinCode();
+
+        // Store match metadata WITHOUT workerId - will be assigned when first player joins
+        await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify({
           matchId,
           joinCode,
           quizId,
-          creatorId: userId,
-          creatorName: username,
-          status: 'waiting',
-          players: [{
-            userId,
-            username,
-            ready: false
-          }],
-          createdAt: new Date()
-        };
+          creatorId: socket.data.userId,
+          status: 'WAITING',
+          createdAt: new Date().toISOString()
+          // NOTE: workerId will be set when first player joins
+        }));
+
+        await redisClient.setex(`joinCode:${joinCode}`, 3600, matchId);
+
+        socket.join(matchId);
+        socket.emit('friend_match_created', { matchId, joinCode });
+
+        logInfo('Friend match created (worker will be assigned on first join)', { matchId, joinCode, quizId, creatorId: socket.data.userId });
+      } catch (error) {
+        logError('Create match error', error as Error);
+        socket.emit('error', { message: 'Failed to create match' });
+      }
+      return;
+    });
+
+    // Join match by code
+    socket.on('join_match', async (data) => {
+      try {
+        if (!socket.data.userId) {
+          return socket.emit('error', { message: 'Not authenticated' });
+        }
+
+        const { joinCode } = data;
+        const matchId = await redisClient.get(`joincode:${joinCode.toUpperCase()}`);
+
+        if (!matchId) {
+          return socket.emit('error', { message: 'Invalid join code' });
+        }
+
+        const matchData = await redisClient.get(`match:${matchId}`);
+        if (!matchData) {
+          return socket.emit('error', { message: 'Match not found' });
+        }
+
+        // Assign worker if not already assigned
+        const match = JSON.parse(matchData);
+        let workerId = match.workerId;
+
+        if (!workerId) {
+          // Assign to least-loaded worker
+          workerId = await workerPool.assignMatch(matchId);
+          if (!workerId) {
+            logError('No available workers', new Error(`Cannot assign match ${matchId}`));
+            socket.emit('error', { message: 'No available workers' });
+            // Broadcast to all clients in match room
+            io.to(matchId).emit('error', { message: 'No available workers' });
+            return;
+          }
+          // Update Redis with assigned worker
+          match.workerId = workerId;
+          await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
+          logInfo('Assigned worker to match', { matchId, workerId });
+        }
+
+        // Forward to worker
+        const sent = workerPool.sendToWorker(workerId, {
+          type: 'join_match',
+          matchId,
+          userId: socket.data.userId,
+          username: socket.data.username,
+          socketId: socket.id
+        });
+
+        if (!sent) {
+          logError('Failed to send join request to worker', new Error(`Worker ${workerId} unavailable for match ${matchId}`));
+          socket.emit('error', { message: 'Match worker not available' });
+          // Broadcast to all clients in match room
+          io.to(matchId).emit('error', { message: 'Match worker not available' });
+          return;
+        }
+
+        socket.join(matchId);
+        socket.emit('match_joined', { matchId });
+
+        logInfo('Player joining match on worker', { matchId, workerId, userId: socket.data.userId });
+      } catch (error) {
+        logError('Join match error', error as Error);
+        socket.emit('error', { message: 'Failed to join match' });
+      }
+      return;
+    });
+
+    // Alias for join_match_by_code (frontend sends this event)
+    socket.on('join_match_by_code', async (data) => {
+      try {
+        if (!socket.data.userId) {
+          return socket.emit('error', { message: 'Not authenticated' });
+        }
+
+        const { joinCode } = data;
+        logInfo('Player attempting to join match by code', { joinCode, userId: socket.data.userId });
         
-        await store.set(`match:${matchId}`, JSON.stringify(matchInfo));
-        await store.set(`joinCode:${joinCode}`, matchId);
+        const matchId = await redisClient.get(`joincode:${joinCode.toUpperCase()}`);
+
+        if (!matchId) {
+          logInfo('Match not found for join code', { joinCode });
+          return socket.emit('error', { message: 'Invalid join code' });
+        }
+
+        const matchData = await redisClient.get(`match:${matchId}`);
+        if (!matchData) {
+          logInfo('Match data not found in Redis', { matchId });
+          return socket.emit('error', { message: 'Match not found' });
+        }
+
+        // Assign worker if not already assigned
+        const match = JSON.parse(matchData);
+        let workerId = match.workerId;
+
+        if (!workerId) {
+          // Assign to least-loaded worker
+          workerId = await workerPool.assignMatch(matchId);
+          if (!workerId) {
+            logError('No available workers', new Error(`Cannot assign match ${matchId}`));
+            socket.emit('error', { message: 'No available workers' });
+            // Broadcast to all clients in match room
+            io.to(matchId).emit('error', { message: 'No available workers' });
+            return;
+          }
+          // Update Redis with assigned worker
+          match.workerId = workerId;
+          await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
+          logInfo('Assigned worker to match', { matchId, workerId });
+        }
+
+        // Forward to worker
+        logInfo('Forwarding join request to worker', { matchId, workerId, userId: socket.data.userId });
         
-        logInfo('Friend match created on master', { matchId, joinCode, quizId, userId });
+        const sent = workerPool.sendToWorker(workerId, {
+          type: 'join_match',
+          matchId,
+          userId: socket.data.userId,
+          username: socket.data.username,
+          socketId: socket.id
+        });
+
+        if (!sent) {
+          logError('Failed to send join request to worker', new Error(`Worker ${workerId} unavailable for match ${matchId}`));
+          socket.emit('error', { message: 'Match worker not available' });
+          // Broadcast to all clients in match room
+          io.to(matchId).emit('error', { message: 'Match worker not available' });
+          return;
+        }
+
+        // Join socket to room immediately
+        socket.join(matchId);
         
-        res.json({
-          success: true,
-          data: {
+        // Emit confirmation to client
+        socket.emit('match_joined', { matchId });
+        
+        // Broadcast player joined to all in room
+        io.to(matchId).emit('player_joined_notification', {
+          userId: socket.data.userId,
+          username: socket.data.username
+        });
+
+        logInfo('Player joining match on worker', { matchId, workerId, userId: socket.data.userId, joinCode });
+      } catch (error) {
+        logError('Join match by code error', error as Error);
+        socket.emit('error', { message: 'Failed to join match' });
+      }
+      return;
+    });
+
+    // Connect to match by matchId (creator joining their own match)
+    socket.on('connect_to_match', async (data) => {
+      try {
+        if (!socket.data.userId) {
+          return socket.emit('error', { message: 'Not authenticated' });
+        }
+
+        const { matchId } = data;
+        if (!matchId) {
+          return socket.emit('error', { message: 'Match ID required' });
+        }
+
+        const matchData = await redisClient.get(`match:${matchId}`);
+        if (!matchData) {
+          logInfo('Match not found for connect_to_match', { matchId });
+          return socket.emit('error', { message: 'Match not found' });
+        }
+
+        // Assign worker if not already assigned
+        const match = JSON.parse(matchData);
+        let workerId = match.workerId;
+
+        if (!workerId) {
+          // Assign to least-loaded worker
+          workerId = await workerPool.assignMatch(matchId);
+          if (!workerId) {
+            logError('No available workers', new Error(`Cannot assign match ${matchId}`));
+            socket.emit('error', { message: 'No available workers' });
+            io.to(matchId).emit('error', { message: 'No available workers' });
+            return;
+          }
+          // Update Redis with assigned worker
+          match.workerId = workerId;
+          await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
+          logInfo('Assigned worker to match', { matchId, workerId });
+        }
+
+        // Forward to worker
+        logInfo('Forwarding connect_to_match to worker', { matchId, workerId, userId: socket.data.userId });
+        
+        const sent = workerPool.sendToWorker(workerId, {
+          type: 'join_match',
+          matchId,
+          userId: socket.data.userId,
+          username: socket.data.username,
+          socketId: socket.id
+        });
+
+        if (!sent) {
+          logError('Failed to send connect request to worker', new Error(`Worker ${workerId} unavailable for match ${matchId}`));
+          socket.emit('error', { message: 'Match worker not available' });
+          io.to(matchId).emit('error', { message: 'Match worker not available' });
+          return;
+        }
+
+        // Join socket to room immediately
+        socket.join(matchId);
+        
+        // Emit confirmation to client
+        socket.emit('match_joined', { matchId });
+        
+        // Broadcast player joined to all in room
+        io.to(matchId).emit('player_joined_notification', {
+          userId: socket.data.userId,
+          username: socket.data.username
+        });
+
+        logInfo('Player connecting to match on worker', { matchId, workerId, userId: socket.data.userId });
+      } catch (error) {
+        logError('Connect to match error', error as Error);
+        socket.emit('error', { message: 'Failed to connect to match' });
+      }
+      return;
+    });
+
+    // Forward all other events to appropriate worker
+    const forwardEvents = [
+      'player_ready',
+      'submit_answer',
+      'disconnect'
+    ];
+
+    forwardEvents.forEach(eventName => {
+      socket.on(eventName, async (data) => {
+        try {
+          const matchId = data.matchId || await workerPool.getUserMatch(socket.data.userId);
+          if (!matchId) {
+            return socket.emit('error', { message: 'Not in any match' });
+          }
+
+          const matchData = await redisClient.get(`match:${matchId}`);
+          if (!matchData) {
+            return socket.emit('error', { message: 'Match not found' });
+          }
+
+          const match = JSON.parse(matchData);
+          let workerId = match.workerId;
+
+          // If no worker assigned, assign one now
+          if (!workerId) {
+            workerId = await workerPool.assignMatch(matchId);
+            if (!workerId) {
+              logError('No available workers', new Error(`Cannot assign match ${matchId}`));
+              socket.emit('error', { message: 'No available workers' });
+              io.to(matchId).emit('error', { message: 'No available workers' });
+              return;
+            }
+            // Update Redis with assigned worker
+            match.workerId = workerId;
+            await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
+            logInfo('Assigned worker to match', { matchId, workerId });
+          }
+
+          const sent = workerPool.sendToWorker(workerId, {
+            type: eventName,
             matchId,
-            joinCode
-          }
-        });
-      } catch (error) {
-        logError('Failed to handle friend match request', error as Error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to process request'
-        });
-      }
-    });
+            userId: socket.data.userId,
+            username: socket.data.username,
+            socketId: socket.id,
+            data
+          });
 
-    // Worker pool stats endpoint
-    app.get('/workers/stats', (req, res) => {
-      const stats = workerPool.getStats();
-      res.json({
-        success: true,
-        data: stats
+          if (!sent) {
+            logError('Failed to send event to worker', new Error(`Worker ${workerId} unavailable for event ${eventName}`));
+            return socket.emit('error', { message: 'Match worker not available' });
+          }
+        } catch (error) {
+          logError(`Error forwarding ${eventName}`, error as Error);
+        }
+        return;
       });
     });
-
-    // Detailed metrics with bottleneck detection
-    app.get('/metrics/detailed', (req, res) => {
-      try {
-        const detailedMetrics = getDetailedMetrics();
-        res.json({
-          success: true,
-          data: detailedMetrics
-        });
-      } catch (error) {
-        logError('Failed to get detailed metrics', error as Error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to get detailed metrics'
-        });
-      }
-    });
-
-    // Bottleneck detection endpoint
-    app.get('/bottlenecks', (req, res) => {
-      try {
-        const detailedMetrics = getDetailedMetrics();
-        res.json({
-          success: true,
-          data: {
-            bottlenecks: detailedMetrics.bottlenecks,
-            summary: {
-              critical: detailedMetrics.bottlenecks.filter(b => b.severity === 'high').length,
-              warning: detailedMetrics.bottlenecks.filter(b => b.severity === 'medium').length,
-              info: detailedMetrics.bottlenecks.filter(b => b.severity === 'low').length
-            },
-            timestamp: new Date().toISOString()
-          }
-        });
-      } catch (error) {
-        logError('Failed to detect bottlenecks', error as Error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to detect bottlenecks'
-        });
-      }
-    });
-
-    // Listen on all network interfaces
-    server.listen(port as number, '0.0.0.0', () => {
-      const networkIP = process.env.NETWORK_IP || 'localhost';
-      logInfo(`Match Service Master started`, {
-        port,
-        host: '0.0.0.0',
-        environment: process.env.NODE_ENV || 'development',
-        networkAccess: `http://${networkIP}:${port}`,
-        timestamp: new Date().toISOString(),
-        store: isRedisConnected ? 'Redis' : 'In-Memory',
-        mode: 'Worker Pool Architecture'
-      });
-    });
-
-    // Graceful shutdown
-    process.on('SIGTERM', async () => {
-      logInfo('SIGTERM received, shutting down gracefully');
-      await workerPool.shutdown();
-      process.exit(0);
-    });
-
-    process.on('SIGINT', async () => {
-      logInfo('SIGINT received, shutting down gracefully');
-      await workerPool.shutdown();
-      process.exit(0);
-    });
-  }
-
-  startMaster().catch((error) => {
-    logError('Failed to start master', error);
-    process.exit(1);
   });
 
-} else {
-  // Worker process
-  require('./matchServerWorker');
+  // Start server
+  server.listen(MASTER_PORT, '0.0.0.0', () => {
+    logInfo('Master server started', {
+      port: MASTER_PORT,
+      host: '0.0.0.0',
+      pid: process.pid
+    });
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    logInfo('SIGTERM received, shutting down gracefully');
+    await workerPool.shutdown();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', async () => {
+    logInfo('SIGINT received, shutting down gracefully');
+    await workerPool.shutdown();
+    process.exit(0);
+  });
+}
+
+function generateJoinCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }

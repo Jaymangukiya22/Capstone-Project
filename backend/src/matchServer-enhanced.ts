@@ -476,7 +476,7 @@ class EnhancedMatchService {
             as: 'options'
           }]
         }],
-        order: [['order', 'ASC']]
+        order: [['orderIndex', 'ASC']]
       });
 
       return quizQuestions.map((qq: any) => ({
@@ -691,7 +691,7 @@ class EnhancedMatchService {
           
           // If not found in memory, check store
           if (!matchId) {
-            const storedMatchId = await store.get(`joinCode:${data.joinCode.toUpperCase()}`);
+            const storedMatchId = await store.get(`joincode:${data.joinCode.toUpperCase()}`);
             if (!storedMatchId) {
               socket.emit('error', { message: 'Invalid join code' });
               return;

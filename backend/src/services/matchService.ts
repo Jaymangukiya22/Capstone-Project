@@ -1,11 +1,19 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
+// src/services/matchService.ts
+import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
+import type RedisType from 'ioredis';
 import { Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, User } from '../models';
-import { redis } from '../config/redis';
+import { getRedisClient, getRedisPubSub } from '../config/redis';
 import { logInfo, logError } from '../utils/logger';
 import jwt from 'jsonwebtoken';
 
-// Types
+type Redis = RedisType;
+
+const PUBSUB_CHANNEL = 'match-events';
+const ANALYTICS_STREAM = 'match_analytics';
+const LOCK_PREFIX = 'lock:match:start:';
+const DEFAULT_LOCK_TTL_MS = 10_000;
+
 interface MatchPlayer {
   userId: number;
   username: string;
@@ -45,7 +53,22 @@ export class MatchService {
   private userToMatch: Map<number, string> = new Map();
   private joinCodeToMatch: Map<string, string> = new Map();
 
+  private redisClient: Redis;
+  private redisPub: Redis;
+  private redisSub: Redis;
+
+  // Unique token for lock ownership
+  private instanceId: string = uuidv4();
+
   constructor(io?: SocketIOServer) {
+    // Get Redis clients (assumes initializeRedis() already called)
+    this.redisClient = getRedisClient();
+    const { pub, sub } = getRedisPubSub();
+    this.redisPub = pub;
+    this.redisSub = sub;
+
+    this.setupRedisSubscriber();
+
     if (io) {
       this.io = io;
       this.setupSocketHandlers();
@@ -57,6 +80,9 @@ export class MatchService {
     this.setupSocketHandlers();
   }
 
+  /* -------------------------
+     Utilities
+  ------------------------- */
   private generateJoinCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
@@ -66,109 +92,152 @@ export class MatchService {
     return code;
   }
 
-  private async loadQuizQuestions(quizId: number): Promise<any[]> {
+  private async writeAnalytics(eventType: string, payload: Record<string, any>): Promise<void> {
     try {
-      // Load quiz questions through QuizQuestion junction table
-      const quizQuestions = await QuizQuestion.findAll({
-        where: { quizId },
-        include: [{
-          model: QuestionBankItem,
-          as: 'question',
-          include: [{
-            model: QuestionBankOption,
-            as: 'options'
-          }]
-        }],
-        order: [['orderIndex', 'ASC']]
-      });
-
-      if (!quizQuestions || quizQuestions.length === 0) {
-        return [];
-      }
-
-      return quizQuestions.map((qq: any) => ({
-        id: qq.question.id,
-        questionText: qq.question.questionText,
-        options: qq.question.options.map((opt: any) => ({
-          id: opt.id,
-          optionText: opt.optionText,
-          isCorrect: opt.isCorrect
-        })),
-        difficulty: qq.question.difficulty,
-        points: qq.points || 100
-      }));
-    } catch (error) {
-      logError('Failed to load quiz questions', error as Error);
-      return [];
+      const timestamp = Date.now().toString();
+      // XADD stream: field-value pairs
+      await this.redisClient.xadd(
+        ANALYTICS_STREAM,
+        '*',
+        'event',
+        eventType,
+        'timestamp',
+        timestamp,
+        'payload',
+        JSON.stringify(payload)
+      );
+    } catch (err: unknown) {
+      logError('Failed to write analytics stream', err as Error);
     }
   }
 
+  // Acquire lock (SET key value NX PX ttl)
+  private async acquireLock(lockKey: string, ttlMs = DEFAULT_LOCK_TTL_MS): Promise<string | null> {
+    try {
+      const token = this.instanceId;
+      // Use options object form so typings accept NX/PX
+      const res = await this.redisClient.set(lockKey, token, 'PX', ttlMs, 'NX');
+      if (res === 'OK') return token;
+      return null;
+    } catch (err: unknown) {
+      logError('acquireLock error', err as Error);
+      return null;
+    }
+  }
+
+  // Safe release via Lua script (delete only if value matches)
+  private async releaseLock(lockKey: string, token: string): Promise<boolean> {
+    const lua = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `;
+    try {
+      const res = await this.redisClient.eval(lua, 1, lockKey, token);
+      return res === 1;
+    } catch (err: unknown) {
+      logError('releaseLock error', err as Error);
+      return false;
+    }
+  }
+
+  /* -------------------------
+     Redis Pub/Sub subscriber
+     Forwards cluster events to local Socket.IO
+  ------------------------- */
+  private setupRedisSubscriber() {
+    // subscribe returns a Promise<number> — ignore the return value
+    this.redisSub.subscribe(PUBSUB_CHANNEL).catch((err: unknown) => {
+      logError('Failed to subscribe to match-events', err as Error);
+    });
+
+    // ioredis 'message' event: (channel, message)
+    this.redisSub.on('message', (channel: string, message: string) => {
+      if (channel !== PUBSUB_CHANNEL) return;
+      try {
+        const parsed = JSON.parse(message) as { type: string; matchId?: string; payload?: any };
+        const { type, matchId, payload } = parsed;
+
+        switch (type) {
+          case 'PLAYER_JOINED':
+            if (matchId) this.io?.to(matchId).emit('player_joined', payload);
+            break;
+          case 'PLAYER_LIST_UPDATED':
+            if (matchId) this.io?.to(matchId).emit('player_list_updated', payload);
+            break;
+          case 'PLAYER_READY':
+            if (matchId) this.io?.to(matchId).emit('player_ready', payload);
+            break;
+          case 'MATCH_STARTED':
+            if (matchId) this.io?.to(matchId).emit('match_started', payload);
+            break;
+          case 'NEXT_QUESTION':
+            if (matchId) this.io?.to(matchId).emit('next_question', payload);
+            break;
+          case 'MATCH_COMPLETED':
+            if (matchId) this.io?.to(matchId).emit('match_completed', payload);
+            break;
+          case 'ANSWER_RESULT':
+            // answer result may target specific socketId
+            if (payload?.socketId) {
+              this.io?.to(payload.socketId).emit('answer_result', payload);
+            }
+            break;
+          default:
+            if (matchId) this.io?.to(matchId).emit(type.toLowerCase(), payload);
+        }
+      } catch (err: unknown) {
+        logError('Error parsing pubsub message', err as Error);
+      }
+    });
+  }
+
+  /* -------------------------
+     Socket handlers (local)
+  ------------------------- */
   private setupSocketHandlers() {
     if (!this.io) return;
-    
+
     this.io.on('connection', (socket) => {
       logInfo('Client connected', { socketId: socket.id });
 
-      // Authenticate user - simplified for testing
       socket.on('authenticate', async (data: any) => {
         try {
-          // Handle both JWT token and direct user data
           let userId: number;
           let username: string;
 
           if (typeof data === 'string') {
-            // JWT token authentication
-            const decoded = jwt.verify(data, process.env.JWT_SECRET!) as any;
-            const user = await User.findByPk(decoded.userId, {
-              attributes: ['id', 'username', 'isActive']
-            });
-
+            const decoded = jwt.verify(data, process.env.JWT_SECRET || '') as any;
+            const user = await User.findByPk(decoded.userId, { attributes: ['id', 'username', 'isActive'] });
             if (!user || !user.isActive) {
               socket.emit('auth_error', { message: 'Invalid token or user inactive' });
               return;
             }
-
             userId = user.id;
             username = user.username;
           } else {
-            // Direct user data for testing
             userId = data.userId || 1;
             username = data.username || `Player${userId}`;
-            
-            // Try to get real user from database
             try {
-              const user = await User.findByPk(userId, {
-                attributes: ['id', 'username', 'email', 'isActive']
-              });
-              if (user) {
-                // Use email if available, otherwise username
-                username = user.email || user.username;
-              }
-            } catch (error) {
-              // Fallback to provided data if database lookup fails
+              const user = await User.findByPk(userId, { attributes: ['id', 'username', 'email', 'isActive'] });
+              if (user) username = user.email || user.username;
+            } catch (err: unknown) {
               logInfo('Using fallback user data', { userId, username });
             }
           }
 
           socket.data.userId = userId;
           socket.data.username = username;
-          
-          const userData = { id: userId, username };
-          socket.emit('authenticated', { user: userData });
-
-          logInfo('User authenticated', { 
-            userId, 
-            username, 
-            socketId: socket.id,
-            authType: typeof data === 'string' ? 'JWT' : 'Direct'
-          });
-        } catch (error) {
+          socket.emit('authenticated', { user: { id: userId, username } });
+          logInfo('User authenticated', { userId, username, socketId: socket.id });
+        } catch (err: unknown) {
+          logError('Authentication error', err as Error);
           socket.emit('auth_error', { message: 'Authentication failed' });
-          logError('Authentication error', error as Error);
         }
       });
 
-      // Create match (regular multiplayer)
       socket.on('create_match', async (data: { quizId: number; maxPlayers?: number }) => {
         try {
           if (!socket.data.userId) {
@@ -178,16 +247,22 @@ export class MatchService {
 
           const { matchId, joinCode } = await this.createMatch(data.quizId, socket.data.userId, data.maxPlayers);
           socket.join(matchId);
-          socket.emit('match_created', { matchId, joinCode });
 
-          logInfo('Match created', { matchId: matchId, userId: socket.data.userId });
-        } catch (error) {
+          // publish events cluster-wide
+          await this.publishEvent('PLAYER_JOINED', matchId, { userId: socket.data.userId, username: socket.data.username });
+          const match = this.matches.get(matchId)!;
+          const playerList = Array.from(match.players.values()).map((p) => ({ userId: p.userId, username: p.username, isReady: p.isReady }));
+          await this.publishEvent('PLAYER_LIST_UPDATED', matchId, { players: playerList });
+
+          socket.emit('match_created', { matchId, joinCode });
+          await this.writeAnalytics('match_created', { matchId, quizId: data.quizId, creator: socket.data.userId });
+          logInfo('Match created', { matchId, userId: socket.data.userId });
+        } catch (err: unknown) {
+          logError('Create match error', err as Error);
           socket.emit('error', { message: 'Failed to create match' });
-          logError('Create match error', error as Error);
         }
       });
 
-      // Create friend match (1v1 with join code)
       socket.on('create_friend_match', async (data: { quizId: number }) => {
         try {
           if (!socket.data.userId) {
@@ -197,40 +272,25 @@ export class MatchService {
 
           const { matchId, joinCode } = await this.createFriendMatch(data.quizId, socket.data.userId);
           socket.join(matchId);
-          
-          // Update creator's socket info in the match and ensure proper mapping
+
           const match = this.matches.get(matchId);
           if (match && match.players.has(socket.data.userId)) {
             const creator = match.players.get(socket.data.userId)!;
             creator.username = socket.data.username || `Player${socket.data.userId}`;
             creator.socketId = socket.id;
-            
-            // Ensure the userToMatch mapping exists for the creator
             this.userToMatch.set(socket.data.userId, matchId);
-            
-            logInfo('Updated creator info', { 
-              userId: socket.data.userId, 
-              username: creator.username,
-              socketId: socket.id,
-              userToMatchMapped: this.userToMatch.has(socket.data.userId)
-            });
           }
-          
-          socket.emit('friend_match_created', { matchId, joinCode });
 
-          logInfo('Friend match created', { 
-            matchId, 
-            joinCode, 
-            userId: socket.data.userId,
-            username: socket.data.username 
-          });
-        } catch (error) {
+          await this.publishEvent('PLAYER_JOINED', matchId, { userId: socket.data.userId, username: socket.data.username });
+          socket.emit('friend_match_created', { matchId, joinCode });
+          await this.writeAnalytics('friend_match_created', { matchId, joinCode, creator: socket.data.userId });
+          logInfo('Friend match created', { matchId, joinCode, userId: socket.data.userId });
+        } catch (err: unknown) {
+          logError('Create friend match error', err as Error);
           socket.emit('error', { message: 'Failed to create friend match' });
-          logError('Create friend match error', error as Error);
         }
       });
 
-      // Join match by code
       socket.on('join_match', async (data: { joinCode: string }) => {
         try {
           if (!socket.data.userId) {
@@ -238,76 +298,110 @@ export class MatchService {
             return;
           }
 
-          const matchId = this.joinCodeToMatch.get(data.joinCode.toUpperCase());
+          const joinCode = data.joinCode.toUpperCase();
+          logInfo('Player attempting to join match by code', { joinCode, userId: socket.data.userId });
+
+          // First check local in-memory map (fast path for same instance)
+          let matchId = this.joinCodeToMatch.get(joinCode);
+
+          // If not found locally, check Redis (for distributed/scaled setup)
           if (!matchId) {
-            socket.emit('error', { message: 'Match not found with code: ' + data.joinCode });
+            const redisMatchId = await this.redisClient.get(`joincode:${joinCode}`);
+            if (redisMatchId) {
+              matchId = redisMatchId;
+              logInfo('Match found in Redis', { joinCode, matchId });
+            }
+          }
+
+          if (!matchId) {
+            logInfo('Match not found for join code', { joinCode });
+            socket.emit('error', { message: 'Match not found with code: ' + joinCode });
             return;
           }
 
           const success = await this.joinMatch(matchId, socket.data.userId, socket.id);
-          if (success) {
-            socket.join(matchId);
-            const match = this.matches.get(matchId)!;
-            
-            // Send match joined confirmation to the joining player
-            socket.emit('match_joined', { 
-              matchId, 
-              players: Array.from(match.players.values()).map(p => ({
-                userId: p.userId,
-                username: p.username,
-                isReady: p.isReady
-              }))
-            });
-
-            // Send updated player list to ALL players in the match (including the joiner)
-            const playerList = Array.from(match.players.values()).map(p => ({
-              userId: p.userId,
-              username: p.username,
-              isReady: p.isReady
-            }));
-            
-            logInfo('Sending player list update', { 
-              playerCount: playerList.length,
-              players: playerList 
-            });
-            
-            this.io?.to(matchId).emit('player_list_updated', {
-              players: playerList
-            });
-
-            // Notify other players about the new joiner
-            socket.to(matchId).emit('player_joined', {
-              userId: socket.data.userId,
-              username: socket.data.username
-            });
-
-            logInfo('Player joined match', { matchId, userId: socket.data.userId });
-          } else {
+          if (!success) {
             socket.emit('error', { message: 'Failed to join match' });
-          }
-        } catch (error) {
-          socket.emit('error', { message: 'Failed to join match' });
-          logError('Join match error', error as Error);
-        }
-      });
-
-      // Player ready
-      socket.on('player_ready', async () => {
-        try {
-          logInfo('Player ready request', { 
-            userId: socket.data.userId, 
-            username: socket.data.username,
-            userToMatchSize: this.userToMatch.size,
-            hasMapping: this.userToMatch.has(socket.data.userId)
-          });
-          
-          const matchId = this.userToMatch.get(socket.data.userId);
-          if (!matchId) {
-            logError('Player ready failed - not in match', new Error(`User ${socket.data.userId} not found in userToMatch mapping`));
-            socket.emit('error', { message: 'Not in a match' });
             return;
           }
 
+          socket.join(matchId);
+
+          const match = this.matches.get(matchId)!;
+          const playerList = Array.from(match.players.values()).map((p) => ({ userId: p.userId, username: p.username, isReady: p.isReady }));
+
+          await this.publishEvent('PLAYER_LIST_UPDATED', matchId, { players: playerList });
+          await this.publishEvent('PLAYER_JOINED', matchId, { userId: socket.data.userId, username: socket.data.username });
+
+          socket.emit('match_joined', { matchId, players: playerList });
+          await this.writeAnalytics('player_joined', { matchId, userId: socket.data.userId });
+          logInfo('Player joined match', { matchId, userId: socket.data.userId });
+        } catch (err: unknown) {
+          logError('Join match error', err as Error);
+          socket.emit('error', { message: 'Failed to join match' });
+        }
+      });
+
+      // Alias for join_match for consistency with frontend naming
+      socket.on('join_match_by_code', async (data: { joinCode: string }) => {
+        // Reuse the join_match handler logic
+        try {
+          if (!socket.data.userId) {
+            socket.emit('error', { message: 'Not authenticated' });
+            return;
+          }
+
+          const joinCode = data.joinCode.toUpperCase();
+          logInfo('Player attempting to join match by code (via join_match_by_code)', { joinCode, userId: socket.data.userId });
+
+          // First check local in-memory map (fast path for same instance)
+          let matchId = this.joinCodeToMatch.get(joinCode);
+
+          // If not found locally, check Redis (for distributed/scaled setup)
+          if (!matchId) {
+            const redisMatchId = await this.redisClient.get(`joincode:${joinCode}`);
+            if (redisMatchId) {
+              matchId = redisMatchId;
+              logInfo('Match found in Redis', { joinCode, matchId });
+            }
+          }
+
+          if (!matchId) {
+            logInfo('Match not found for join code', { joinCode });
+            socket.emit('error', { message: 'Match not found with code: ' + joinCode });
+            return;
+          }
+
+          const success = await this.joinMatch(matchId, socket.data.userId, socket.id);
+          if (!success) {
+            socket.emit('error', { message: 'Failed to join match' });
+            return;
+          }
+
+          socket.join(matchId);
+
+          const match = this.matches.get(matchId)!;
+          const playerList = Array.from(match.players.values()).map((p) => ({ userId: p.userId, username: p.username, isReady: p.isReady }));
+
+          await this.publishEvent('PLAYER_LIST_UPDATED', matchId, { players: playerList });
+          await this.publishEvent('PLAYER_JOINED', matchId, { userId: socket.data.userId, username: socket.data.username });
+
+          socket.emit('match_joined', { matchId, players: playerList });
+          await this.writeAnalytics('player_joined', { matchId, userId: socket.data.userId });
+          logInfo('Player joined match', { matchId, userId: socket.data.userId });
+        } catch (err: unknown) {
+          logError('Join match by code error', err as Error);
+          socket.emit('error', { message: 'Failed to join match' });
+        }
+      });
+
+      socket.on('player_ready', async () => {
+        try {
+          const matchId = this.userToMatch.get(socket.data.userId);
+          if (!matchId) {
+            socket.emit('error', { message: 'Not in a match' });
+            return;
+          }
           const match = this.matches.get(matchId);
           if (!match) {
             socket.emit('error', { message: 'Match not found' });
@@ -315,92 +409,73 @@ export class MatchService {
           }
 
           const player = match.players.get(socket.data.userId);
-          if (player) {
-            player.isReady = true;
-            
-            this.io?.to(matchId).emit('player_ready', {
-              userId: socket.data.userId,
-              username: socket.data.username
-            });
-
-            // Check if all players are ready
-            const allReady = Array.from(match.players.values()).every(p => p.isReady);
-            const minPlayers = match.matchType === 'FRIEND_1V1' ? 2 : 2; // Require at least 2 players
-            
-            logInfo('Checking match start conditions', { 
-              matchId, 
-              allReady, 
-              playerCount: match.players.size, 
-              minPlayers 
-            });
-
-            if (allReady && match.players.size >= minPlayers) {
-              logInfo('All players ready, starting match', { 
-                matchId, 
-                playerCount: match.players.size, 
-                minPlayers 
-              });
-              this.startMatch(matchId);
-            }
+          if (!player) {
+            socket.emit('error', { message: 'Player not in match' });
+            return;
           }
-        } catch (error) {
-          logError('Player ready error', error as Error);
+
+          player.isReady = true;
+          await this.publishEvent('PLAYER_READY', matchId, { userId: player.userId, username: player.username });
+          await this.writeAnalytics('player_ready', { matchId, userId: player.userId });
+
+          const allReady = Array.from(match.players.values()).every((p) => p.isReady);
+          const minPlayers = match.matchType === 'FRIEND_1V1' ? 2 : 2;
+
+          if (allReady && match.players.size >= minPlayers) {
+            // Attempt cluster-safe start
+            await this.attemptStartMatchClusterSafe(matchId, match.timeLimit);
+          }
+        } catch (err: unknown) {
+          logError('Player ready error', err as Error);
         }
       });
 
-      // Submit answer
-      socket.on('submit_answer', async (data: { 
-        questionId: number; 
-        selectedOptions: number[]; 
-        timeSpent: number 
-      }) => {
+      socket.on('submit_answer', async (data: { questionId: number; selectedOptions: number[]; timeSpent: number }) => {
         try {
           const matchId = this.userToMatch.get(socket.data.userId);
           if (!matchId) return;
-
           await this.submitAnswer(matchId, socket.data.userId, data);
-        } catch (error) {
-          logError('Submit answer error', error as Error);
+        } catch (err: unknown) {
+          logError('Submit answer error', err as Error);
         }
       });
 
-      // Handle disconnection
       socket.on('disconnect', () => {
         logInfo('Client disconnected', { socketId: socket.id });
-        
         if (socket.data.userId) {
           const matchId = this.userToMatch.get(socket.data.userId);
           if (matchId) {
-            const match = this.matches.get(matchId);
-            if (match) {
-              // Notify other players
-              socket.to(matchId).emit('player_disconnected', {
-                userId: socket.data.userId,
-                username: socket.data.username
-              });
-            }
+            this.publishEvent('PLAYER_DISCONNECTED', matchId, { userId: socket.data.userId, username: socket.data.username }).catch((err) => {
+              logError('Publish disconnect error', err as Error);
+            });
+            // optional reconnection logic could be placed here
           }
         }
       });
     });
   }
 
-  /**
-   * Create a new match
-   */
-  public async createSoloMatch(userId: number, quizId: number, aiOpponentId?: string): Promise<string> {
-    const match = await this.createMatch(quizId, userId, 2);
-    return match.matchId;
+  // Publish structured event to cluster via Redis
+  private async publishEvent(type: string, matchId: string, payload: Record<string, any>): Promise<void> {
+    try {
+      const message = JSON.stringify({ type, matchId, payload });
+      await this.redisPub.publish(PUBSUB_CHANNEL, message);
+    } catch (err: unknown) {
+      logError('Failed to publish event', err as Error);
+    }
   }
 
-  public async createMatch(quizId: number, userId: number, maxPlayers: number = 10): Promise<{ matchId: string; joinCode: string }> {
-    const quiz = await Quiz.findOne({
-      where: { id: quizId, isActive: true }
-    });
+  /* -------------------------
+     Match lifecycle methods
+  ------------------------- */
+  public async createSoloMatch(userId: number, quizId: number, aiOpponentId?: string): Promise<string> {
+    const { matchId } = await this.createMatch(quizId, userId, 2);
+    return matchId;
+  }
 
-    if (!quiz) {
-      throw new Error('Quiz not found');
-    }
+  public async createMatch(quizId: number, userId: number, maxPlayers = 10): Promise<{ matchId: string; joinCode: string }> {
+    const quiz = await Quiz.findOne({ where: { id: quizId, isActive: true } });
+    if (!quiz) throw new Error('Quiz not found');
 
     const matchId = uuidv4();
     const joinCode = this.generateJoinCode();
@@ -409,11 +484,7 @@ export class MatchService {
     const match: MatchRoom = {
       id: matchId,
       quizId,
-      quiz: {
-        id: quiz.id,
-        title: quiz.title,
-        timeLimit: quiz.timeLimit
-      },
+      quiz: { id: quiz.id, title: quiz.title, timeLimit: quiz.timeLimit },
       players: new Map(),
       status: 'WAITING',
       currentQuestionIndex: 0,
@@ -426,10 +497,9 @@ export class MatchService {
       matchType: 'MULTIPLAYER'
     };
 
-    // Add creator as first player
     const creator: MatchPlayer = {
       userId,
-      username: '', // Will be set when socket connects
+      username: '',
       socketId: '',
       score: 0,
       currentQuestionIndex: 0,
@@ -443,29 +513,17 @@ export class MatchService {
     this.userToMatch.set(userId, matchId);
     this.joinCodeToMatch.set(joinCode, matchId);
 
-    // Store match in Redis for persistence
-    await redis.setEx(`match:${matchId}`, 3600, JSON.stringify({
-      id: matchId,
-      quizId,
-      joinCode,
-      status: match.status,
-      createdAt: match.createdAt
+    await this.redisClient.setex(`match:${matchId}`, 3600, JSON.stringify({
+      id: matchId, quizId, joinCode, status: match.status, createdAt: match.createdAt.toISOString()
     }));
 
+    await this.writeAnalytics('match_created', { matchId, quizId, creator: userId });
     return { matchId, joinCode };
   }
 
-  /**
-   * Create a friend match (1v1 with join code)
-   */
   public async createFriendMatch(quizId: number, userId: number): Promise<{ matchId: string; joinCode: string }> {
-    const quiz = await Quiz.findOne({
-      where: { id: quizId, isActive: true }
-    });
-
-    if (!quiz) {
-      throw new Error('Quiz not found');
-    }
+    const quiz = await Quiz.findOne({ where: { id: quizId, isActive: true } });
+    if (!quiz) throw new Error('Quiz not found');
 
     const matchId = uuidv4();
     const joinCode = this.generateJoinCode();
@@ -474,16 +532,12 @@ export class MatchService {
     const match: MatchRoom = {
       id: matchId,
       quizId,
-      quiz: {
-        id: quiz.id,
-        title: quiz.title,
-        timeLimit: quiz.timeLimit
-      },
+      quiz: { id: quiz.id, title: quiz.title, timeLimit: quiz.timeLimit },
       players: new Map(),
       status: 'WAITING',
       currentQuestionIndex: 0,
       questionStartTime: 0,
-      maxPlayers: 2, // 1v1 match
+      maxPlayers: 2,
       timeLimit: quiz.timeLimit || 30,
       questions,
       createdAt: new Date(),
@@ -491,10 +545,9 @@ export class MatchService {
       matchType: 'FRIEND_1V1'
     };
 
-    // Add creator as first player
     const creator: MatchPlayer = {
       userId,
-      username: '', // Will be set when socket connects
+      username: '',
       socketId: '',
       score: 0,
       currentQuestionIndex: 0,
@@ -508,268 +561,261 @@ export class MatchService {
     this.userToMatch.set(userId, matchId);
     this.joinCodeToMatch.set(joinCode, matchId);
 
-    // Store match in Redis for persistence
-    await redis.setEx(`match:${matchId}`, 3600, JSON.stringify({
-      id: matchId,
-      quizId,
-      joinCode,
-      matchType: 'FRIEND_1V1',
-      status: match.status,
-      createdAt: match.createdAt
+    // Store match data WITHOUT workerId - matchserver will assign it on join
+    await this.redisClient.setex(`match:${matchId}`, 3600, JSON.stringify({
+      id: matchId, quizId, joinCode, matchType: 'FRIEND_1V1', status: match.status, createdAt: match.createdAt.toISOString()
     }));
 
+    // Store join code to match ID mapping in Redis
+    await this.redisClient.setex(`joincode:${joinCode}`, 3600, matchId);
+
+    await this.writeAnalytics('friend_match_created', { matchId, joinCode, creator: userId });
     logInfo('Friend match created', { matchId, joinCode, quizId });
     return { matchId, joinCode };
   }
 
   public async joinMatch(matchId: string, userId: number, socketId: string): Promise<boolean> {
     const match = this.matches.get(matchId);
-    if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
-      return false;
-    }
+    if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) return false;
 
-    // Get user info with fallback for test users
     let username = `TestUser${userId}`;
     try {
-      const user = await User.findByPk(userId, {
-        attributes: ['username', 'email']
-      });
-      
-      if (user) {
-        username = user.email || user.username;
-      }
-    } catch (error) {
-      logInfo('Using fallback username for user', { userId, username });
+      const user = await User.findByPk(userId, { attributes: ['username', 'email'] });
+      if (user) username = user.email || user.username;
+    } catch (err: unknown) {
+      logInfo('Using fallback username', { userId, username });
     }
 
     const player: MatchPlayer = {
-      userId,
-      username,
-      socketId,
-      score: 0,
-      currentQuestionIndex: 0,
-      isReady: false,
-      isAI: false,
-      answers: []
+      userId, username, socketId, score: 0, currentQuestionIndex: 0, isReady: false, isAI: false, answers: []
     };
 
     match.players.set(userId, player);
     this.userToMatch.set(userId, matchId);
 
-    logInfo('Player joined match', { matchId, userId, username, playerCount: match.players.size });
+    await this.writeAnalytics('player_joined', { matchId, userId });
     return true;
   }
 
-  private async startMatch(matchId: string) {
+  // Attempt start with cluster-safe lock
+  private async attemptStartMatchClusterSafe(matchId: string, questionTimeLimitSec: number): Promise<void> {
+    const lockKey = LOCK_PREFIX + matchId;
+    // Ensure lock TTL covers question duration plus a buffer
+    const ttl = Math.max(DEFAULT_LOCK_TTL_MS, questionTimeLimitSec * 1000 + 5000);
+    const token = await this.acquireLock(lockKey, ttl);
+    if (!token) {
+      logInfo('Lock not acquired; another node will start the match', { matchId });
+      return;
+    }
+
+    try {
+      const match = this.matches.get(matchId);
+      if (!match) return;
+      if (match.status !== 'WAITING') return;
+
+      const allReady = Array.from(match.players.values()).every((p) => p.isReady);
+      if (!allReady) return;
+
+      await this.startMatch(matchId);
+
+      // Publish cluster-wide match started
+      await this.publishEvent('MATCH_STARTED', matchId, {
+        questionIndex: match.currentQuestionIndex,
+        question: this.makeQuestionForPlayers(match.questions[match.currentQuestionIndex], match.timeLimit),
+        totalQuestions: match.questions.length
+      });
+
+      await this.writeAnalytics('match_started', { matchId });
+    } catch (err: unknown) {
+      logError('attemptStartMatchClusterSafe error', err as Error);
+    } finally {
+      await this.releaseLock(lockKey, token).catch((err: unknown) => {
+        logError('Failed to release start lock', err as Error);
+      });
+    }
+  }
+
+  private makeQuestionForPlayers(currentQuestion: any, timeLimit: number) {
+    return {
+      id: currentQuestion.id,
+      questionText: currentQuestion.questionText,
+      options: currentQuestion.options.map((opt: any) => ({ id: opt.id, optionText: opt.optionText })),
+      timeLimit
+    };
+  }
+
+  private async startMatch(matchId: string): Promise<void> {
     const match = this.matches.get(matchId);
     if (!match) {
-      logError('Cannot start match - match not found', new Error(`Match ${matchId} not found`));
+      logError('Cannot start match - not found', new Error(`Match ${matchId} not found`));
       return;
     }
 
-    if (match.questions.length === 0) {
-      logError('Cannot start match - no questions loaded', new Error(`Match ${matchId} has no questions`));
-      this.io?.to(matchId).emit('error', { message: 'No questions available for this quiz' });
+    if (!match.questions || match.questions.length === 0) {
+      logError('Cannot start match - no questions', new Error(`Match ${matchId} has no questions`));
+      await this.publishEvent('MATCH_ERROR', matchId, { message: 'No questions available' });
       return;
     }
-
-    logInfo('Starting match', { 
-      matchId, 
-      playerCount: match.players.size, 
-      questionCount: match.questions.length,
-      quizTitle: match.quiz.title 
-    });
 
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
 
-    // Send first question
-    const currentQuestion = match.questions[0];
-    const questionForPlayers = {
-      id: currentQuestion.id,
-      questionText: currentQuestion.questionText,
-      options: currentQuestion.options.map((opt: any) => ({
-        id: opt.id,
-        optionText: opt.optionText
-        // Don't send isCorrect to players
-      })),
-      timeLimit: match.timeLimit
-    };
+    const payload = this.makeQuestionForPlayers(match.questions[0], match.timeLimit);
 
-    logInfo('Sending match_started event', { 
-      matchId, 
-      questionId: currentQuestion.id, 
-      questionText: currentQuestion.questionText,
-      optionCount: currentQuestion.options.length,
-      totalQuestions: match.questions.length 
-    });
+    // Local emit
+    this.io?.to(matchId).emit('match_started', { question: payload, questionIndex: 0, totalQuestions: match.questions.length });
 
-    this.io?.to(matchId).emit('match_started', {
-      question: questionForPlayers,
-      questionIndex: 0,
-      totalQuestions: match.questions.length
-    });
-
-    // Start AI response timer if there are AI players
-    this.startAIResponseTimer(match, 0);
-
-    // Set timer for question
+    // Start per-question timer on this node (node that started the match)
     setTimeout(() => {
-      this.nextQuestion(matchId);
+      this.nextQuestion(matchId).catch((err: unknown) => logError('nextQuestion timer error', err as Error));
     }, match.timeLimit * 1000);
 
-    logInfo('Match started successfully', { matchId, players: match.players.size });
+    logInfo('Match started', { matchId, players: match.players.size });
   }
 
-  private async submitAnswer(
-    matchId: string, 
-    userId: number, 
-    answerData: { questionId: number; selectedOptions: number[]; timeSpent: number }
-  ) {
-    const match = this.matches.get(matchId);
-    if (!match || match.status !== 'IN_PROGRESS') return;
+  private async submitAnswer(matchId: string, userId: number, answerData: { questionId: number; selectedOptions: number[]; timeSpent: number }): Promise<void> {
+    try {
+      const match = this.matches.get(matchId);
+      if (!match || match.status !== 'IN_PROGRESS') return;
 
-    const player = match.players.get(userId);
-    if (!player) return;
+      const player = match.players.get(userId);
+      if (!player) return;
 
-    const currentQuestion = match.questions[match.currentQuestionIndex];
-    if (!currentQuestion || currentQuestion.id !== answerData.questionId) return;
+      const currentQuestion = match.questions[match.currentQuestionIndex];
+      if (!currentQuestion || currentQuestion.id !== answerData.questionId) return;
 
-    // Check if answer is correct
-    const correctOptionIds = currentQuestion.options
-      .filter((opt: any) => opt.isCorrect)
-      .map((opt: any) => opt.id);
+      const correctOptionIds = currentQuestion.options.filter((opt: any) => opt.isCorrect).map((opt: any) => opt.id);
+      const isCorrect = answerData.selectedOptions.length === correctOptionIds.length &&
+        answerData.selectedOptions.every((id) => correctOptionIds.includes(id));
 
-    const isCorrect = answerData.selectedOptions.length === correctOptionIds.length &&
-      answerData.selectedOptions.every(id => correctOptionIds.includes(id));
+      const basePoints = 100;
+      const timeBonus = Math.max(0, Math.floor((match.timeLimit - answerData.timeSpent) * 2));
+      const points = isCorrect ? basePoints + timeBonus : 0;
 
-    // Calculate points
-    const basePoints = 100;
-    const timeBonus = Math.max(0, Math.floor((match.timeLimit - answerData.timeSpent) * 2));
-    const points = isCorrect ? basePoints + timeBonus : 0;
+      player.score += points;
+      player.answers.push({
+        questionId: answerData.questionId,
+        selectedOptions: answerData.selectedOptions,
+        isCorrect,
+        timeSpent: answerData.timeSpent,
+        points
+      });
 
-    // Update player score
-    player.score += points;
-    player.answers.push({
-      questionId: answerData.questionId,
-      selectedOptions: answerData.selectedOptions,
-      isCorrect,
-      timeSpent: answerData.timeSpent,
-      points
-    });
+      const payload = {
+        socketId: player.socketId,
+        isCorrect,
+        points,
+        correctOptions: correctOptionIds,
+        totalScore: player.score
+      };
 
-    // Notify player of result
-    this.io?.to(player.socketId).emit('answer_result', {
-      isCorrect,
-      points,
-      correctOptions: correctOptionIds,
-      totalScore: player.score
-    });
-
-    logInfo('Answer submitted', { 
-      matchId, 
-      userId, 
-      isCorrect, 
-      points, 
-      timeSpent: answerData.timeSpent 
-    });
+      await this.publishEvent('ANSWER_RESULT', matchId, payload);
+      await this.writeAnalytics('answer_submitted', { matchId, userId, isCorrect, points });
+    } catch (err: unknown) {
+      logError('submitAnswer error', err as Error);
+    }
   }
 
-  private async nextQuestion(matchId: string) {
+  private async nextQuestion(matchId: string): Promise<void> {
     const match = this.matches.get(matchId);
     if (!match) return;
 
     match.currentQuestionIndex++;
 
     if (match.currentQuestionIndex >= match.questions.length) {
-      // Match completed
-      this.endMatch(matchId);
+      await this.endMatch(matchId);
       return;
     }
 
-    // Send next question
     const currentQuestion = match.questions[match.currentQuestionIndex];
-    const questionForPlayers = {
-      id: currentQuestion.id,
-      questionText: currentQuestion.questionText,
-      options: currentQuestion.options.map((opt: any) => ({
-        id: opt.id,
-        optionText: opt.optionText
-      })),
-      timeLimit: match.timeLimit
-    };
-
+    const payload = this.makeQuestionForPlayers(currentQuestion, match.timeLimit);
     match.questionStartTime = Date.now();
 
-    this.io?.to(matchId).emit('next_question', {
-      question: questionForPlayers,
+    await this.publishEvent('NEXT_QUESTION', matchId, {
+      question: payload,
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
     });
 
-    // Start AI response timer if there are AI players
-    this.startAIResponseTimer(match, match.currentQuestionIndex);
+    this.io?.to(matchId).emit('next_question', { question: payload, questionIndex: match.currentQuestionIndex, totalQuestions: match.questions.length });
 
-    // Set timer for next question
     setTimeout(() => {
-      this.nextQuestion(matchId);
+      this.nextQuestion(matchId).catch((err: unknown) => logError('nextQuestion timer error', err as Error));
     }, match.timeLimit * 1000);
   }
 
-  private async endMatch(matchId: string) {
+  private async endMatch(matchId: string): Promise<void> {
     const match = this.matches.get(matchId);
     if (!match) return;
 
     match.status = 'COMPLETED';
 
-    // Calculate final results
-    const results = Array.from(match.players.values()).map(player => ({
+    const results = Array.from(match.players.values()).map((player) => ({
       userId: player.userId,
       username: player.username,
       score: player.score,
       answers: player.answers
     }));
 
-    // Sort by score
     results.sort((a, b) => b.score - a.score);
 
-    // Send results to all players
-    this.io?.to(matchId).emit('match_completed', {
-      results,
-      winner: results[0],
-      matchId
-    });
+    const payload = { results, winner: results[0], matchId };
 
-    // Clean up
-    match.players.forEach(player => {
-      this.userToMatch.delete(player.userId);
-    });
-    
-    if (match.joinCode) {
-      this.joinCodeToMatch.delete(match.joinCode);
-    }
-    
+    await this.publishEvent('MATCH_COMPLETED', matchId, payload);
+    this.io?.to(matchId).emit('match_completed', payload);
+    await this.writeAnalytics('match_completed', { matchId, results });
+
+    // Cleanup
+    match.players.forEach((p) => this.userToMatch.delete(p.userId));
+    if (match.joinCode) this.joinCodeToMatch.delete(match.joinCode);
     this.matches.delete(matchId);
 
-    logInfo('Match completed', { matchId, results });
+    logInfo('Match completed', { matchId });
   }
 
-  private startAIResponseTimer(match: MatchRoom, questionIndex: number) {
-    // Placeholder for AI response logic
-    // This would be implemented when AI players are added
+  private startAIResponseTimer(_match: MatchRoom, _questionIndex: number): void {
+    // Placeholder for AI logic
   }
 
-  /**
-   * Get match by ID
-   */
+  private async loadQuizQuestions(quizId: number): Promise<any[]> {
+    try {
+      const quizQuestions = await QuizQuestion.findAll({
+        where: { quizId },
+        include: [{
+          model: QuestionBankItem,
+          as: 'question',
+          include: [{ model: QuestionBankOption, as: 'options' }]
+        }],
+        order: [['orderIndex', 'ASC']]
+      });
+
+      if (!quizQuestions || quizQuestions.length === 0) return [];
+
+      return quizQuestions.map((qq: any) => ({
+        id: qq.question.id,
+        questionText: qq.question.questionText,
+        options: qq.question.options.map((opt: any) => ({
+          id: opt.id,
+          optionText: opt.optionText,
+          isCorrect: opt.isCorrect
+        })),
+        difficulty: qq.question.difficulty,
+        points: qq.points || 100
+      }));
+    } catch (err: unknown) {
+      logError('Failed to load quiz questions', err as Error);
+      return [];
+    }
+  }
+
+  /* -------------------------
+     Monitoring / getters (public)
+  ------------------------- */
   public getMatchById(matchId: string): MatchRoom | undefined {
     return this.matches.get(matchId);
   }
 
-  /**
-   * Get available matches for joining
-   */
   public getAvailableMatches(): Array<{
     id: string;
     quizId: number;
@@ -779,12 +825,11 @@ export class MatchService {
     status: string;
     createdAt: Date;
   }> {
-    const availableMatches: Array<any> = [];
-    
-    this.matches.forEach((match, matchId) => {
+    const available: any[] = [];
+    this.matches.forEach((match, id) => {
       if (match.status === 'WAITING' && match.players.size < match.maxPlayers) {
-        availableMatches.push({
-          id: matchId,
+        available.push({
+          id,
           quizId: match.quizId,
           quiz: match.quiz,
           playerCount: match.players.size,
@@ -794,25 +839,36 @@ export class MatchService {
         });
       }
     });
-
-    return availableMatches;
+    return available;
   }
 
-  /**
-   * Get active matches (alias for backward compatibility)
-   */
-  public getActiveMatches(): Array<{
-    id: string;
-    quizId: number;
-    quiz: any;
-    playerCount: number;
-    maxPlayers: number;
-    status: string;
-    createdAt: Date;
-  }> {
-    return this.getAvailableMatches();
+  public getDetailedStats() {
+    const stats = {
+      totalMatches: this.matches.size,
+      totalPlayers: Array.from(this.matches.values()).reduce((acc, m) => acc + m.players.size, 0),
+      matchesByStatus: { WAITING: 0, IN_PROGRESS: 0, COMPLETED: 0 },
+      matchesByType: { SOLO: 0, MULTIPLAYER: 0, FRIEND_1V1: 0 }
+    };
+
+    for (const m of this.matches.values()) {
+      stats.matchesByStatus[m.status]++;
+      stats.matchesByType[m.matchType]++;
+    }
+    return stats;
   }
 }
 
-// Export singleton instance (will be initialized with socket server later)
-export const matchService = new MatchService();
+// Lazy-load singleton to ensure Redis is initialized first
+let matchServiceInstance: MatchService | null = null;
+
+export function getMatchService(): MatchService {
+  if (!matchServiceInstance) {
+    matchServiceInstance = new MatchService();
+  }
+  return matchServiceInstance;
+}
+
+// For backward compatibility, export as property getter
+export const matchService = new Proxy({} as any, {
+  get: () => getMatchService()
+});

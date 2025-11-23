@@ -1,5 +1,15 @@
+# =============================================================================
+# QUIZUP UNIFIED DOCKER COMPOSE
+# Handles: localhost, network, production scaling
+# Usage: docker-compose -f docker-compose.unified.yml up -d
+# =============================================================================
+
+# Docker Compose for QuizUP - Unified Configuration
+
 services:
-  # PostgreSQL Database
+  # =============================================================================
+  # DATABASE
+  # =============================================================================
   postgres:
     image: postgres:15-alpine
     container_name: quizup_postgres
@@ -7,80 +17,68 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-quizup_db}
       POSTGRES_USER: ${POSTGRES_USER:-quizup_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS:-200}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docs/database-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./backend/scripts/seed-data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - quizup_network
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quizup_user} -d ${POSTGRES_DB:-quizup_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quizup_user}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
 
-  # Redis Cache
+  # =============================================================================
+  # REDIS CACHE
+  # =============================================================================
   redis:
     image: redis:7-alpine
     container_name: quizup_redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
-    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     networks:
       - quizup_network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-    restart: unless-stopped
 
-  # Backend API Server
+  # =============================================================================
+  # BACKEND API (Scalable)
+  # =============================================================================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: ${NODE_ENV:-development}
+      target: production
     container_name: quizup_backend
-    env_file:
-      - ./backend/.env.${NODE_ENV:-production}
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${BACKEND_PORT:-3000}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-quizup_user}:${POSTGRES_PASSWORD:-quizup_password}@postgres:5432/${POSTGRES_DB:-quizup_db}?schema=public
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
-      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-true}
-      SERVICE_TYPE: backend
-      MATCH_SERVICE_URL: http://matchserver:3001
-      # Database connection variables for Sequelize
+      DB_NAME: quizup_db
+      DB_USER: quizup_user
+      DB_PASSWORD: quizup_password
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-quizup_db}
-      DB_USER: ${POSTGRES_USER:-quizup_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-7a0b42e9df5856f7cfe0094361f65630}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      MIN_WORKERS: ${MIN_WORKERS:-1}
+      MAX_WORKERS: ${MAX_WORKERS:-2}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENABLE_DEBUG_ROUTES: ${ENABLE_DEBUG_ROUTES:-true}
+      SEED_DATABASE: ${SEED_DATABASE:-true}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
-    volumes:
-      # Mount the entire backend directory for hot-reloading
-      - ./backend:/app:cached
-      # Use an anonymous volume to keep the container's node_modules separate
-      - backend_node_modules:/app/node_modules
-      # Add npm cache volume for Windows compatibility
-      - backend_npm_cache:/usr/local/lib/node_modules/npm/.npm
-    # Use nodemon to run the source file and watch for changes
-    command: sh -c "npx nodemon src/server.ts"
     networks:
       - quizup_network
     depends_on:
@@ -88,53 +86,54 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 45s
-    restart: unless-stopped
+    # Resource limits (Docker Compose format)
+    cpus: ${BACKEND_CPU_LIMIT:-1.0}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-1G}
 
-  # Match Server (WebSocket)
+  # =============================================================================
+  # MATCH SERVER (Scalable)
+  # =============================================================================
   matchserver:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: ${NODE_ENV:-development}
+      target: matchserver-master
     container_name: quizup_matchserver
+    command: ["npx", "ts-node", "src/matchServerMaster.ts"]
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${MATCH_SERVICE_PORT:-3001}
-      MATCH_SERVICE_PORT: ${MATCH_SERVICE_PORT:-3001}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-quizup_user}:${POSTGRES_PASSWORD:-quizup_password}@postgres:5432/${POSTGRES_DB:-quizup_db}?schema=public
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      SERVICE_TYPE: matchserver
-      # Database connection variables for Sequelize
+      DB_NAME: quizup_db
+      DB_USER: quizup_user
+      DB_PASSWORD: quizup_password
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-quizup_db}
-      DB_USER: ${POSTGRES_USER:-quizup_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      MATCH_SERVICE_PORT: 3001
+      MASTER_HOST: 0.0.0.0
       # Worker Pool Configuration
-      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-4}
-      MAX_WORKERS: ${MAX_WORKERS:-50}
       MIN_WORKERS: ${MIN_WORKERS:-10}
+      MAX_WORKERS: ${MAX_WORKERS:-500}
+      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-5}
       WORKER_IDLE_TIMEOUT: ${WORKER_IDLE_TIMEOUT:-300000}
+      # Scaling
+      SCALE_UP_THRESHOLD: ${SCALE_UP_THRESHOLD:-0.8}
+      SCALE_DOWN_THRESHOLD: ${SCALE_DOWN_THRESHOLD:-0.3}
+      SCALE_CHECK_INTERVAL: ${SCALE_CHECK_INTERVAL:-30000}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
     ports:
       - "${MATCH_SERVICE_PORT:-3001}:3001"
+    # ADD VOLUMES FOR PERSISTENCE ✅
     volumes:
-      # Mount the entire backend directory for hot-reloading
-      - ./backend:/app:cached
-      # Use an anonymous volume to keep the container's node_modules separate
-      - backend_node_modules:/app/node_modules
-      # Add npm cache volume for Windows compatibility
-      - backend_npm_cache:/usr/local/lib/node_modules/npm/.npm
-    # Use nodemon to run the source file and watch for changes
-    command: sh -c "npx nodemon src/matchServer-enhanced.ts"
+      - ./backend/src:/app/src:ro  # Source code (read-only)
+      - ./backend/tests:/app/tests:ro  # Tests (read-only)
+      - matchserver_logs:/app/logs  # Logs (persistent)
     networks:
       - quizup_network
     depends_on:
@@ -142,338 +141,93 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      backend:
-        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 45s
-    restart: unless-stopped
+    cpus: ${MATCHSERVER_CPU_LIMIT:-4.0}
+    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-4G}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc:
+        soft: 32768
+        hard: 32768
 
-  # Frontend Application
+  # =============================================================================
+  # NGINX LOAD BALANCER
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: quizup_nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${NGINX_HTTP_PORT:-8090}:80"
+    networks:
+      - quizup_network
+    depends_on:
+      - backend
+      - matchserver
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # =============================================================================
+  # FRONTEND (Development)
+  # =============================================================================
   frontend:
     build:
       context: ./Frontend-admin
       dockerfile: Dockerfile
-      target: ${NODE_ENV:-development}
+      target: ${FRONTEND_TARGET:-development}
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090}
         VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
-        VITE_APP_NAME: ${VITE_APP_NAME:-QuizUP}
-        VITE_APP_VERSION: ${VITE_APP_VERSION:-1.0.0}
+        VITE_NETWORK_MODE: ${VITE_NETWORK_MODE:-false}
     container_name: quizup_frontend
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090}
-      VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./Frontend-admin/src:/app/src:ro
-      - ./Frontend-admin/public:/app/public:ro
-      - ./Frontend-admin/vite.config.ts:/app/vite.config.ts:ro
     networks:
       - quizup_network
-    depends_on:
-      - backend
-      - matchserver
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
+    # Single instance for Docker Compose
 
-  # Nginx Reverse Proxy (LocalTunnel-ready)
-  nginx:
-    image: nginx:alpine
-    container_name: quizup_nginx
-    ports:
-      - "8090:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - quizup_network
-    depends_on:
-      - frontend
-      - backend
-      - matchserver
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # Adminer (Database Management)
+  # =============================================================================
+  # DATABASE ADMIN (Optional)
+  # =============================================================================
   adminer:
     image: adminer:latest
     container_name: quizup_adminer
-    environment:
-      ADMINER_DEFAULT_SERVER: postgres
-      ADMINER_DESIGN: pepa-linha
     ports:
       - "${ADMINER_PORT:-8080}:8080"
     networks:
       - quizup_network
-    depends_on:
-      - postgres
     restart: unless-stopped
 
-  # Redis Commander (Redis Management)
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: quizup_redis_commander
-    environment:
-      REDIS_HOSTS: local:redis:6379
-      HTTP_USER: ${REDIS_COMMANDER_USER:-admin}
-      HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD:-admin}
-    ports:
-      - "${REDIS_COMMANDER_PORT:-8081}:8081"
-    networks:
-      - quizup_network
-    depends_on:
-      - redis
-    restart: unless-stopped
-  # Prometheus (Monitoring)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: quizup_prometheus
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    ports:
-      - "9090:9090"
-    networks:
-      - quizup_network
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-  # Grafana (Dashboard)
-
-  grafana:
-      image: grafana/grafana-oss:9.5.18
-      container_name: quizup_grafana
-      ports:
-        - "3003:3000"
-      volumes:
-          # 📁 1. Mounts your datasource YAML files
-          - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-
-          # 📁 2. Mounts your dashboard provider YAML file
-          - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-          
-          # 📁 3. Mounts the folder with all your dashboard JSON files
-          - ./monitoring/grafana/dashboards:/etc/grafana/dashboards
-          
-          # 📁 4. Mounts your custom grafana.ini file
-          - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini
-          
-          # 📁 5. Persistent storage for Grafana database
-          - grafana_data:/var/lib/grafana
-      environment:
-        - GF_SECURITY_ADMIN_USER=admin
-        - GF_SECURITY_ADMIN_PASSWORD=admin
-      networks:
-        - quizup_network
-      depends_on:
-        - prometheus
-      restart: unless-stopped
-
-    
-  # grafana:
-  #   image: grafana/grafana-oss:latest
-  #   container_name: quizup_grafana
-  #   ports:
-  #     - "3003:3000"
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #     - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-  #     - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-  #     - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini
-  #   environment:
-  #     - GF_SECURITY_ADMIN_USER=admin
-  #     - GF_SECURITY_ADMIN_PASSWORD=admin
-  #     - GF_SECURITY_ALLOW_EMBEDDING=true
-  #     - GF_AUTH_ANONYMOUS_ENABLED=true
-  #     - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-  #     - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-  #     - GF_LOG_LEVEL=info
-  #     - GF_PLUGINS_ENABLE_ALPHA=false
-  #     - GF_PLUGINS_PLUGIN_ADMIN_ENABLED=true
-  #     - GF_PLUGINS_PREINSTALL=redis-datasource,redis-explorer-app,golioth-websocket-datasource
-  #     - GF_ANGULAR_SUPPORT_ENABLED=true
-  #     - GF_PLUGINS_ALLOW_UNSIGNED=redis-explorer-app,redis-datasource
-  #   networks:
-  #     - quizup_network
-  #   depends_on:
-  #     - prometheus
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 90s
-  #   restart: unless-stopped
-
-  # Node Exporter (System Metrics)
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: quizup_node_exporter
-    ports:
-      - "9100:9100"
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    networks:
-      - quizup_network
-    restart: unless-stopped
-
-  # PostgreSQL Exporter (Database Metrics)
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:latest
-    container_name: quizup_postgres_exporter
-    ports:
-      - "9187:9187"
-    environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-quizup_user}:${POSTGRES_PASSWORD:-quizup_password}@postgres:5432/${POSTGRES_DB:-quizup_db}?sslmode=disable"
-      PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres_exporter/queries.yaml"
-    volumes:
-      - ./monitoring/postgres-exporter:/etc/postgres_exporter:ro
-    networks:
-      - quizup_network
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # Redis Exporter (Cache Metrics)
-  redis-exporter:
-    image: oliver006/redis_exporter:latest
-    container_name: quizup_redis_exporter
-    ports:
-      - "9121:9121"
-    environment:
-      REDIS_ADDR: "redis://redis:6379"
-      REDIS_EXPORTER_LOG_FORMAT: "txt"
-    networks:
-      - quizup_network
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # Alertmanager (Alert Management)
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: quizup_alertmanager
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./monitoring/alertmanager:/etc/alertmanager
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-    networks:
-      - quizup_network
-    restart: unless-stopped
-
-  # InfluxDB (for Cloudflare Analytics)
-  influxdb:
-    image: influxdb:2.7-alpine
-    container_name: quizup_influxdb
-    ports:
-      - "8086:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: admin123
-      DOCKER_INFLUXDB_INIT_ORG: quizup
-      DOCKER_INFLUXDB_INIT_BUCKET: cloudflare
-      DOCKER_INFLUXDB_INIT_RETENTION: 30d
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
-      - influxdb_config:/etc/influxdb2
-    networks:
-      - quizup_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-  # Production Frontend (Nginx serving built files)
-  frontend-prod:
-    build:
-      context: ./Frontend-admin
-      dockerfile: Dockerfile
-      target: production
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090}
-        VITE_WEBSOCKET_URL: ${VITE_WEBSOCKET_URL:-ws://localhost:3001}
-        VITE_APP_NAME: ${VITE_APP_NAME:-QuizUP}
-        VITE_APP_VERSION: ${VITE_APP_VERSION:-1.0.0}
-    container_name: quizup_frontend_prod
-    ports:
-      - "5174:80"  # Different port for production
-    networks:
-      - quizup_network
-    depends_on:
-      - backend
-      - matchserver
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      start_period: 5s
-      retries: 3
-    restart: unless-stopped
-
+# =============================================================================
+# NETWORKS
+# =============================================================================
 networks:
   quizup_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.25.0.0/16
+        - subnet: 172.20.0.0/16
 
+# =============================================================================
+# VOLUMES
+# =============================================================================
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
-  alertmanager_data:
-    driver: local
-  influxdb_data:
-    driver: local
-  influxdb_config:
-    driver: local
-  backend_node_modules:
-    driver: local
-  backend_npm_cache:
+  matchserver_logs:  # ADD THIS
     driver: local

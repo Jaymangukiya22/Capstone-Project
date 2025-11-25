@@ -17,7 +17,17 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-quizup_db}
       POSTGRES_USER: ${POSTGRES_USER:-quizup_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quizup_password}
-      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS:-200}
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS:-10000}
+    command: 
+      - "postgres"
+      - "-c"
+      - "max_connections=10000"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
@@ -38,7 +48,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: quizup_redis
-    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-4gb} --maxmemory-policy allkeys-lru --tcp-backlog 511 --timeout 0 --tcp-keepalive 300
     volumes:
       - redis_data:/data
     ports:
@@ -73,7 +83,8 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       MIN_WORKERS: ${MIN_WORKERS:-1}
       MAX_WORKERS: ${MAX_WORKERS:-2}
-      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      DB_POOL_MIN: ${DB_POOL_MIN:-20}
+      DB_POOL_MAX: ${DB_POOL_MAX:-2000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ENABLE_DEBUG_ROUTES: ${ENABLE_DEBUG_ROUTES:-true}
       SEED_DATABASE: ${SEED_DATABASE:-true}
@@ -93,8 +104,8 @@ services:
       timeout: 10s
       retries: 3
     # Resource limits (Docker Compose format)
-    cpus: ${BACKEND_CPU_LIMIT:-1.0}
-    mem_limit: ${BACKEND_MEMORY_LIMIT:-1G}
+    cpus: ${BACKEND_CPU_LIMIT:-4.0}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-4G}
 
   # =============================================================================
   # MATCH SERVER (Scalable)
@@ -118,9 +129,9 @@ services:
       MATCH_SERVICE_PORT: 3001
       MASTER_HOST: 0.0.0.0
       # Worker Pool Configuration
-      MIN_WORKERS: ${MIN_WORKERS:-10}
-      MAX_WORKERS: ${MAX_WORKERS:-500}
-      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-5}
+      MIN_WORKERS: ${MIN_WORKERS:-20}
+      MAX_WORKERS: ${MAX_WORKERS:-1000}
+      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-10}
       WORKER_IDLE_TIMEOUT: ${WORKER_IDLE_TIMEOUT:-300000}
       # Scaling
       SCALE_UP_THRESHOLD: ${SCALE_UP_THRESHOLD:-0.8}
@@ -147,8 +158,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    cpus: ${MATCHSERVER_CPU_LIMIT:-4.0}
-    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-4G}
+    cpus: ${MATCHSERVER_CPU_LIMIT:-8.0}
+    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-8G}
     ulimits:
       nofile:
         soft: 65536

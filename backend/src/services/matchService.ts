@@ -561,9 +561,25 @@ export class MatchService {
     this.userToMatch.set(userId, matchId);
     this.joinCodeToMatch.set(joinCode, matchId);
 
-    // Store match data WITHOUT workerId - matchserver will assign it on join
+    // Store complete match data in Redis (without workerId - will be assigned on first join)
     await this.redisClient.setex(`match:${matchId}`, 3600, JSON.stringify({
-      id: matchId, quizId, joinCode, matchType: 'FRIEND_1V1', status: match.status, createdAt: match.createdAt.toISOString()
+      id: matchId, 
+      quizId, 
+      joinCode, 
+      matchType: 'FRIEND_1V1', 
+      status: match.status, 
+      createdAt: match.createdAt.toISOString(),
+      players: Array.from(match.players.values()).map(p => ({
+        userId: p.userId,
+        username: p.username,
+        score: p.score,
+        currentQuestionIndex: p.currentQuestionIndex,
+        isReady: p.isReady,
+        answers: p.answers
+      })),
+      currentQuestionIndex: match.currentQuestionIndex,
+      questionStartTime: match.questionStartTime,
+      timeLimit: match.timeLimit
     }));
 
     // Store join code to match ID mapping in Redis

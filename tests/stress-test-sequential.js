@@ -53,8 +53,8 @@ async function playSingleMatch(browser, matchNum) {
   try {
     // === STEP 1: Login Player 1 ===
     console.log('🌐 Logging in Player 1...');
-    await page1.goto(`${BASE_URL}/login`);
-    await page1.waitForSelector('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', { timeout: 10000 });
+    await page1.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page1.waitForSelector('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', { timeout: 15000 });
     await page1.fill('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', 'stresstest_1@test.com');
     await page1.fill('input[type="password"]', '1234567890');
     await page1.click('button:has-text("Sign in"), button[type="submit"]');
@@ -62,8 +62,8 @@ async function playSingleMatch(browser, matchNum) {
     
     // === STEP 2: Login Player 2 ===
     console.log('🌐 Logging in Player 2...');
-    await page2.goto(`${BASE_URL}/login`);
-    await page2.waitForSelector('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', { timeout: 10000 });
+    await page2.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page2.waitForSelector('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', { timeout: 15000 });
     await page2.fill('input[placeholder*="admin"], input[placeholder*="student"], input[type="email"], input[type="text"]', 'stresstest_2@test.com');
     await page2.fill('input[type="password"]', '1234567890');
     await page2.click('button:has-text("Sign in"), button[type="submit"]');
@@ -360,14 +360,40 @@ async function playSingleMatch(browser, matchNum) {
 async function answerQuestion(page, playerName, questionNum) {
   try {
     // BUILD-SAFE: Wait for radio inputs (never change with build)
-    await page.waitForSelector('input[type="radio"]', { timeout: 5000 });
-    await sleep(500);
+    let radioFound = false;
+    let radios = [];
     
-    // Get all radio inputs
-    const radios = await page.locator('input[type="radio"]').all();
+    try {
+      await page.waitForSelector('input[type="radio"]', { timeout: 5000 });
+      radioFound = true;
+      radios = await page.locator('input[type="radio"]').all();
+    } catch (timeoutError) {
+      // Timeout - take screenshot for debugging
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `timeout-${playerName.replace(' ', '_')}-q${questionNum}-${timestamp}.png`;
+      console.log(`    ⚠️  TIMEOUT waiting for radio buttons - capturing screenshot: ${filename}`);
+      try {
+        await page.screenshot({ path: filename });
+        console.log(`    📸 Screenshot saved: ${filename}`);
+      } catch (screenshotError) {
+        console.log(`    ❌ Failed to capture screenshot: ${screenshotError.message}`);
+      }
+      
+      // Try alternative selectors
+      console.log(`    🔍 Trying alternative selectors for ${playerName}...`);
+      try {
+        radios = await page.locator('button[role="radio"], [role="radio"]').all();
+        if (radios.length > 0) {
+          console.log(`    ✅ Found ${radios.length} radio buttons via alternative selector`);
+          radioFound = true;
+        }
+      } catch (e) {
+        console.log(`    ❌ Alternative selector also failed`);
+      }
+    }
     
-    if (radios.length === 0) {
-      console.log(`    ⚠ ${playerName}: No options found`);
+    if (!radioFound || radios.length === 0) {
+      console.log(`    ⚠ ${playerName}: No options found for Q${questionNum}`);
       return false;
     }
     

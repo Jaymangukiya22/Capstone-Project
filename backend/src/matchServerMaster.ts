@@ -441,10 +441,12 @@ matchserver_uptime_seconds ${Math.floor(process.uptime())}
             io.to(matchId).emit('error', { message: 'No available workers' });
             return;
           }
-          // Update Redis with assigned worker
+          // Update Redis with assigned worker IMMEDIATELY
           match.workerId = workerId;
           await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
           logInfo('Assigned worker to match', { matchId, workerId });
+        } else {
+          logInfo('Match already assigned to worker', { matchId, workerId });
         }
 
         // Forward to worker

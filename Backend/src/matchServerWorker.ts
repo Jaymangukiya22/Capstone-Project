@@ -87,7 +87,13 @@ class WorkerMatchService {
         order: [['orderIndex', 'ASC']]
       });
 
-      return quizQuestions.map((qq: any) => ({
+      logInfo(`Worker ${workerId}: Loaded quiz questions`, {
+        quizId,
+        totalQuestionsLoaded: quizQuestions.length,
+        questionIds: quizQuestions.map((qq: any) => qq.question.id)
+      });
+
+      const mappedQuestions = quizQuestions.map((qq: any) => ({
         id: qq.question.id,
         questionText: qq.question.questionText,
         options: qq.question.options.map((opt: any) => ({
@@ -98,6 +104,13 @@ class WorkerMatchService {
         difficulty: qq.question.difficulty,
         points: qq.points || 100
       }));
+
+      logInfo(`Worker ${workerId}: Mapped questions`, {
+        quizId,
+        totalQuestionsMapped: mappedQuestions.length
+      });
+
+      return mappedQuestions;
     } catch (error) {
       logError(`Worker ${workerId}: Failed to load quiz questions`, error as Error);
       return [];
@@ -325,6 +338,12 @@ class WorkerMatchService {
       questionIndex: 0
     });
 
+    // Send acknowledgment to allow client to emit player_ready
+    this.emitToSocket(socketId, 'match_ready_acknowledged', {
+      matchId,
+      userId
+    });
+
     // Broadcast to all players
     this.emitToMatch(matchId, 'player_list_updated', {
       players: this.getPlayerList(match)
@@ -364,9 +383,91 @@ class WorkerMatchService {
 
   public async playerReady(data: any) {
     const { matchId, userId } = data;
-    const match = this.matches.get(matchId);
+    let match = this.matches.get(matchId);
 
-    if (!match || !match.players.has(userId)) {
+    // If match not in memory, try to load from Redis
+    if (!match) {
+      logInfo(`Worker ${workerId}: Match not in local memory for playerReady, loading from Redis`, { matchId });
+      const matchData = await this.redis.get(`match:${matchId}`);
+      if (!matchData) {
+        logError(`Worker ${workerId}: Match not found in Redis for playerReady`, new Error(`Match ${matchId}`));
+        throw new Error('Match not found');
+      }
+
+      const storedMatch = JSON.parse(matchData);
+      const questions = await this.loadQuizQuestions(storedMatch.quizId);
+
+      match = {
+        id: matchId,
+        quizId: storedMatch.quizId,
+        quiz: storedMatch.quiz,
+        players: new Map(),
+        status: storedMatch.status || 'WAITING',
+        currentQuestionIndex: storedMatch.currentQuestionIndex || 0,
+        questionStartTime: storedMatch.questionStartTime || 0,
+        maxPlayers: 2,
+        timeLimit: storedMatch.timeLimit || 30,
+        questions,
+        createdAt: new Date(storedMatch.createdAt),
+        joinCode: storedMatch.joinCode
+      };
+
+      // Restore players
+      if (storedMatch.players && Array.isArray(storedMatch.players)) {
+        for (const p of storedMatch.players) {
+          match.players.set(p.userId, {
+            userId: p.userId,
+            username: p.username,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            socketId: '',
+            score: p.score || 0,
+            currentQuestionIndex: p.currentQuestionIndex || 0,
+            isReady: p.isReady || false,
+            answers: p.answers || [],
+            hasSubmittedCurrent: p.hasSubmittedCurrent || false
+          });
+        }
+      }
+
+      this.matches.set(matchId, match);
+    }
+
+    // CRITICAL FIX: Wait for player to be in match (with retries for race condition)
+    let retries = 0;
+    const maxRetries = 10;
+    while (!match.players.has(userId) && retries < maxRetries) {
+      logInfo(`Worker ${workerId}: Player not yet in match, retrying... (${retries + 1}/${maxRetries})`, { matchId, userId });
+      await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+      retries++;
+      
+      // Reload match from Redis in case it was updated
+      const updatedData = await this.redis.get(`match:${matchId}`);
+      if (updatedData) {
+        const updated = JSON.parse(updatedData);
+        if (updated.players && Array.isArray(updated.players)) {
+          for (const p of updated.players) {
+            if (!match.players.has(p.userId)) {
+              match.players.set(p.userId, {
+                userId: p.userId,
+                username: p.username,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                socketId: '',
+                score: p.score || 0,
+                currentQuestionIndex: p.currentQuestionIndex || 0,
+                isReady: p.isReady || false,
+                answers: p.answers || [],
+                hasSubmittedCurrent: p.hasSubmittedCurrent || false
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (!match.players.has(userId)) {
+      logError(`Worker ${workerId}: Player still not in match after retries`, new Error(`User ${userId} not in match ${matchId}`));
       throw new Error('Player not in match');
     }
 
@@ -389,6 +490,7 @@ class WorkerMatchService {
     // Check if all ready
     const allReady = Array.from(match.players.values()).every(p => p.isReady);
     if (allReady && match.players.size === match.maxPlayers) {
+      logInfo(`Worker ${workerId}: All players ready, starting match`, { matchId });
       await this.startMatch(matchId);
     }
   }

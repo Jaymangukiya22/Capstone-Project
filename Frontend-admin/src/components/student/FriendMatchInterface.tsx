@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import QuizHeader from './quiz-interface/QuizHeader';
 import QuestionCard from './quiz-interface/QuestionCard';
 import QuizNavigation from './quiz-interface/QuizNavigation';
@@ -9,6 +9,41 @@ import { Users, Wifi, WifiOff } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { useQuizNavigationGuard } from '@/hooks/useNavigationGuard';
 import { matchStateManager } from '@/utils/matchStateManager';
+
+// --- OPTIMIZATION 1: Memoized Components to prevent re-renders ---
+const MemoizedQuestionCard = memo(QuestionCard);
+const MemoizedQuizNavigation = memo(QuizNavigation);
+const MemoizedQuizSidebar = memo(QuizSidebar);
+
+// --- OPTIMIZATION 2: Isolated Timer Component ---
+// This prevents the main component from re-rendering every second
+const MatchTimer = memo(({ timeRemaining, onTimeUp, totalTime, questionKey }: { timeRemaining: number, onTimeUp: () => void, totalTime: number, questionKey: string }) => {
+  const [displayTime, setDisplayTime] = useState(timeRemaining);
+  
+  useEffect(() => {
+    setDisplayTime(timeRemaining);
+  }, [timeRemaining]);
+
+  useEffect(() => {
+    if (displayTime <= 0) {
+      onTimeUp();
+      return;
+    }
+    const timer = setInterval(() => {
+      setDisplayTime(prev => {
+        if (prev <= 1) {
+          onTimeUp();
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [displayTime, onTimeUp]);
+
+  return null; // Timer manages logic only, doesn't render
+});
 
 interface FriendMatchQuestion {
   id: number;
@@ -611,16 +646,16 @@ const FriendMatchInterface: React.FC = () => {
     gameWebSocket.on('answer_result', (data: any) => {
       console.log('✅ Answer result received:', data);
       if (data.isCorrect) {
-        toast({
-          title: "Correct! ✓",
-          description: `+${data.points} points (Total: ${data.totalScore})`,
-        });
+        // toast({
+        //   title: "Correct! ✓",
+        //   description: `+${data.points} points (Total: ${data.totalScore})`,
+        // });
       } else {
-        toast({
-          title: "Incorrect",
-          description: `0 points (Total: ${data.totalScore})`,
-          variant: "destructive"
-        });
+        // toast({
+        //   title: "Incorrect",
+        //   description: `0 points (Total: ${data.totalScore})`,
+        //   variant: "destructive"
+        // });
       }
     });
 
@@ -745,8 +780,8 @@ const FriendMatchInterface: React.FC = () => {
     });
   };
 
-  // Handle answer selection
-  const handleAnswerSelect = (answer: string) => {
+  // --- OPTIMIZATION 3: UseCallback for heavy handlers ---
+  const handleAnswerSelect = useCallback((answer: string) => {
     if (!currentQuestionData) return;
 
     // Find the selected option ID
@@ -754,10 +789,10 @@ const FriendMatchInterface: React.FC = () => {
     if (!selectedOption) return;
 
     setAnswers(prev => new Map(prev.set(currentQuestion, [selectedOption.id])));
-  };
+  }, [currentQuestionData, currentQuestion]);
 
-  // Submit current answer
-  const submitCurrentAnswer = () => {
+  // Submit current answer with useCallback to prevent re-creation
+  const submitCurrentAnswer = useCallback(() => {
     // CRITICAL: Prevent double submission
     if (hasSubmittedCurrentQuestion.current) {
       console.log('⚠️ Already submitted this question, ignoring duplicate submission');
@@ -816,10 +851,10 @@ const FriendMatchInterface: React.FC = () => {
         variant: "destructive"
       });
     }
-  };
+  }, [answers, currentQuestion, currentQuestionData]);
 
   // Auto-advance to next question when time runs out
-  const handleQuestionTimeUp = async () => {
+  const handleQuestionTimeUp = useCallback(async () => {
     console.log('⏰ Question time up! Auto-advancing...');
     
     // Only submit if not already submitted
@@ -836,7 +871,7 @@ const FriendMatchInterface: React.FC = () => {
       console.log('⏰ Moving to next question...');
       // The server will send the next question automatically
     }
-  };
+  }, [currentQuestion, totalQuestions, submitCurrentAnswer]);
 
   // Navigation handlers
   const handleNext = () => {
@@ -1082,6 +1117,14 @@ const FriendMatchInterface: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-hidden">
+      {/* Isolated Timer - prevents parent re-renders every second */}
+      <MatchTimer 
+        timeRemaining={questionTimeRemaining} 
+        totalTime={currentQuestionData?.timeLimit || 30}
+        onTimeUp={handleQuestionTimeUp}
+        questionKey={`${currentQuestion}-${currentQuestionData?.id}`}
+      />
+
       {/* Navigation Warning Banner */}
       {!isLoading && !isWaitingForPlayers && !isMatchCompleted && (
         <div className="bg-amber-50 border-b border-amber-200 p-3">
@@ -1131,7 +1174,7 @@ const FriendMatchInterface: React.FC = () => {
           {/* Quiz Sidebar - hidden on mobile and tablet */}
           <div className="hidden xl:block xl:w-80 2xl:w-96 flex-shrink-0 border-r border-border">
             <div className="h-full overflow-y-auto p-4">
-              <QuizSidebar
+              <MemoizedQuizSidebar
                 questions={Array(totalQuestions).fill(null).map((_, i) => ({
                   id: i + 1,
                   question: `Question ${i + 1}`,
@@ -1148,7 +1191,7 @@ const FriendMatchInterface: React.FC = () => {
           <div className="flex-1 flex flex-col min-h-0">
             {/* Question Card - Takes available space, scrollable if needed */}
             <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 overflow-y-auto">
-              <QuestionCard
+              <MemoizedQuestionCard
                 question={questionForCard}
                 selectedAnswer={currentAnswer}
                 onAnswerSelect={handleAnswerSelect}
@@ -1159,7 +1202,7 @@ const FriendMatchInterface: React.FC = () => {
 
             {/* Navigation - Fixed at bottom with ultra-compact padding for iPhone */}
             <div className="flex-shrink-0 px-3 py-1 sm:px-4 sm:py-2 md:px-6 md:py-3 border-t border-border bg-background/95 backdrop-blur-sm">
-              <QuizNavigation
+              <MemoizedQuizNavigation
                 currentQuestion={currentQuestion}
                 totalQuestions={totalQuestions}
                 hasAnswer={!!currentAnswer}

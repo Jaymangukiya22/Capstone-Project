@@ -13,6 +13,7 @@ const SCALE_CHECK_INTERVAL = parseInt(process.env.SCALE_CHECK_INTERVAL || '30000
 interface WorkerInfo {
   worker: Worker;
   matchCount: number;
+  pendingMatches: number;
   capacity: number;
   activeMatches: Set<string>;
   lastHeartbeat: number;
@@ -73,10 +74,11 @@ export class EnhancedWorkerPool {
     const workerInfo: WorkerInfo = {
       worker,
       matchCount: 0,
+      pendingMatches: 0,
       capacity: MAX_MATCHES_PER_WORKER,
       activeMatches: new Set(),
       lastHeartbeat: Date.now(),
-      status: 'active'
+      status: 'idle'
     };
 
     this.workers.set(worker.id, workerInfo);
@@ -137,6 +139,8 @@ export class EnhancedWorkerPool {
     if (!workerInfo) return;
 
     workerInfo.matchCount++;
+    // Decrement pending counter since match is now confirmed created
+    workerInfo.pendingMatches = Math.max(0, workerInfo.pendingMatches - 1);
     workerInfo.activeMatches.add(matchId);
     this.matchToWorker.set(matchId, workerId);
     this.userToMatch.set(userId, matchId);
@@ -150,6 +154,7 @@ export class EnhancedWorkerPool {
       matchId,
       workerId,
       workerMatchCount: workerInfo.matchCount,
+      pendingMatches: workerInfo.pendingMatches,
       totalMatches: this.matchToWorker.size
     });
   }
@@ -215,14 +220,17 @@ export class EnhancedWorkerPool {
       return existingWorker;
     }
 
-    // Find least loaded worker
+    // Find least loaded worker (including pending matches)
     let selectedWorker: WorkerInfo | null = null;
     let minLoad = Infinity;
 
     for (const workerInfo of this.workers.values()) {
       if (workerInfo.status === 'dead') continue;
 
-      const load = workerInfo.matchCount / workerInfo.capacity;
+      // Calculate load including both actual and pending matches
+      const totalLoad = workerInfo.matchCount + workerInfo.pendingMatches;
+      const load = totalLoad / workerInfo.capacity;
+      
       if (load < minLoad) {
         selectedWorker = workerInfo;
         minLoad = load;
@@ -246,7 +254,18 @@ export class EnhancedWorkerPool {
     }
 
     const assignedWorkerId = selectedWorker.worker.id;
-    logInfo('Assigned match to worker', { matchId, workerId: assignedWorkerId, load: minLoad });
+    
+    // CRITICAL FIX: Increment pending counter IMMEDIATELY upon assignment
+    selectedWorker.pendingMatches++;
+    
+    logInfo('Assigned match to worker', { 
+      matchId, 
+      workerId: assignedWorkerId, 
+      load: minLoad,
+      pendingMatches: selectedWorker.pendingMatches,
+      actualMatches: selectedWorker.matchCount
+    });
+    
     return assignedWorkerId;
   }
 

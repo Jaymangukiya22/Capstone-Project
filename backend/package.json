@@ -15,6 +15,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "dev:match": "ts-node-dev --respawn --transpile-only src/matchServer-enhanced.ts",
     "dev:match:pool": "ts-node-dev --respawn --transpile-only src/matchServerMaster.ts",
+    "dev:matchMasater":"npx ts-node src/matchServerMaster.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:match\"",
     "dev:all:pool": "concurrently \"npm run dev\" \"npm run dev:match:pool\"",
     "db:setup": "node dist/scripts/setupDatabase.js",

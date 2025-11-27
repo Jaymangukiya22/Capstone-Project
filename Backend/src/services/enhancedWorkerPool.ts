@@ -121,6 +121,11 @@ export class EnhancedWorkerPool {
 
       case 'emit_to_match':
         // Worker wants to emit to all players in a match
+        logInfo('Worker pool forwarding emit_to_match', { 
+          matchId: message.matchId, 
+          event: message.event,
+          workerId: worker.id 
+        });
         this.io.to(message.matchId).emit(message.event, message.data);
         break;
 

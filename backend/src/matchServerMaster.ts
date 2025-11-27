@@ -491,6 +491,7 @@ matchserver_uptime_seconds ${Math.floor(process.uptime())}
     const forwardEvents = [
       'player_ready',
       'submit_answer',
+      'CLIENT_READY',
       'disconnect'
     ];
 

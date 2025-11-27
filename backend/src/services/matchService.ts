@@ -334,7 +334,7 @@ export class MatchService {
           await this.publishEvent('PLAYER_JOINED', matchId, { userId: socket.data.userId, username: socket.data.username });
 
           socket.emit('match_joined', { matchId, players: playerList });
-          await this.writeAnalytics('player_joined', { matchId, userId: socket.data.userId });
+          // Analytics already written in joinMatch() method - removed duplicate
           logInfo('Player joined match', { matchId, userId: socket.data.userId });
         } catch (err: unknown) {
           logError('Join match error', err as Error);
@@ -387,7 +387,7 @@ export class MatchService {
           await this.publishEvent('PLAYER_JOINED', matchId, { userId: socket.data.userId, username: socket.data.username });
 
           socket.emit('match_joined', { matchId, players: playerList });
-          await this.writeAnalytics('player_joined', { matchId, userId: socket.data.userId });
+          // Analytics already written in joinMatch() method - removed duplicate
           logInfo('Player joined match', { matchId, userId: socket.data.userId });
         } catch (err: unknown) {
           logError('Join match by code error', err as Error);

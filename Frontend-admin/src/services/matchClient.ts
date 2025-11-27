@@ -89,6 +89,7 @@ export interface SocketEventPayloads {
     selectedOptions: number[];
     timeToken: number;
     clientTimestamp: string;
+    matchId?: string;
   };
   next_question: {
     questionIndex: number;
@@ -134,6 +135,9 @@ export interface SocketEventPayloads {
   };
 
   // Connection Management
+  leave_match: {
+    reason: 'USER_LEFT' | 'CONNECTION_LOST' | 'TIMEOUT';
+  };
   player_disconnected: {
     userId: number;
     username: string;
@@ -214,30 +218,59 @@ export interface QuizInfo {
 function getWebSocketURL(): string {
   if (typeof window === 'undefined') {
     // Server-side rendering fallback
-    return 'ws://localhost:3001';
+    return 'ws://localhost:8090/socket.io/';
   }
 
   const { protocol, hostname, port } = window.location;
   
-  // Development detection
+  // 🔍 DIAGNOSTIC LOGGING
+  const diagnostics = {
+    protocol,
+    hostname,
+    port,
+    fullURL: window.location.href,
+    viteWebSocketURL: import.meta.env.VITE_WEBSOCKET_URL
+  };
+  console.log('🔍 WebSocket URL Detection - Diagnostics:', diagnostics);
+  
+  // ✅ PRODUCTION: Use environment variable if available (set during build)
+  if (import.meta.env.VITE_WEBSOCKET_URL) {
+    console.log(`✅ Using VITE_WEBSOCKET_URL from environment: ${import.meta.env.VITE_WEBSOCKET_URL}`);
+    return import.meta.env.VITE_WEBSOCKET_URL;
+  }
+  
+  // Development detection - auto-detect based on current location
   if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('192.168.')) {
     // Check if we're running on a specific port (Vite dev server usually 5173)
     const currentPort = port || '5173';
     
+    console.log(`🔍 Detected localhost environment - port: ${currentPort}`);
+    
     // If on Vite dev server, connect to match server on 3001
     if (currentPort === '5173' || currentPort === '3000') {
+      console.log(`🔍 Vite dev server detected - connecting to ws://${hostname}:3001`);
       return `ws://${hostname}:3001`;
     }
     
+    // If on Nginx proxy (port 8090), connect through Nginx's /socket.io/ proxy
+    if (currentPort === '8090' || currentPort === '80') {
+      const wsURL = `ws://${hostname}:${currentPort}/socket.io/`;
+      console.log(`🔍 Nginx proxy detected (port ${currentPort}) - connecting to ${wsURL}`);
+      return wsURL;
+    }
+    
     // Otherwise use current host with match server port
+    console.log(`🔍 Direct connection to ws://${hostname}:3001`);
     return `ws://${hostname}:3001`;
   }
   
-  // Production: use same hostname with wss if https
+  // Production: use same hostname with wss if https and route through /socket.io/
   const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
   const wsPort = port ? `:${port}` : '';
+  const wsURL = `${wsProtocol}//${hostname}${wsPort}/socket.io/`;
   
-  return `${wsProtocol}//${hostname}${wsPort}`;
+  console.log(`🔍 Production environment detected - connecting to ${wsURL}`);
+  return wsURL;
 }
 
 /**
@@ -252,31 +285,46 @@ export class MatchClient {
   private eventHandlers: Map<string, Function[]> = new Map();
   private matchId: string | null = null;
   private userId: number | null = null;
+  private options: {
+    maxReconnectAttempts?: number;
+    reconnectDelay?: number;
+    heartbeatInterval?: number;
+  };
 
-  constructor(private options: {
+  constructor(options: {
     maxReconnectAttempts?: number;
     reconnectDelay?: number;
     heartbeatInterval?: number;
   } = {}) {
+    this.options = options;
     this.maxReconnectAttempts = options.maxReconnectAttempts || 5;
   }
 
   /**
    * Connect to WebSocket server
    */
-  async connect(): Promise<void> {
+  async connect(wsURL?: string, userId?: number, username?: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsURL = getWebSocketURL();
-      logInfo(`Connecting to WebSocket server: ${wsURL}`);
+      const finalURL = wsURL || getWebSocketURL();
+      logInfo(`Connecting to WebSocket server: ${finalURL}`, { userId, username });
 
-      this.socket = io(wsURL, {
-        transports: ['websocket', 'polling'],
+      this.socket = io(finalURL, {
+        // ✅ CRITICAL FIX: Force WebSockets only to avoid multi-worker routing issues
+        // HTTP polling causes requests to route to different workers, breaking session continuity
+        // This matches the bot behavior and ensures sticky session behavior
+        transports: ['websocket'],
+        upgrade: false,  // Don't try to upgrade from polling
         timeout: 10000,
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: this.options.reconnectDelay || 1000,
         reconnectionDelayMax: 5000
       });
+
+      // Store userId for later use
+      if (userId) {
+        this.userId = userId;
+      }
 
       // Connection events
       this.socket.on('connect', () => {
@@ -411,7 +459,7 @@ export class MatchClient {
     }
     this.eventHandlers.get(event)!.push(handler);
 
-    this.socket.on(event, handler);
+    this.socket.on(event, handler as any);
   }
 
   /**
@@ -424,7 +472,7 @@ export class MatchClient {
     if (!this.socket) return;
 
     if (handler) {
-      this.socket.off(event, handler);
+      this.socket.off(event, handler as any);
       
       // Remove from our handler tracking
       const handlers = this.eventHandlers.get(event);
@@ -439,6 +487,39 @@ export class MatchClient {
       this.socket.off(event);
       this.eventHandlers.delete(event);
     }
+  }
+
+  /**
+   * Emit CLIENT_READY when the game UI is loaded
+   * This tells the server that the client is ready to receive the first question
+   */
+  emitClientReady(matchId: string, userId: number): void {
+    if (!this.socket || !this.isConnected) {
+      logError('Cannot emit CLIENT_READY: Socket not connected');
+      console.error('❌ Socket not ready for CLIENT_READY', { isConnected: this.isConnected, hasSocket: !!this.socket });
+      return;
+    }
+
+    logInfo('Emitting CLIENT_READY - game UI loaded', { matchId, userId });
+    console.log('🔌 Socket emitting: CLIENT_READY', { matchId, userId });
+    this.socket.emit('CLIENT_READY', { matchId, userId });
+  }
+
+  /**
+   * Listen for LOAD_GAME_SCENE event
+   * This is emitted by the server when all players have joined
+   */
+  onLoadGameScene(handler: (data: any) => void): void {
+    if (!this.socket) {
+      logError('Cannot listen to LOAD_GAME_SCENE: Socket not connected');
+      return;
+    }
+
+    logInfo('Setting up LOAD_GAME_SCENE listener');
+    this.socket.on('LOAD_GAME_SCENE', (data: any) => {
+      logInfo('LOAD_GAME_SCENE received from server', data);
+      handler(data);
+    });
   }
 
   /**
@@ -528,15 +609,27 @@ export class MatchClient {
   /**
    * Set player ready status
    */
-  setReady(isReady: boolean): void {
-    this.emit('player_ready', { isReady });
+  setReady(isReady: boolean, matchId?: string): void {
+    // CRITICAL FIX: Include matchId so master server can route to correct worker
+    // Without matchId, master cannot find the match and returns "Not in any match" error
+    const payload: any = { isReady };
+    const actualMatchId = matchId || this.matchId;
+    if (actualMatchId) {
+      payload.matchId = actualMatchId;
+    }
+    this.emit('player_ready', payload);
   }
 
   /**
    * Submit answer for current question
    */
   submitAnswer(params: SocketEventPayloads['submit_answer']): void {
-    this.emit('submit_answer', params);
+    // CRITICAL FIX: Include matchId so worker can route to correct match
+    const payload: any = {
+      ...params,
+      matchId: params.matchId || this.matchId
+    };
+    this.emit('submit_answer', payload);
   }
 
   /**

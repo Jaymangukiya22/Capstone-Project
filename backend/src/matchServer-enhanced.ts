@@ -368,6 +368,7 @@ class EnhancedMatchService {
   private matches: Map<string, MatchRoom> = new Map();
   private userToMatch: Map<number, string> = new Map();
   private joinCodeToMatch: Map<string, string> = new Map();
+  private disconnectTimers: Map<number, NodeJS.Timeout> = new Map();
   // Simple in-process counters for Prometheus exposition
   private matchesCreatedTotal: number = 0;
   private workersSpawnedTotal: number = 0;
@@ -768,6 +769,98 @@ class EnhancedMatchService {
             return;
           }
           
+          // Check if user is already in the match (for reconnection)
+          if (match.players.has(socket.data.userId)) {
+            // If already in the match, just update their socket ID and proceed
+            const existingPlayer = match.players.get(socket.data.userId);
+            if (existingPlayer) {
+              existingPlayer.socketId = socket.id;
+              this.userToMatch.set(socket.data.userId, matchId);
+              
+              // Clear grace period timer if exists
+              if (this.disconnectTimers && this.disconnectTimers.has(socket.data.userId)) {
+                clearTimeout(this.disconnectTimers.get(socket.data.userId));
+                this.disconnectTimers.delete(socket.data.userId);
+                logInfo('Grace period cleared - player reconnected', {
+                  userId: socket.data.userId,
+                  matchId
+                });
+              }
+              
+              socket.join(matchId);
+              
+              // DIAGNOSTIC: Check if socket is in room
+              const roomSize = this.io.sockets.adapter.rooms.get(matchId)?.size || 0;
+              const socketInRoom = this.io.sockets.adapter.rooms.get(matchId)?.has(socket.id) || false;
+              
+              logInfo('🔍 RECONNECTION DIAGNOSTIC - Socket joined to room', {
+                matchId,
+                userId: socket.data.userId,
+                socketId: socket.id,
+                roomSize,
+                socketInRoom,
+                matchStatus: match.status
+              });
+              
+              // If match is in progress, send current question state
+              if (match.status === 'IN_PROGRESS') {
+                const currentQuestion = match.questions[match.currentQuestionIndex];
+                const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+                
+                if (currentQuestion) {
+                  logInfo('🔍 Sending next_question to reconnected player', {
+                    matchId,
+                    userId: socket.data.userId,
+                    socketId: socket.id,
+                    questionIndex: match.currentQuestionIndex
+                  });
+                  
+                  // ✅ Send next_question to the room (not just this socket) so frontend can handle it
+                  this.io.to(matchId).emit('next_question', {
+                    question: {
+                      id: currentQuestion.id,
+                      questionText: currentQuestion.questionText,
+                      options: currentQuestion.options.map((opt: any) => ({
+                        id: opt.id,
+                        optionText: opt.optionText
+                      })),
+                      timeLimit: match.timeLimit
+                    },
+                    questionIndex: match.currentQuestionIndex,
+                    totalQuestions: match.questions.length
+                  });
+                  
+                  // Notify other players that this player reconnected
+                  socket.to(matchId).emit('player_reconnected', {
+                    userId: socket.data.userId,
+                    username: socket.data.username,
+                    message: `${socket.data.username} reconnected`
+                  });
+                }
+              } else {
+                socket.emit('match_joined', {
+                  matchId,
+                  players: Array.from(match.players.values()).map(p => ({
+                    userId: p.userId,
+                    username: p.username,
+                    firstName: p.firstName,
+                    lastName: p.lastName,
+                    isReady: p.isReady
+                  }))
+                });
+              }
+              
+              logInfo('Player reconnected to match', {
+                matchId,
+                userId: socket.data.userId,
+                playerCount: match.players.size,
+                matchStatus: match.status
+              });
+              return;
+            }
+          }
+          
+          // If match is not WAITING and player is not already in it, reject
           if (match.status !== 'WAITING') {
             socket.emit('error', { message: 'Match already started or completed' });
             return;
@@ -782,33 +875,6 @@ class EnhancedMatchService {
           if (!match.questions || match.questions.length === 0) {
             socket.emit('error', { message: 'No questions available for this quiz' });
             return;
-          }
-
-          // Check if user is already in the match
-          if (match.players.has(socket.data.userId)) {
-            // If already in the match, just update their socket ID and proceed
-            const existingPlayer = match.players.get(socket.data.userId);
-            if (existingPlayer) {
-              existingPlayer.socketId = socket.id;
-              this.userToMatch.set(socket.data.userId, matchId);
-              socket.join(matchId);
-              socket.emit('match_joined', {
-                matchId,
-                players: Array.from(match.players.values()).map(p => ({
-                  userId: p.userId,
-                  username: p.username,
-                  firstName: p.firstName,
-                  lastName: p.lastName,
-                  isReady: p.isReady
-                }))
-              });
-              logInfo('Player reconnected to match', {
-                matchId,
-                userId: socket.data.userId,
-                playerCount: match.players.size
-              });
-              return;
-            }
           }
 
           // Add player to match
@@ -999,6 +1065,12 @@ class EnhancedMatchService {
             if (existingPlayer) {
               // Update existing player's socket ID
               existingPlayer.socketId = socket.id;
+              logInfo('Player reconnecting to match', {
+                matchId: data.matchId,
+                userId: socket.data.userId,
+                oldSocketId: existingPlayer.socketId,
+                newSocketId: socket.id
+              });
             } else {
               // Add new player
               const player: MatchPlayer = {
@@ -1015,6 +1087,12 @@ class EnhancedMatchService {
                 answers: []
               };
               match.players.set(socket.data.userId, player);
+              logInfo('New player joining match', {
+                matchId: data.matchId,
+                userId: socket.data.userId,
+                socketId: socket.id,
+                totalPlayers: match.players.size
+              });
             }
             
             this.userToMatch.set(socket.data.userId, data.matchId);
@@ -1119,13 +1197,17 @@ class EnhancedMatchService {
       });
 
       // Player ready
-      socket.on('player_ready', async (data: { ready?: boolean } = {}) => {
+      socket.on('player_ready', async (data: { ready?: boolean; matchId?: string } = {}) => {
         try {
-          const matchId = this.userToMatch.get(socket.data.userId);
+          // CRITICAL FIX: Use matchId from payload first (sent by client), then fall back to userToMatch map
+          let matchId = data.matchId || this.userToMatch.get(socket.data.userId);
           if (!matchId) {
             socket.emit('error', { message: 'Not in any match' });
             return;
           }
+          
+          // Ensure userToMatch is updated with the correct matchId
+          this.userToMatch.set(socket.data.userId, matchId);
 
           const match = this.matches.get(matchId);
           if (!match) {
@@ -1196,11 +1278,16 @@ class EnhancedMatchService {
       socket.on('submit_answer', async (data: { 
         questionId: number; 
         selectedOptions: number[]; 
-        timeSpent: number 
+        timeSpent: number;
+        matchId?: string;
       }) => {
         try {
-          const matchId = this.userToMatch.get(socket.data.userId);
+          // CRITICAL FIX: Use matchId from payload first (sent by client), then fall back to userToMatch map
+          const matchId = data.matchId || this.userToMatch.get(socket.data.userId);
           if (!matchId) return;
+          
+          // Ensure userToMatch is updated with the correct matchId
+          this.userToMatch.set(socket.data.userId, matchId);
 
           const match = this.matches.get(matchId);
           if (!match || match.status !== 'IN_PROGRESS') return;
@@ -1335,18 +1422,73 @@ class EnhancedMatchService {
 
       // Handle disconnection
       socket.on('disconnect', () => {
-        logInfo('Client disconnected', { socketId: socket.id });
+        logInfo('Player disconnect event', { 
+          socketId: socket.id,
+          userId: socket.data.userId
+        });
         
         if (socket.data.userId) {
           const matchId = this.userToMatch.get(socket.data.userId);
           if (matchId) {
             const match = this.matches.get(matchId);
             if (match) {
-              // Notify other players
-              socket.to(matchId).emit('player_disconnected', {
-                userId: socket.data.userId,
-                username: socket.data.username
-              });
+              const player = match.players.get(socket.data.userId);
+              
+              // If match is IN_PROGRESS, keep player in match for reconnection (grace period: 30 seconds)
+              if (match.status === 'IN_PROGRESS' && player) {
+                logInfo('Player disconnected during match - allowing reconnection', {
+                  userId: socket.data.userId,
+                  matchId,
+                  gracePeriod: '30 seconds',
+                  playerSocketBefore: player.socketId
+                });
+                
+                // Clear the socketId to mark player as disconnected
+                player.socketId = '';
+                
+                // Notify other players of temporary disconnect
+                socket.to(matchId).emit('player_temporarily_disconnected', {
+                  userId: socket.data.userId,
+                  username: socket.data.username,
+                  message: `${socket.data.username} disconnected - reconnecting...`
+                });
+                
+                // Set a 30-second grace period for reconnection
+                const gracePeriodTimer = setTimeout(() => {
+                  const stillDisconnected = !player.socketId || player.socketId === '';
+                  if (stillDisconnected) {
+                    logInfo('Grace period expired - removing player from match', {
+                      userId: socket.data.userId,
+                      matchId,
+                      playerSocketAfter: player.socketId
+                    });
+                    
+                    // Remove player after grace period
+                    match.players.delete(socket.data.userId);
+                    this.userToMatch.delete(socket.data.userId);
+                    
+                    // Notify other players
+                    socket.to(matchId).emit('player_permanently_disconnected', {
+                      userId: socket.data.userId,
+                      username: socket.data.username,
+                      message: `${socket.data.username} disconnected permanently`
+                    });
+                  }
+                }, 30000); // 30 second grace period
+                
+                // Store timer reference for cleanup if they reconnect
+                if (!this.disconnectTimers) this.disconnectTimers = new Map();
+                this.disconnectTimers.set(socket.data.userId, gracePeriodTimer);
+              } else {
+                // Match not in progress or player not found - remove immediately
+                match.players.delete(socket.data.userId);
+                this.userToMatch.delete(socket.data.userId);
+                
+                socket.to(matchId).emit('player_disconnected', {
+                  userId: socket.data.userId,
+                  username: socket.data.username
+                });
+              }
             }
           }
         }
@@ -1443,6 +1585,18 @@ class EnhancedMatchService {
     };
 
     match.questionStartTime = Date.now();
+
+    // DIAGNOSTIC: Check room before emitting
+    const roomSize = this.io.sockets.adapter.rooms.get(matchId)?.size || 0;
+    const socketsInRoom = Array.from(this.io.sockets.adapter.rooms.get(matchId) || []);
+    
+    logInfo('🔍 EMITTING next_question to room', {
+      matchId,
+      questionIndex: match.currentQuestionIndex,
+      roomSize,
+      socketsInRoom: socketsInRoom.length,
+      players: Array.from(match.players.keys())
+    });
 
     this.io.to(matchId).emit('next_question', {
       question: questionForPlayers,

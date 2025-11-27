@@ -65,6 +65,8 @@ interface MatchPlayer {
 
 
 const FriendMatchInterface: React.FC = () => {
+  console.log('🎮 [COMPONENT] FriendMatchInterface component rendered/mounted');
+  
   // Match state
   const [matchId, setMatchId] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState<string>('');
@@ -98,6 +100,7 @@ const FriendMatchInterface: React.FC = () => {
   const wsConnected = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedCurrentQuestion = useRef(false); // Prevent double submission
+  const hasSentClientReadyRef = useRef(false);
 
   // Get answered questions set for progress tracking
   const answeredQuestions = new Set(answers.keys());
@@ -110,6 +113,7 @@ const FriendMatchInterface: React.FC = () => {
       
       // Restore state
       setMatchId(savedState.matchId);
+      gameWebSocket.setMatchId(savedState.matchId);
       setJoinCode(savedState.joinCode);
       setCurrentQuestion(savedState.currentQuestion);
       setTotalQuestions(savedState.totalQuestions);
@@ -147,9 +151,11 @@ const FriendMatchInterface: React.FC = () => {
   useEffect(() => {
     const initializeFriendMatch = async () => {
       try {
+        console.log('🎮 [INIT] FriendMatchInterface mounted - checking for friendMatch in sessionStorage');
         const matchInfo = sessionStorage.getItem('friendMatch');
+        console.log('🎮 [INIT] friendMatch from sessionStorage:', matchInfo);
         if (!matchInfo) {
-          console.error('No friend match info found');
+          console.error('❌ [INIT] No friend match info found in sessionStorage');
           return;
         }
 
@@ -160,7 +166,7 @@ const FriendMatchInterface: React.FC = () => {
           setQuizTitle(quizName);
         }
         
-        // Check if we're reconnecting - if we have a saved matchId, we should reconnect
+        // Check if we'dreconnecting - if we have a saved matchId, we should reconnect
         const savedState = matchStateManager.getMatchState();
         
         // CRITICAL: If saved matchId doesn't match current matchId, clear old state
@@ -192,6 +198,7 @@ const FriendMatchInterface: React.FC = () => {
         setJoinCode(joinCode);
         if (storedMatchId) {
           setMatchId(storedMatchId);
+          gameWebSocket.setMatchId(storedMatchId);
         }
 
         // Connect to WebSocket
@@ -237,10 +244,11 @@ const FriendMatchInterface: React.FC = () => {
         }
       }
 
-      // Set up event listeners BEFORE connecting, pass mode and joinCode
-      setupWebSocketListeners(mode, joinCode, isReconnecting);
+      // Set up event listeners BEFORE connecting, pass mode, joinCode, and userId
+      setupWebSocketListeners(mode, joinCode, isReconnecting, userId);
 
       // Connect to WebSocket - use the environment-aware WEBSOCKET_URL instead of passed parameter
+      // Note: Authentication is handled automatically in the connect method
       console.log('Connecting with user data:', { userId, username, firstName, lastName, isReconnecting, wsUrl: WEBSOCKET_URL });
       await gameWebSocket.connect(WEBSOCKET_URL, userId, username);
       setIsConnected(true);
@@ -259,7 +267,7 @@ const FriendMatchInterface: React.FC = () => {
     }
   };
 
-  const setupWebSocketListeners = (mode: 'create' | 'join', joinCode?: string, isReconnecting: boolean = false) => {
+  const setupWebSocketListeners = (mode: 'create' | 'join', joinCode?: string, isReconnecting: boolean = false, userId?: number) => {
     let hasPerformedAction = false; // Flag to prevent duplicate actions
     
     // Clear any existing listeners first to prevent duplicates
@@ -280,21 +288,28 @@ const FriendMatchInterface: React.FC = () => {
       }
       hasPerformedAction = true;
       
+      // ✅ CRITICAL FIX: Prevent multiple connect_to_match calls
+      // Use a flag to ensure we only emit once per authentication
+      let connectEmitted = false;
+      
       // If reconnecting, just connect to the existing match using saved matchId
-      if (isReconnecting && reconnectMatchId) {
+      if (isReconnecting && reconnectMatchId && !connectEmitted) {
         console.log('🔄 Reconnecting to match:', reconnectMatchId);
         gameWebSocket.emit('connect_to_match', { matchId: reconnectMatchId });
+        connectEmitted = true;
         return;
       }
       
       // Now that we're authenticated, perform the appropriate action
-      if (mode === 'create' && matchId) {
+      if (mode === 'create' && matchId && !connectEmitted) {
         console.log('🎯 Authenticated! Now connecting to match:', matchId);
         gameWebSocket.emit('connect_to_match', { matchId });
-      } else if (mode === 'join' && joinCode) {
+        connectEmitted = true;
+      } else if (mode === 'join' && joinCode && !connectEmitted) {
         console.log('🎯 Authenticated! Now joining match with code:', joinCode);
         gameWebSocket.joinMatchByCode(joinCode);
-      } else if (joinCode && !matchId) {
+        connectEmitted = true;
+      } else if (joinCode && !matchId && !connectEmitted) {
         // Simple fix: treat based on mode
         
         // Simple fix: If mode is 'create', treat as creator, otherwise join
@@ -322,7 +337,8 @@ const FriendMatchInterface: React.FC = () => {
           console.log('🎯 Authenticated! Now joining match with code:', joinCode);
           gameWebSocket.joinMatchByCode(joinCode);
         }
-      } else {
+        connectEmitted = true;
+      } else if (!connectEmitted) {
         console.error('❌ No valid action after authentication!', { mode, matchId, joinCode });
       }
     });
@@ -332,12 +348,26 @@ const FriendMatchInterface: React.FC = () => {
       console.log('🔗 Connected to match:', data);
       setJoinCode(data.joinCode);
 
-      // CRITICAL: Store matchId and save to localStorage immediately for reconnection
-      if (!matchId && data.matchId) {
+      // CRITICAL: Store matchId and save to localStorage/session immediately for reconnection
+      if (data.matchId && !matchId) {
         console.log('💾 Setting matchId from match_connected:', data.matchId);
         setMatchId(data.matchId);
-        
-        // Save to localStorage immediately for reconnection
+        gameWebSocket.setMatchId(data.matchId);
+
+        // Update friendMatch session entry with real matchId
+        const friendMatchInfo = sessionStorage.getItem('friendMatch');
+        if (friendMatchInfo) {
+          try {
+            const parsed = JSON.parse(friendMatchInfo);
+            parsed.matchId = data.matchId;
+            parsed.joinCode = data.joinCode || parsed.joinCode;
+            sessionStorage.setItem('friendMatch', JSON.stringify(parsed));
+          } catch (e) {
+            console.error('Failed to update friendMatch session with matchId:', e);
+          }
+        }
+
+        // Save to session immediately for reconnection
         const matchInfo = sessionStorage.getItem('friendMatch');
         if (matchInfo) {
           const parsed = JSON.parse(matchInfo);
@@ -402,8 +432,22 @@ const FriendMatchInterface: React.FC = () => {
       if (data.matchId && !matchId) {
         console.log('💾 Setting matchId from match_joined:', data.matchId);
         setMatchId(data.matchId);
-        
-        // Save to localStorage immediately for reconnection
+        gameWebSocket.setMatchId(data.matchId);
+
+        // Update friendMatch session entry with real matchId for joiners
+        const friendMatchInfo = sessionStorage.getItem('friendMatch');
+        if (friendMatchInfo) {
+          try {
+            const parsed = JSON.parse(friendMatchInfo);
+            parsed.matchId = data.matchId;
+            parsed.joinCode = parsed.joinCode || joinCode;
+            sessionStorage.setItem('friendMatch', JSON.stringify(parsed));
+          } catch (e) {
+            console.error('Failed to update friendMatch session with matchId (joiner):', e);
+          }
+        }
+
+        // Save to session immediately for reconnection
         const matchInfo = sessionStorage.getItem('friendMatch');
         if (matchInfo) {
           const parsed = JSON.parse(matchInfo);
@@ -457,6 +501,87 @@ const FriendMatchInterface: React.FC = () => {
       });
     });
 
+    // Fallback handshake: some clients may miss LOAD_GAME_SCENE due to
+    // reconnect timing. Use match_ready_acknowledged as a backup trigger
+    // to send CLIENT_READY exactly once per client.
+    gameWebSocket.on('match_ready_acknowledged', (data: any) => {
+      console.log('🟢 MATCH_READY_ACK received:', data);
+
+      try {
+        const targetMatchId = data.matchId || matchId;
+
+        // Get userId from localStorage directly to be safe
+        let currentUserId = userId;
+        if (!currentUserId) {
+          try {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            currentUserId = userData.id;
+          } catch (e) {
+            console.error('User ID parse error in match_ready_acknowledged', e);
+          }
+        }
+
+        if (targetMatchId && currentUserId) {
+          if (hasSentClientReadyRef.current) {
+            console.log('⚠️ CLIENT_READY already sent - skipping match_ready_acknowledged emit');
+            return;
+          }
+
+          hasSentClientReadyRef.current = true;
+          console.log('🚀 EMIT CLIENT_READY from match_ready_acknowledged', { targetMatchId, currentUserId });
+          gameWebSocket.emitClientReady(targetMatchId, currentUserId);
+        } else {
+          console.error('❌ Cannot emit CLIENT_READY from match_ready_acknowledged: Missing ID', { targetMatchId, currentUserId });
+        }
+      } catch (error) {
+        console.error('❌ Error in match_ready_acknowledged handler', error);
+      }
+    });
+
+    // ✅ NEW: LOAD_GAME_SCENE - Server tells us to load the game UI
+    // This happens when all players have joined, but before the match starts
+    gameWebSocket.onLoadGameScene((data: any) => {
+      console.log('🎮 LOAD_GAME_SCENE received - game UI loaded, emitting CLIENT_READY', data);
+      
+      try {
+        // Update players
+        const newPlayers = data.players || [];
+        setPlayers([...newPlayers]);
+        setIsWaitingForPlayers(false);
+        setIsLoading(false);
+        
+        // ✅ CRITICAL FIX: Emit CLIENT_READY immediately, bypassing state checks
+        // Use the matchId directly from the event data if available, fallback to state
+        const targetMatchId = data.matchId || matchId;
+        
+        // Get userId from localStorage directly to be safe
+        let currentUserId = userId;
+        if (!currentUserId) {
+          try {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            currentUserId = userData.id;
+          } catch (e) {
+            console.error('User ID parse error', e);
+          }
+        }
+
+        if (targetMatchId && currentUserId) {
+          if (hasSentClientReadyRef.current) {
+            console.log('⚠️ CLIENT_READY already sent - skipping LOAD_GAME_SCENE emit');
+          } else {
+            hasSentClientReadyRef.current = true;
+            console.log('🚀 IMMEDIATE EMIT: CLIENT_READY', { targetMatchId, currentUserId });
+            // Force the emit even if React state is lagging
+            gameWebSocket.emitClientReady(targetMatchId, currentUserId);
+          }
+        } else {
+          console.error('❌ Cannot emit CLIENT_READY: Missing ID', { targetMatchId, currentUserId });
+        }
+      } catch (error) {
+        console.error('❌ Error in LOAD_GAME_SCENE handler', error);
+      }
+    });
+
     // Player list updated
     gameWebSocket.on('player_list_updated', (data: any) => {
       const newPlayers = data.players || [];
@@ -469,18 +594,10 @@ const FriendMatchInterface: React.FC = () => {
         setIsWaitingForPlayers(false);
         setIsLoading(false);
         
-        // AUTO-START: Immediately when we have 2 players
-        const autoStartKey = `autostart_${matchId}`;
-        const hasAlreadyAutoStarted = sessionStorage.getItem(autoStartKey);
-        
-        if (!hasAlreadyAutoStarted) {
-          console.log('🚀 AUTO-STARTING: 2 players connected! Starting match immediately');
-          sessionStorage.setItem(autoStartKey, 'true');
-          // Start immediately - both players are ready to play!
-          setTimeout(() => {
-            gameWebSocket.setReady(true);
-          }, 500); // Short delay just for UI feedback
-        }
+        // ✅ CHANGED: Don't auto-start here anymore
+        // Wait for LOAD_GAME_SCENE event from server instead
+        // This ensures proper synchronization
+        console.log('✅ 2 players connected - waiting for LOAD_GAME_SCENE from server');
       }
     });
 
@@ -552,30 +669,20 @@ const FriendMatchInterface: React.FC = () => {
       });
     });
 
-    // Player list updated
+    // Player list updated (legacy handler - now mirrors the primary handler above)
+    // NOTE: We no longer auto-start or emit player_ready here. The server
+    // drives the flow via LOAD_GAME_SCENE and CLIENT_READY.
     gameWebSocket.on('player_list_updated', (data: any) => {
       const newPlayers = data.players || [];
-      
+
       // Update players without re-render key to avoid loops
       setPlayers([...newPlayers]);
-      
+
       // If we have 2 players, stop waiting and loading spinners
       if (newPlayers.length === 2) {
         setIsWaitingForPlayers(false);
         setIsLoading(false);
-        
-        // AUTO-START: Immediately when we have 2 players
-        const autoStartKey = `autostart_${matchId}`;
-        const hasAlreadyAutoStarted = sessionStorage.getItem(autoStartKey);
-        
-        if (!hasAlreadyAutoStarted) {
-          console.log('🚀 AUTO-STARTING: 2 players connected! Starting match immediately');
-          sessionStorage.setItem(autoStartKey, 'true');
-          // Start immediately - both players are ready to play!
-          setTimeout(() => {
-            gameWebSocket.setReady(true);
-          }, 500);
-        }
+        console.log('✅ 2 players connected - waiting for LOAD_GAME_SCENE from server');
       }
     });
 
@@ -815,12 +922,16 @@ const FriendMatchInterface: React.FC = () => {
       return;
     }
 
-    const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
+    const rawTimeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
+    const questionLimit = currentQuestionData.timeLimit || 30;
+    const timeSpent = Math.min(Math.max(rawTimeSpent, 0), questionLimit);
 
     console.log('📤 Submitting answer:', {
       questionId: currentQuestionData.id,
       selectedOptions,
+      rawTimeSpent,
       timeSpent,
+      questionLimit,
       currentQuestion
     });
 
@@ -953,7 +1064,7 @@ const FriendMatchInterface: React.FC = () => {
 
   // Timer countdown effect for individual questions
   useEffect(() => {
-    if (questionTimeRemaining <= 0 || isLoading || isWaitingForPlayers) return;
+    if (questionTimeRemaining <= 0 || isLoading || isWaitingForPlayers || !currentQuestionData) return;
 
     const questionTimer = setInterval(() => {
       setQuestionTimeRemaining(prev => {
@@ -967,7 +1078,7 @@ const FriendMatchInterface: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(questionTimer);
-  }, [questionTimeRemaining, currentQuestion, totalQuestions, isLoading, isWaitingForPlayers]);
+  }, [questionTimeRemaining, currentQuestion, totalQuestions, isLoading, isWaitingForPlayers, currentQuestionData]);
 
   // Remove duplicate timer - using the one above
 
@@ -1089,10 +1200,13 @@ const FriendMatchInterface: React.FC = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">No question data available.</p>
+          <p className="text-muted-foreground mb-2">Preparing your first question...</p>
+          <p className="text-xs text-muted-foreground">
+            If this takes too long, please go back and restart the match.
+          </p>
           <button 
             onClick={() => window.location.pathname = '/student-quiz'}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
           >
             Back to Quiz Selection
           </button>

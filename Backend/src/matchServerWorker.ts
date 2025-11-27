@@ -358,26 +358,33 @@ class WorkerMatchService {
       allMatchIds: Array.from(this.matches.keys())
     });
 
-    // Auto-start match ONLY when ALL players are present (for 1v1 matches, that's exactly 2 players)
+    // ✅ NEW: Wait for CLIENT_READY signal instead of auto-starting
+    // This ensures both clients have loaded the UI before the timer starts
     if (match.players.size === match.maxPlayers && match.status === 'WAITING') {
-      logInfo(`Worker ${workerId}: ✅ ALL PLAYERS PRESENT - AUTO-STARTING MATCH`, { matchId, playerCount: match.players.size, maxPlayers: match.maxPlayers });
+      logInfo(`Worker ${workerId}: ✅ ALL PLAYERS PRESENT - WAITING FOR CLIENT_READY`, { matchId, playerCount: match.players.size, maxPlayers: match.maxPlayers });
       
-      // Start the match after a 2 second delay to let both players see the "ready" state
-      setTimeout(() => {
-        const currentMatch = this.matches.get(matchId);
-        // FIX A: CRITICAL - Never cancel a match that is already IN_PROGRESS
-        // Only start if still WAITING and all players present
-        if (currentMatch && currentMatch.status === 'IN_PROGRESS') {
-          logInfo(`Worker ${workerId}: Match already started, ignoring sanity check`, { matchId });
-          return;
-        }
-        
-        if (currentMatch && currentMatch.players.size === currentMatch.maxPlayers && currentMatch.status === 'WAITING') {
-          this.startMatch(matchId);
-        } else {
-          logInfo(`Worker ${workerId}: Match start cancelled - not all players present`, { matchId, playerCount: currentMatch?.players.size || 0, status: currentMatch?.status });
-        }
-      }, 2000);
+      // Tell clients to load the game scene
+      this.emitToMatch(matchId, 'LOAD_GAME_SCENE', {
+        matchId,
+        players: this.getPlayerList(match),
+        quiz: match.quiz,
+        totalQuestions: match.questions.length
+      });
+    } else if (match.players.size === match.maxPlayers && match.status !== 'WAITING') {
+      // ✅ LATE JOINER FIX: If match is already full but this player just joined/reconnected,
+      // send LOAD_GAME_SCENE directly to this socket so they don't get stuck
+      logInfo(`Worker ${workerId}: ⚠️ LATE JOINER/RECONNECT - Sending LOAD_GAME_SCENE to user ${userId}`, { 
+        matchId, 
+        playerCount: match.players.size,
+        matchStatus: match.status
+      });
+      
+      this.emitToSocket(socketId, 'LOAD_GAME_SCENE', {
+        matchId,
+        players: this.getPlayerList(match),
+        quiz: match.quiz,
+        totalQuestions: match.questions.length
+      });
     }
   }
 
@@ -495,10 +502,49 @@ class WorkerMatchService {
     }
   }
 
+  // ✅ NEW: Handle CLIENT_READY event from frontend
+  // This is called when the client has loaded the game UI and is ready to receive the first question
+  public async clientReady(data: any) {
+    const { matchId, userId } = data;
+    let match = this.matches.get(matchId);
+
+    if (!match) {
+      logError(`Worker ${workerId}: Match not found for CLIENT_READY`, new Error(`Match ${matchId}`));
+      return;
+    }
+
+    const player = match.players.get(userId);
+    if (!player) {
+      logError(`Worker ${workerId}: Player not found for CLIENT_READY`, new Error(`User ${userId}`));
+      return;
+    }
+
+    logInfo(`Worker ${workerId}: CLIENT_READY received from player`, { matchId, userId, username: player.username });
+
+    // Mark player as ready (for game scene loading)
+    player.isReady = true;
+
+    // Check if ALL players have sent CLIENT_READY
+    const allClientReady = Array.from(match.players.values()).every(p => p.isReady);
+    if (allClientReady && match.players.size === match.maxPlayers && match.status === 'WAITING') {
+      logInfo(`Worker ${workerId}: ✅ ALL CLIENTS READY - STARTING MATCH NOW`, { matchId, playerCount: match.players.size });
+      await this.startMatch(matchId);
+    }
+  }
+
   private async startMatch(matchId: string) {
     const match = this.matches.get(matchId);
     if (!match || match.questions.length === 0) {
       throw new Error('Cannot start match - no questions');
+    }
+    
+    // CRITICAL FIX: Prevent starting match multiple times
+    if (match.status !== 'WAITING') {
+      logInfo(`Worker ${workerId}: Match already started or in progress - skipping duplicate start`, {
+        matchId,
+        currentStatus: match.status
+      });
+      return;
     }
 
     match.status = 'IN_PROGRESS';
@@ -519,40 +565,10 @@ class WorkerMatchService {
       totalQuestions: match.questions.length
     });
 
-    // Set 30-second timeout for first question
-    const timerId = `${matchId}_q0`;
-    const timer = setTimeout(async () => {
-      logInfo(`Worker ${workerId}: 30-second timeout reached for first question`, { matchId });
-      this.questionTimers.delete(timerId);
-      
-      const currentMatch = this.matches.get(matchId);
-      if (currentMatch && currentMatch.status === 'IN_PROGRESS') {
-        // Mark unanswered players as having submitted
-        Array.from(currentMatch.players.values()).forEach(p => {
-          if (!p.hasSubmittedCurrent) {
-            p.hasSubmittedCurrent = true;
-          }
-        });
+    // ✅ NO TIMER HERE - Timer will be set when first player submits answer
+    // This prevents multiple timers from running and causing questions to auto-advance
 
-        await this.saveMatchState(matchId, currentMatch);
-
-        // Notify players of timeout
-        this.emitToMatch(matchId, 'question_timeout', {
-          message: 'Time is up! Moving to next question...',
-          questionIndex: currentMatch.currentQuestionIndex
-        });
-
-        if (currentMatch.currentQuestionIndex >= currentMatch.questions.length - 1) {
-          await this.endMatch(matchId);
-        } else {
-          await this.nextQuestion(matchId);
-        }
-      }
-    }, 30000);
-
-    this.questionTimers.set(timerId, timer);
-
-    logInfo(`Worker ${workerId}: Match started`, { matchId, playerCount: match.players.size });
+    logInfo(`Worker ${workerId}: Match started - waiting for player answers`, { matchId, playerCount: match.players.size });
   }
 
   public async submitAnswer(data: any) {
@@ -670,6 +686,20 @@ class WorkerMatchService {
     if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
       throw new Error('Invalid selected options');
     }
+
+    // ✅ TIMING DEBUG: Log server vs client time calculations
+    const timeElapsedSinceQuestionStart = (Date.now() - match.questionStartTime) / 1000;
+    logInfo(`⏱️ TIMING DEBUG`, {
+      matchId,
+      userId,
+      serverTimeSpent: Math.round(timeElapsedSinceQuestionStart * 100) / 100,
+      clientTimeSpent: timeSpent,
+      difference: Math.round(Math.abs(timeElapsedSinceQuestionStart - timeSpent) * 100) / 100,
+      questionTimeLimit: match.timeLimit,
+      questionStartTime: match.questionStartTime,
+      currentTime: Date.now(),
+      isLate: timeElapsedSinceQuestionStart > match.timeLimit + 5
+    });
 
     if (typeof timeSpent !== 'number' || timeSpent < 0 || timeSpent > match.timeLimit + 5) {
       throw new Error('Invalid time spent');
@@ -839,50 +869,13 @@ class WorkerMatchService {
       totalQuestions: match.questions.length
     });
     
-    logInfo(`Worker ${workerId}: Next question emitted immediately`, {
+    // ✅ NO TIMER HERE - Timer will be set when first player submits answer
+    // This prevents multiple timers from running and causing questions to auto-advance
+
+    logInfo(`Worker ${workerId}: Next question emitted - waiting for player answers`, {
       matchId,
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
-    });
-
-    // Set 30-second timeout for this question (only if not already set)
-    const timerId = `${matchId}_q${match.currentQuestionIndex}`;
-    if (!this.questionTimers.has(timerId)) {
-      const timer = setTimeout(async () => {
-        logInfo(`Worker ${workerId}: 30-second timeout reached for question`, { matchId, questionIndex: match.currentQuestionIndex });
-        this.questionTimers.delete(timerId);
-        
-        const currentMatch = this.matches.get(matchId);
-        if (currentMatch && currentMatch.status === 'IN_PROGRESS') {
-          // Mark unanswered players as having submitted
-          Array.from(currentMatch.players.values()).forEach(p => {
-            if (!p.hasSubmittedCurrent) {
-              p.hasSubmittedCurrent = true;
-            }
-          });
-
-          await this.saveMatchState(matchId, currentMatch);
-
-          // Notify players of timeout
-          this.emitToMatch(matchId, 'question_timeout', {
-            message: 'Time is up! Moving to next question...',
-            questionIndex: currentMatch.currentQuestionIndex
-          });
-
-          if (currentMatch.currentQuestionIndex >= currentMatch.questions.length - 1) {
-            await this.endMatch(matchId);
-          } else {
-            await this.nextQuestion(matchId);
-          }
-        }
-      }, 30000);
-
-      this.questionTimers.set(timerId, timer);
-    }
-
-    logInfo(`Worker ${workerId}: Next question`, {
-      matchId,
-      questionIndex: match.currentQuestionIndex
     });
   }
 
@@ -1133,6 +1126,10 @@ async function startWorker() {
 
           case 'submit_answer':
             await workerService.submitAnswer(message);
+            break;
+
+          case 'CLIENT_READY':
+            await workerService.clientReady(message);
             break;
 
           case 'disconnect':

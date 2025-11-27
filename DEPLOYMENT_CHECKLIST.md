@@ -33,7 +33,15 @@ Complete step-by-step guide to deploy and test your QuizUP application across al
   - Verify JWT_SECRET is set
   - Confirm database credentials
 
-### 2. Code Fixes Applied
+### 2. Infrastructure Updated for High Performance
+
+- [x] **nginx.conf** - Rate limits increased (50K→10K r/s, burst 100→1000)
+- [x] **docker-compose.yml** - Resource limits via environment variables
+- [x] **backend/Dockerfile** - System limits configured (65536 FDs, 32768 procs)
+- [x] **Environment files** - Scaling configs for 150-3K+ users
+- [x] **Rate limits** - 50K (localhost), 75K (network), 500K (production)
+
+### 3. Code Fixes Applied
 
 - [x] **WebSocket Event Handling Fixed** (MatchLobby.tsx)
 - [x] **Player Data Structure Standardized** (FriendMatchInterface.tsx)

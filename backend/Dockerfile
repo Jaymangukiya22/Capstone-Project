@@ -1,4 +1,4 @@
-# Hyper-optimized Multi-stage Dockerfile for QuizUP Backend with Master-Worker
+# Hyper-optimized Multi-stage Dockerfile for QuizUP Backend
 FROM node:20-alpine AS base
 RUN apk add --no-cache curl bash && \
     addgroup -g 1001 -S nodejs && \
@@ -26,19 +26,30 @@ CMD ["npm", "run", "dev"]
 # Build stage
 FROM development AS build
 USER root
+# 1. Create dist folder
 RUN mkdir -p /app/dist && chown -R nodejs:nodejs /app/dist
 USER nodejs
-RUN npm run build 2>&1
+# 2. Build
+RUN npm run build
 USER root
-RUN npm prune --production 2>&1 && chown -R nodejs:nodejs /app/node_modules
-USER nodejs
+# 3. Prune dev dependencies. 
+# REMOVED: "chown -R nodejs:nodejs" (This saves ~220s. We handle ownership during COPY in the next stage)
+RUN npm prune --production 2>&1
 
 # Production stage
 FROM node:20-alpine AS production
+# 1. Setup User
 RUN apk add --no-cache curl bash && \
     addgroup -g 1001 -S nodejs && \
     adduser -u 1001 -S nodejs -G nodejs
 WORKDIR /app
+
+# 2. OPTIMIZATION: Create directories BEFORE copying heavy node_modules
+# This prevents the "layer initialization hang" you were experiencing.
+RUN mkdir -p logs uploads && chown -R nodejs:nodejs logs uploads
+
+# 3. Copy artifacts (Heavy lifting)
+# The --chown flag here handles permissions efficiently during the copy
 COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=development --chown=nodejs:nodejs /app/docs ./docs
@@ -46,14 +57,14 @@ COPY --from=development --chown=nodejs:nodejs /app/start-server.js ./
 COPY --from=development --chown=nodejs:nodejs /app/package.json ./
 COPY --from=development --chown=nodejs:nodejs /app/tsconfig.json ./
 COPY --chown=nodejs:nodejs .env ./
-RUN mkdir -p logs uploads && chown -R nodejs:nodejs logs uploads
+
 USER nodejs
 EXPOSE 3000 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=2 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 CMD [ "node", "dist/server.js" ]
 
-# Master Server stage (NEW!)
+# Master Server stage
 FROM development AS matchserver-master
 ENV SERVICE_TYPE=master
 USER nodejs

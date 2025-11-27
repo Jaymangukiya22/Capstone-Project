@@ -13,10 +13,10 @@ const axios = require('axios');
 // CONFIG
 // ============================================================================
 // Parse command-line argument for number of matches
-const NUM_MATCHES = parseInt(process.argv[2]) || 100;
+const NUM_MATCHES = parseInt(process.argv[2]) || 1;
 const TOTAL_USERS = NUM_MATCHES * 2; // 2 users per match
-const API_URL = process.env.API_URL || 'http://localhost:8090';
-const SOCKET_URL = process.env.SOCKET_URL || 'http://localhost:3001';
+const API_URL = process.env.API_URL || 'https://api.quizdash.dpdns.org';
+const SOCKET_URL = process.env.SOCKET_URL || 'https://match.quizdash.dpdns.org';
 const QUIZ_ID = 110;
 const THINK_TIME_MS = 1000;
 
@@ -31,7 +31,10 @@ const metrics = {
   answersSubmitted: 0,
   errors: 0,
   errorList: [],
-  startTime: Date.now()
+  startTime: Date.now(),
+  // Track which matches have started/completed to avoid double-counting
+  startedMatches: new Set(),
+  completedMatches: new Set()
 };
 
 console.log(`
@@ -91,6 +94,8 @@ class Bot {
     this.currentQuestion = 0;
     this.totalQuestions = 0;
     this.players = [];
+    this.hasEmittedReady = false; // Track if player_ready has been emitted
+    this.matchHasStarted = false; // Track if match_started has been received
   }
 
   async login() {
@@ -170,8 +175,9 @@ class Bot {
           this.players = data.players;
           console.log(`👥 Bot ${this.id} PLAYER LIST UPDATED - Match: ${this.matchId}, Players: ${data.players.length}/2 (${data.players.map(p => p.username).join(', ')})`);
           
-          // Only emit player_ready when ALL players have joined (2 players for friend match)
-          if (data.players.length === 2) {
+          // Only emit player_ready when ALL players have joined AND we haven't already emitted it
+          if (data.players.length === 2 && !this.hasEmittedReady && !this.matchHasStarted) {
+            this.hasEmittedReady = true; // Set flag BEFORE emitting to prevent race conditions
             console.log(`✅ Bot ${this.id} ALL PLAYERS READY - Emitting player_ready for match ${this.matchId}`);
             this.socket.emit('player_ready', { 
               matchId: this.matchId,
@@ -183,7 +189,14 @@ class Bot {
         });
 
         this.socket.on('match_started', (data) => {
-          metrics.matchesStarted++;
+          // Only increment once per match, not per bot
+          if (!this.matchHasStarted) {
+            this.matchHasStarted = true;
+            if (!metrics.startedMatches.has(this.matchId)) {
+              metrics.startedMatches.add(this.matchId);
+              metrics.matchesStarted++;
+            }
+          }
           this.currentQuestion = 0;
           this.totalQuestions = data.totalQuestions || 10;
           console.log(`✅ Bot ${this.id} MATCH STARTED - Match: ${this.matchId}, Q${this.currentQuestion + 1}/${this.totalQuestions}`);
@@ -201,7 +214,11 @@ class Bot {
         });
 
         this.socket.on('match_completed', (data) => {
-          metrics.matchesCompleted++;
+          // Only increment once per match, not per bot
+          if (!metrics.completedMatches.has(this.matchId)) {
+            metrics.completedMatches.add(this.matchId);
+            metrics.matchesCompleted++;
+          }
           console.log(`🏆 Bot ${this.id} MATCH COMPLETED - Match: ${this.matchId}, Completed ${this.currentQuestion + 1}/${this.totalQuestions} questions`);
           this.socket.disconnect();
         });

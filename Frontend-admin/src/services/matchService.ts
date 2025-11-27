@@ -327,7 +327,25 @@ export class GameWebSocket {
   private socket: Socket | null = null
   private matchId: string | null = null
   private eventHandlers: Map<string, Function[]> = new Map()
+  public onLoadGameScene(callback: (data: any) => void) {
+    // Use the generic event handler system so this works even if connect()
+    // hasn't run yet. onAny() will dispatch LOAD_GAME_SCENE to this handler.
+    this.on('LOAD_GAME_SCENE', callback)
+  }
 
+  // ✅ ADD THIS METHOD
+  public emitClientReady(matchId: string, userId: number) {
+    if (this.socket) {
+      console.log('📤 Sending CLIENT_READY signal', { matchId, userId });
+      this.socket.emit('CLIENT_READY', { matchId, userId });
+    }
+  }
+
+  // Allow React components to synchronize the current matchId with the
+  // WebSocket layer so that events like submit_answer always include it.
+  public setMatchId(matchId: string | null) {
+    this.matchId = matchId;
+  }
   /**
    * Connect to match WebSocket using Socket.IO with session management
    */
@@ -341,16 +359,22 @@ export class GameWebSocket {
           this.matchId = reconnectionData.matchId;
         }
 
-        // Extract base URL from websocketUrl (remove ws:// and path)
-        const baseUrl = websocketUrl.replace('ws://', 'http://').replace('wss://', 'https://')
+        // Use websocketUrl directly - it already has the correct protocol and path
+        console.log('🔌 [SOCKET] Connecting to match server:', websocketUrl);
+        console.log('🔌 [SOCKET] User:', { userId, username });
+        console.log('🔌 [SOCKET] Window location:', window.location.href);
         
-        this.socket = io(baseUrl, {
-          transports: ['websocket', 'polling'],
+        this.socket = io(websocketUrl, {
+          transports: ['websocket'],
+          upgrade: false,
           timeout: 10000,
-        })
+        });
+
+        console.log('🔌 [SOCKET] Socket.IO instance created, waiting for connection...');
 
         this.socket.on('connect', () => {
-          console.log('Connected to match WebSocket via Socket.IO')
+          console.log('✅ [SOCKET] Connected to match WebSocket via Socket.IO')
+          console.log('✅ [SOCKET] Socket ID:', this.socket?.id);
           
           // Update session with connection info
           sessionManager.updateMatchState({
@@ -373,25 +397,30 @@ export class GameWebSocket {
                 console.error('Error parsing user data:', e);
               }
             }
-            console.log('Sending authenticate with:', { userId, username, firstName, lastName });
+            console.log('🔐 [SOCKET] Sending authenticate with:', { userId, username, firstName, lastName });
             this.send('authenticate', { userId, username, firstName, lastName })
           }
           resolve()
         })
 
-        this.socket.on('disconnect', () => {
-          console.log('Socket.IO connection closed')
+        this.socket.on('disconnect', (reason) => {
+          console.log('❌ [SOCKET] Socket.IO connection closed. Reason:', reason)
           this.socket = null
         })
 
         this.socket.on('connect_error', (error) => {
-          console.error('Socket.IO connection error:', error)
+          console.error('❌ [SOCKET] Socket.IO connection error:', error)
           reject(error)
+        })
+
+        this.socket.on('error', (error) => {
+          console.error('❌ [SOCKET] Socket.IO error:', error)
         })
 
         // Listen for all events and forward to handlers
         this.socket.onAny((eventName, ...args) => {
           const data = args[0] || {}
+          console.log('📨 [SOCKET] Received event:', eventName, data);
           this.handleMessage(eventName, data)
         })
 
@@ -490,21 +519,48 @@ export class GameWebSocket {
   /**
    * Mark player as ready
    */
-  setReady(ready: boolean = true): void {
-    console.log('🚀 SENDING player_ready event with ready:', ready)
-    this.send('player_ready', { ready })
+  setReady(ready: boolean = true, matchId?: string): void {
+    console.log('🚀 SENDING player_ready event with ready:', ready, 'matchId:', matchId)
+    // CRITICAL FIX: Include matchId so master server can route to correct worker
+    const payload: any = { ready };
+    if (matchId) {
+      payload.matchId = matchId;
+    }
+    this.send('player_ready', payload)
   }
 
   /**
    * Submit answer for current question with session tracking
    */
   submitAnswer(questionId: number, selectedOptions: number[], timeSpent?: number): void {
-    const answerData = {
+    // Ensure we have a matchId even for friend matches where the
+    // GameWebSocket.startMatch helper is not used. Fall back to
+    // the friendMatch info stored in sessionStorage.
+    if (!this.matchId) {
+      try {
+        const friendMatchInfo = sessionStorage.getItem('friendMatch');
+        if (friendMatchInfo) {
+          const parsed = JSON.parse(friendMatchInfo);
+          if (parsed.matchId) {
+            this.matchId = parsed.matchId;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to restore matchId from friendMatch session:', e);
+      }
+    }
+
+    const answerData: any = {
       questionId,
       selectedOptions,
       timeSpent: timeSpent || 0,
       timestamp: Date.now()
     };
+    
+    // CRITICAL FIX: Include matchId so worker can route to correct match
+    if (this.matchId) {
+      answerData.matchId = this.matchId;
+    }
 
     // Update session with answer data
     const currentState = sessionManager.getMatchState();

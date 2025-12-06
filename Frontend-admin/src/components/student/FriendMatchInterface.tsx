@@ -96,7 +96,7 @@ const FriendMatchInterface: React.FC = () => {
   // Navigation guard to prevent going back during friend match
   const { disableGuard } = useQuizNavigationGuard(!isLoading && !isWaitingForPlayers, isMatchCompleted);
   
-  // WebSocket connection ref
+  // WebSocket connection / submission refs
   const wsConnected = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedCurrentQuestion = useRef(false); // Prevent double submission
@@ -716,10 +716,6 @@ const FriendMatchInterface: React.FC = () => {
     // Question timeout - auto-advance when 30 seconds pass
     gameWebSocket.on('question_timeout', (data: any) => {
       console.log('⏱️ QUESTION TIMEOUT:', data);
-      toast({
-        title: "Time's Up!",
-        description: data.message || "Moving to next question...",
-      });
     });
 
     // Individual player progression (for independent advancement)
@@ -769,6 +765,16 @@ const FriendMatchInterface: React.FC = () => {
     // Waiting for opponent
     gameWebSocket.on('waiting_for_opponent', (data: any) => {
       console.log('⏳ Waiting for opponent:', data);
+
+      // Only show "waiting" if we actually submitted the *current* question.
+      // After next_question arrives we reset hasSubmittedCurrentQuestion to false,
+      // so any late/stale waiting_for_opponent events from the previous question
+      // will be ignored and won't lock the Next button on the new question.
+      if (!hasSubmittedCurrentQuestion.current) {
+        console.log('⚠️ Ignoring waiting_for_opponent - no active submission for this question');
+        return;
+      }
+
       setIsWaitingForOpponent(true);
       if (data.waitingFor && data.waitingFor.length > 0) {
         setWaitingForOpponentName(data.waitingFor[0]);
@@ -779,7 +785,21 @@ const FriendMatchInterface: React.FC = () => {
       });
     });
 
-    // Player answered
+    // Opponent submitted answer - clear waiting state
+    gameWebSocket.on('opponent_submitted', (data: any) => {
+      console.log('✅ Opponent submitted answer:', data);
+      
+      // Clear waiting state since opponent has answered
+      setIsWaitingForOpponent(false);
+      setWaitingForOpponentName('opponent');
+      
+      toast({
+        title: "Opponent Answered",
+        description: `${data.username} submitted their answer`,
+      });
+    });
+
+    // Player answered (legacy handler)
     gameWebSocket.on('player_answered', (data: any) => {
       console.log('Player answered:', data);
       // Show that opponent answered
@@ -899,81 +919,92 @@ const FriendMatchInterface: React.FC = () => {
   }, [currentQuestionData, currentQuestion]);
 
   // Submit current answer with useCallback to prevent re-creation
-  const submitCurrentAnswer = useCallback(() => {
-    // CRITICAL: Prevent double submission
-    if (hasSubmittedCurrentQuestion.current) {
-      console.log('⚠️ Already submitted this question, ignoring duplicate submission');
-      return;
-    }
+  const submitCurrentAnswer = useCallback(
+    async (options?: { allowEmpty?: boolean; reason?: 'timeout' | 'manual' }) => {
+      const allowEmpty = options?.allowEmpty ?? false;
 
-    if (!currentQuestionData) {
-      console.log('❌ No current question data to submit');
-      return;
-    }
+      // Prevent double submission for the same question
+      if (hasSubmittedCurrentQuestion.current) {
+        console.log('⚠️ Already submitted this question, ignoring duplicate submission', options);
+        return;
+      }
 
-    const selectedOptions = answers.get(currentQuestion) || [];
-    if (selectedOptions.length === 0) {
-      toast({
-        title: "Please Select an Answer",
-        description: "You must select an option before submitting.",
-        variant: "destructive"
+      if (!currentQuestionData) {
+        console.log('❌ No current question data to submit');
+        return;
+      }
+
+      const selectedOptions = answers.get(currentQuestion) || [];
+      const optionsToSend = selectedOptions.length > 0 ? selectedOptions : [];
+
+      if (!allowEmpty && optionsToSend.length === 0) {
+        toast({
+          title: "Please Select an Answer",
+          description: "You must select an option before submitting.",
+          variant: "destructive"
+        });
+        console.log('❌ No options selected - cannot submit');
+        return;
+      }
+
+      const rawTimeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
+      const questionLimit = currentQuestionData.timeLimit || 30;
+      const timeSpent = Math.min(Math.max(rawTimeSpent, 0), questionLimit);
+
+      console.log('📤 Submitting answer:', {
+        questionId: currentQuestionData.id,
+        selectedOptions,
+        rawTimeSpent,
+        timeSpent,
+        questionLimit,
+        currentQuestion,
+        reason: options?.reason || 'manual'
       });
-      console.log('❌ No options selected - cannot submit');
-      return;
-    }
 
-    const rawTimeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
-    const questionLimit = currentQuestionData.timeLimit || 30;
-    const timeSpent = Math.min(Math.max(rawTimeSpent, 0), questionLimit);
+      try {
+        setIsSubmitting(true);
+        hasSubmittedCurrentQuestion.current = true;
 
-    console.log('📤 Submitting answer:', {
-      questionId: currentQuestionData.id,
-      selectedOptions,
-      rawTimeSpent,
-      timeSpent,
-      questionLimit,
-      currentQuestion
-    });
+        gameWebSocket.submitAnswer(currentQuestionData.id, optionsToSend, timeSpent);
 
-    try {
-      setIsSubmitting(true);
-      // Mark as submitted immediately to prevent double-clicks
-      hasSubmittedCurrentQuestion.current = true;
-      
-      gameWebSocket.submitAnswer(currentQuestionData.id, selectedOptions, timeSpent);
-      
-      // Safety timeout: If server doesn't respond in 5 seconds, unlock the UI
-      const safetyTimer = setTimeout(() => {
-        console.log("⚠️ Safety timeout triggered - Server didn't respond in 5 seconds, unlocking UI");
+        // Safety timeout: If server doesn't respond in 5 seconds, unlock the UI
+        const safetyTimer = setTimeout(() => {
+          console.log("⚠️ Safety timeout triggered - Server didn't respond in 5 seconds, unlocking UI");
+          setIsSubmitting(false);
+          hasSubmittedCurrentQuestion.current = false;
+        }, 5000);
+
+        timerRef.current = safetyTimer;
+      } catch (error) {
+        console.error('❌ Error submitting answer:', error);
         setIsSubmitting(false);
         hasSubmittedCurrentQuestion.current = false;
-      }, 5000);
-      
-      // Store timer ID for cleanup if needed
-      timerRef.current = safetyTimer;
-
-    } catch (error) {
-      console.error('❌ Error submitting answer:', error);
-      setIsSubmitting(false);
-      hasSubmittedCurrentQuestion.current = false;
-      toast({
-        title: "Submission Error",
-        description: "Failed to submit answer. Please try again.",
-        variant: "destructive"
-      });
-    }
-  }, [answers, currentQuestion, currentQuestionData]);
+        toast({
+          title: "Submission Error",
+          description: "Failed to submit answer. Please try again.",
+          variant: "destructive"
+        });
+      }
+    },
+    [answers, currentQuestion, currentQuestionData, questionStartTime]
+  );
 
   // Auto-advance to next question when time runs out
   const handleQuestionTimeUp = useCallback(async () => {
     console.log('⏰ Question time up! Auto-advancing...');
-    
-    // Only submit if not already submitted
-    if (!hasSubmittedCurrentQuestion.current) {
-      // Submit current answer (even if empty)
-      await submitCurrentAnswer();
+
+    // If the question just started, this is likely a stale timer from the
+    // previous question – ignore it so we don't create a phantom submission.
+    const elapsedMs = Date.now() - questionStartTime;
+    if (elapsedMs < 500) {
+      console.log('⏰ Ignoring stale timeout - question just changed', { elapsedMs });
+      return;
     }
-    
+
+    if (!hasSubmittedCurrentQuestion.current) {
+      await submitCurrentAnswer({ allowEmpty: true, reason: 'timeout' });
+    }
+
     const isLastQuestion = currentQuestion === totalQuestions;
     if (isLastQuestion) {
       console.log('⏰ Last question - submitting quiz...');
@@ -982,7 +1013,7 @@ const FriendMatchInterface: React.FC = () => {
       console.log('⏰ Moving to next question...');
       // The server will send the next question automatically
     }
-  }, [currentQuestion, totalQuestions, submitCurrentAnswer]);
+  }, [currentQuestion, totalQuestions, questionStartTime, submitCurrentAnswer]);
 
   // Navigation handlers
   const handleNext = () => {
@@ -1001,9 +1032,9 @@ const FriendMatchInterface: React.FC = () => {
     }, 1000);
   };
 
-  // Handle time up
+  // Handle time up from header timer – delegate to the main timeout handler
   const handleTimeUp = () => {
-    submitCurrentAnswer();
+    handleQuestionTimeUp();
   };
 
   // Function to get display name for a player

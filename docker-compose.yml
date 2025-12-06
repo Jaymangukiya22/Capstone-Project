@@ -104,7 +104,7 @@ services:
       timeout: 10s
       retries: 3
     # Resource limits (Docker Compose format)
-    cpus: ${BACKEND_CPU_LIMIT:-2.0}
+    cpus: ${BACKEND_CPU_LIMIT:-1.0}
     mem_limit: ${BACKEND_MEMORY_LIMIT:-2G}
 
   # =============================================================================
@@ -158,7 +158,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    cpus: ${MATCHSERVER_CPU_LIMIT:-2.0}
+    cpus: ${MATCHSERVER_CPU_LIMIT:-1.00}
     mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-2G}
     ulimits:
       nofile:

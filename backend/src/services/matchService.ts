@@ -17,6 +17,8 @@ const DEFAULT_LOCK_TTL_MS = 10_000;
 interface MatchPlayer {
   userId: number;
   username: string;
+  firstName?: string;
+  lastName?: string;
   socketId: string;
   score: number;
   currentQuestionIndex: number;
@@ -529,6 +531,25 @@ export class MatchService {
     const joinCode = this.generateJoinCode();
     const questions = await this.loadQuizQuestions(quizId);
 
+    // Look up creator's real identity so we can show it to the opponent
+    let username = `User${userId}`;
+    let firstName: string | undefined;
+    let lastName: string | undefined;
+
+    try {
+      const user = await User.findByPk(userId, {
+        attributes: ['username', 'email', 'firstName', 'lastName']
+      });
+
+      if (user) {
+        username = (user as any).email || user.username;
+        firstName = user.firstName || undefined;
+        lastName = user.lastName || undefined;
+      }
+    } catch (err: unknown) {
+      logInfo('Using fallback username for friend match creator', { userId, username });
+    }
+
     const match: MatchRoom = {
       id: matchId,
       quizId,
@@ -547,7 +568,9 @@ export class MatchService {
 
     const creator: MatchPlayer = {
       userId,
-      username: '',
+      username,
+      firstName,
+      lastName,
       socketId: '',
       score: 0,
       currentQuestionIndex: 0,
@@ -572,6 +595,8 @@ export class MatchService {
       players: Array.from(match.players.values()).map(p => ({
         userId: p.userId,
         username: p.username,
+        firstName: p.firstName,
+        lastName: p.lastName,
         score: p.score,
         currentQuestionIndex: p.currentQuestionIndex,
         isReady: p.isReady,

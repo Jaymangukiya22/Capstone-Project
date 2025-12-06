@@ -267,8 +267,9 @@ class WorkerMatchService {
       throw new Error('Match is full');
     }
 
-    // Check if reconnecting
-    if (match.players.has(userId)) {
+    const isReconnect = match.players.has(userId);
+
+    if (isReconnect) {
       const player = match.players.get(userId)!;
       player.socketId = socketId;
       this.userToMatch.set(userId, matchId);
@@ -288,6 +289,7 @@ class WorkerMatchService {
           hasSubmittedCurrent: player.hasSubmittedCurrent
         });
       } else {
+        // Pre-game reconnect: just send current lobby state
         this.emitToSocket(socketId, 'match_joined', {
           matchId,
           players: this.getPlayerList(match)
@@ -295,74 +297,80 @@ class WorkerMatchService {
       }
 
       logInfo(`Worker ${workerId}: Player reconnected`, { matchId, userId });
-      return;
+    } else {
+      // Add new player
+      const player: MatchPlayer = {
+        userId,
+        username,
+        socketId,
+        score: 0,
+        currentQuestionIndex: 0,
+        isReady: false,
+        answers: [],
+        hasSubmittedCurrent: false
+      };
+
+      match.players.set(userId, player);
+      this.userToMatch.set(userId, matchId);
+
+      // Save to Redis immediately
+      await this.saveMatchState(matchId, match);
+      
+      // Wait longer to ensure Redis is fully updated before next join
+      // This prevents race conditions where second player gets assigned to different worker
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Notify master
+      this.notifyMaster({
+        type: 'player_joined',
+        matchId,
+        userId
+      });
+
+      // Emit to joiner with match data and first question
+      const firstQuestion = match.questions && match.questions.length > 0 ? match.questions[0] : null;
+      this.emitToSocket(socketId, 'match_joined', {
+        matchId,
+        players: this.getPlayerList(match),
+        quiz: match.quiz,
+        totalQuestions: match.questions.length,
+        question: firstQuestion ? this.sanitizeQuestion(firstQuestion) : null,
+        questionIndex: 0
+      });
+
+      // Send acknowledgment to allow client to emit player_ready
+      this.emitToSocket(socketId, 'match_ready_acknowledged', {
+        matchId,
+        userId
+      });
+
+      // Broadcast to all players
+      this.emitToMatch(matchId, 'player_list_updated', {
+        players: this.getPlayerList(match)
+      });
+
+      logInfo(`Worker ${workerId}: ✅ PLAYER JOINED - MATCH NOW ON THIS WORKER`, { 
+        matchId, 
+        userId, 
+        playerCount: match.players.size, 
+        questionsLoaded: match.questions.length,
+        matchesInThisWorker: this.matches.size,
+        allMatchIds: Array.from(this.matches.keys())
+      });
     }
 
-    // Add new player
-    const player: MatchPlayer = {
-      userId,
-      username,
-      socketId,
-      score: 0,
-      currentQuestionIndex: 0,
-      isReady: false,
-      answers: [],
-      hasSubmittedCurrent: false
-    };
+    // ✅ NEW: Wait for CLIENT_READY signal instead of auto-starting.
+    // ALL PLAYERS PRESENT now means "all maxPlayers have active socket connections",
+    // not just that they exist in Redis/DB.
+    const connectedCount = Array.from(match.players.values()).filter(p => p.socketId && p.socketId.length > 0).length;
 
-    match.players.set(userId, player);
-    this.userToMatch.set(userId, matchId);
+    if (connectedCount === match.maxPlayers && match.status === 'WAITING') {
+      logInfo(`Worker ${workerId}: ✅ ALL PLAYERS PRESENT - WAITING FOR CLIENT_READY`, {
+        matchId,
+        connectedCount,
+        maxPlayers: match.maxPlayers
+      });
 
-    // Save to Redis immediately
-    await this.saveMatchState(matchId, match);
-    
-    // Wait longer to ensure Redis is fully updated before next join
-    // This prevents race conditions where second player gets assigned to different worker
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Notify master
-    this.notifyMaster({
-      type: 'player_joined',
-      matchId,
-      userId
-    });
-
-    // Emit to joiner with match data and first question
-    const firstQuestion = match.questions && match.questions.length > 0 ? match.questions[0] : null;
-    this.emitToSocket(socketId, 'match_joined', {
-      matchId,
-      players: this.getPlayerList(match),
-      quiz: match.quiz,
-      totalQuestions: match.questions.length,
-      question: firstQuestion ? this.sanitizeQuestion(firstQuestion) : null,
-      questionIndex: 0
-    });
-
-    // Send acknowledgment to allow client to emit player_ready
-    this.emitToSocket(socketId, 'match_ready_acknowledged', {
-      matchId,
-      userId
-    });
-
-    // Broadcast to all players
-    this.emitToMatch(matchId, 'player_list_updated', {
-      players: this.getPlayerList(match)
-    });
-
-    logInfo(`Worker ${workerId}: ✅ PLAYER JOINED - MATCH NOW ON THIS WORKER`, { 
-      matchId, 
-      userId, 
-      playerCount: match.players.size, 
-      questionsLoaded: match.questions.length,
-      matchesInThisWorker: this.matches.size,
-      allMatchIds: Array.from(this.matches.keys())
-    });
-
-    // ✅ NEW: Wait for CLIENT_READY signal instead of auto-starting
-    // This ensures both clients have loaded the UI before the timer starts
-    if (match.players.size === match.maxPlayers && match.status === 'WAITING') {
-      logInfo(`Worker ${workerId}: ✅ ALL PLAYERS PRESENT - WAITING FOR CLIENT_READY`, { matchId, playerCount: match.players.size, maxPlayers: match.maxPlayers });
-      
       // Tell clients to load the game scene
       this.emitToMatch(matchId, 'LOAD_GAME_SCENE', {
         matchId,
@@ -370,12 +378,12 @@ class WorkerMatchService {
         quiz: match.quiz,
         totalQuestions: match.questions.length
       });
-    } else if (match.players.size === match.maxPlayers && match.status !== 'WAITING') {
-      // ✅ LATE JOINER FIX: If match is already full but this player just joined/reconnected,
-      // send LOAD_GAME_SCENE directly to this socket so they don't get stuck
+    } else if (!isReconnect && connectedCount === match.maxPlayers && match.status !== 'WAITING') {
+      // ✅ LATE JOINER FIX (preserved): If match is already full and this player
+      // just joined as a new socket, send LOAD_GAME_SCENE directly so they don't get stuck.
       logInfo(`Worker ${workerId}: ⚠️ LATE JOINER/RECONNECT - Sending LOAD_GAME_SCENE to user ${userId}`, { 
         matchId, 
-        playerCount: match.players.size,
+        connectedCount,
         matchStatus: match.status
       });
       
@@ -508,14 +516,98 @@ class WorkerMatchService {
     const { matchId, userId } = data;
     let match = this.matches.get(matchId);
 
+    // ✅ CRITICAL: If match not in memory, try to re-hydrate from Redis
     if (!match) {
-      logError(`Worker ${workerId}: Match not found for CLIENT_READY`, new Error(`Match ${matchId}`));
+      logInfo(`Worker ${workerId}: Match not in local memory for CLIENT_READY, loading from Redis`, { matchId, userId });
+      const matchData = await this.redis.get(`match:${matchId}`);
+      if (!matchData) {
+        logError(`Worker ${workerId}: Match not found in Redis for CLIENT_READY`, new Error(`Match ${matchId}`));
       return;
     }
 
-    const player = match.players.get(userId);
+      const storedMatch = JSON.parse(matchData);
+      const questions = await this.loadQuizQuestions(storedMatch.quizId);
+
+      match = {
+        id: matchId,
+        quizId: storedMatch.quizId,
+        quiz: storedMatch.quiz,
+        players: new Map(),
+        status: storedMatch.status || 'WAITING',
+        currentQuestionIndex: storedMatch.currentQuestionIndex || 0,
+        questionStartTime: storedMatch.questionStartTime || 0,
+        maxPlayers: 2,
+        timeLimit: storedMatch.timeLimit || 30,
+        questions,
+        createdAt: new Date(storedMatch.createdAt),
+        joinCode: storedMatch.joinCode
+      };
+
+      // Restore players
+      if (storedMatch.players && Array.isArray(storedMatch.players)) {
+        for (const p of storedMatch.players) {
+          match.players.set(p.userId, {
+            userId: p.userId,
+            username: p.username,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            socketId: '',
+            score: p.score || 0,
+            currentQuestionIndex: p.currentQuestionIndex || 0,
+            isReady: p.isReady || false,
+            answers: p.answers || [],
+            hasSubmittedCurrent: p.hasSubmittedCurrent || false
+          });
+        }
+      }
+
+      this.matches.set(matchId, match);
+    }
+
+    // ✅ CRITICAL: Handle race where CLIENT_READY arrives before player is fully attached
+    let player = match.players.get(userId);
     if (!player) {
-      logError(`Worker ${workerId}: Player not found for CLIENT_READY`, new Error(`User ${userId}`));
+      let retries = 0;
+      const maxRetries = 10;
+
+      while (!player && retries < maxRetries) {
+        logInfo(`Worker ${workerId}: Player not yet in match for CLIENT_READY, retrying... (${retries + 1}/${maxRetries})`, {
+          matchId,
+          userId
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms backoff
+        retries++;
+
+        const updatedData = await this.redis.get(`match:${matchId}`);
+        if (updatedData) {
+          const updated = JSON.parse(updatedData);
+          if (updated.players && Array.isArray(updated.players)) {
+            for (const p of updated.players) {
+              if (!match.players.has(p.userId)) {
+                match.players.set(p.userId, {
+                  userId: p.userId,
+                  username: p.username,
+                  firstName: p.firstName,
+                  lastName: p.lastName,
+                  socketId: '',
+                  score: p.score || 0,
+                  currentQuestionIndex: p.currentQuestionIndex || 0,
+                  isReady: p.isReady || false,
+                  answers: p.answers || [],
+                  hasSubmittedCurrent: p.hasSubmittedCurrent || false
+                });
+              }
+            }
+          }
+        }
+
+        player = match.players.get(userId);
+      }
+    }
+
+    if (!player) {
+      logError(`Worker ${workerId}: Player still not found for CLIENT_READY after retries`, new Error(`User ${userId}`));
       return;
     }
 
@@ -524,10 +616,16 @@ class WorkerMatchService {
     // Mark player as ready (for game scene loading)
     player.isReady = true;
 
+    // Persist updated readiness so other workers / reconnects see it
+    await this.saveMatchState(matchId, match);
+
     // Check if ALL players have sent CLIENT_READY
     const allClientReady = Array.from(match.players.values()).every(p => p.isReady);
     if (allClientReady && match.players.size === match.maxPlayers && match.status === 'WAITING') {
-      logInfo(`Worker ${workerId}: ✅ ALL CLIENTS READY - STARTING MATCH NOW`, { matchId, playerCount: match.players.size });
+      logInfo(`Worker ${workerId}: ✅ ALL CLIENTS READY - STARTING MATCH NOW`, {
+        matchId,
+        playerCount: match.players.size
+      });
       await this.startMatch(matchId);
     }
   }
@@ -660,7 +758,7 @@ class WorkerMatchService {
     }
 
     const currentQuestion = match.questions[match.currentQuestionIndex];
-    
+
     // Log question details for debugging
     logInfo(`Worker ${workerId}: Question validation`, {
       matchId,
@@ -670,10 +768,23 @@ class WorkerMatchService {
       totalQuestions: match.questions.length,
       currentQuestionExists: !!currentQuestion
     });
-    
-    // Allow submission if question exists (don't validate questionId match - it might differ)
+
+    // Strict server-side guard: only accept answers for the current question.
+    // Late/stale timeout packets from the previous question will carry the old
+    // questionId and must be ignored to prevent "skipping" the new question.
     if (!currentQuestion) {
       throw new Error('No current question available');
+    }
+
+    if (typeof questionId === 'number' && currentQuestion.id !== questionId) {
+      logInfo(`Worker ${workerId}: Ignoring stale submission for non-current question`, {
+        matchId,
+        userId,
+        submittedQuestionId: questionId,
+        currentQuestionId: currentQuestion.id,
+        currentQuestionIndex: match.currentQuestionIndex
+      });
+      return;
     }
 
     // Check for duplicate submission
@@ -683,16 +794,17 @@ class WorkerMatchService {
     }
 
     // Validate inputs
-    if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
-      throw new Error('Invalid selected options');
+    if (!Array.isArray(selectedOptions)) {
+      throw new Error('Invalid selected options payload');
     }
 
-    // ✅ TIMING DEBUG: Log server vs client time calculations
+    // TIMING DEBUG: Log server vs client time calculations
     const timeElapsedSinceQuestionStart = (Date.now() - match.questionStartTime) / 1000;
-    logInfo(`⏱️ TIMING DEBUG`, {
+    const serverTimeSpent = Math.round(timeElapsedSinceQuestionStart * 100) / 100;
+    logInfo(` TIMING DEBUG`, {
       matchId,
       userId,
-      serverTimeSpent: Math.round(timeElapsedSinceQuestionStart * 100) / 100,
+      serverTimeSpent,
       clientTimeSpent: timeSpent,
       difference: Math.round(Math.abs(timeElapsedSinceQuestionStart - timeSpent) * 100) / 100,
       questionTimeLimit: match.timeLimit,
@@ -700,6 +812,20 @@ class WorkerMatchService {
       currentTime: Date.now(),
       isLate: timeElapsedSinceQuestionStart > match.timeLimit + 5
     });
+
+    // SAFETY GUARD: Ignore impossible ultra-fast empty submissions.
+    // These typically come from a stale timeout firing right after a new
+    // question starts, producing 0-second "phantom" answers with no options.
+    if (Array.isArray(selectedOptions) && selectedOptions.length === 0 && timeSpent === 0 && serverTimeSpent < 0.25) {
+      logInfo(`Worker ${workerId}: Ignoring phantom 0-second empty submission`, {
+        matchId,
+        userId,
+        questionId,
+        serverTimeSpent,
+        clientTimeSpent: timeSpent
+      });
+      return;
+    }
 
     if (typeof timeSpent !== 'number' || timeSpent < 0 || timeSpent > match.timeLimit + 5) {
       throw new Error('Invalid time spent');
@@ -711,14 +837,17 @@ class WorkerMatchService {
     let correctOptionIds: number[] = [];
     
     try {
+      // Treat empty submissions as unanswered questions (0 points)
+      const sanitizedSelectedOptions = selectedOptions.filter((id: any) => typeof id === 'number');
+
       // Check if answer is correct
       correctOptionIds = currentQuestion.options
         .filter((opt: any) => opt.isCorrect)
         .map((opt: any) => opt.id);
 
       isCorrect = 
-        selectedOptions.length === correctOptionIds.length &&
-        selectedOptions.every(id => correctOptionIds.includes(id));
+        sanitizedSelectedOptions.length === correctOptionIds.length &&
+        sanitizedSelectedOptions.every(id => correctOptionIds.includes(id));
 
       // Calculate points (with validation)
       const basePoints = 100;
@@ -730,7 +859,7 @@ class WorkerMatchService {
       player.score += points;
       player.answers.push({
         questionId,
-        selectedOptions,
+        selectedOptions: sanitizedSelectedOptions,
         isCorrect,
         timeSpent: validTimeSpent,
         points

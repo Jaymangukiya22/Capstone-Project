@@ -78,7 +78,20 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    logError('Registration error', error as Error);
+    const err: any = error;
+    console.error('Detailed registration error:', {
+      name: err?.name,
+      message: err?.message,
+      parent: err?.parent,
+      original: err?.original,
+    });
+    logError('Registration error', err as Error, {
+      body: req.body,
+      name: err?.name,
+      message: err?.message,
+      parent: err?.parent,
+      original: err?.original,
+    });
     res.status(500).json({
       success: false,
       error: 'Registration failed',

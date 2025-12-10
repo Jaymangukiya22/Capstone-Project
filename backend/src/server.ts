@@ -2,7 +2,7 @@ import "./tracing";
 import * as dotenv from "dotenv";
 dotenv.config();
 import express from "express";
-import cors from "cors";
+// import cors from "cors"; // DISABLED - Nginx handles CORS
 import helmet from "helmet";
 import compression from "compression";
 import promBundle from "express-prom-bundle";
@@ -11,6 +11,7 @@ import swaggerUi from "swagger-ui-express";
 import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "yaml";
+import { initializeRedis } from "./config/redis";
 import categoryRoutes from "./routes/categoryRoutes";
 import quizRoutes from "./routes/quizRoutes";
 import questionRoutes from "./routes/questionRoutes";
@@ -20,6 +21,7 @@ import quizAttemptRoutes from "./routes/quizAttemptRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import matchRoutes from "./routes/matchRoutes";
 import friendMatchRoutes from "./routes/friendMatchRoutes";
+import performanceRoutes from "./routes/performanceRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
 import { logInfo, logError } from "./utils/logger";
@@ -41,70 +43,55 @@ const metricsMiddleware = promBundle({
 });
 
 // Middleware
-app.use(helmet());
-// CORS Configuration
-const allowedOrigins = [
-  `http://${IP_ADD}:5173`,
-  `http://${IP_ADD}:5174`,
-  `http://${IP_ADD}:3001`,
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:3001",
-  "http://localhost:8090",
-  "http://10.80.5.18",
-  "https://jv7ot4-ip-157-32-46-222.tunnelmole.net",
-];
-
-// Add environment-based origins
-const envOrigins = process.env.CORS_ORIGIN?.split(",") || [];
-allowedOrigins.push(...envOrigins);
-
-// Function to check if origin matches wildcard patterns
-const isOriginAllowed = (origin: string): boolean => {
-  // Check exact matches first
-  if (allowedOrigins.includes(origin)) return true;
-
-  // Check wildcard patterns
-  for (const allowedOrigin of allowedOrigins) {
-    if (allowedOrigin.includes("*")) {
-      const pattern = allowedOrigin.replace(/\*/g, ".*");
-      const regex = new RegExp(`^${pattern}$`);
-      if (regex.test(origin)) return true;
-    }
-  }
-
-  return false;
-};
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://static.cloudflareinsights.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+// CORS Configuration - DISABLED: Nginx handles CORS
+// Simple pass-through allowOrigin function for when behind Nginx
+const isOriginAllowed = (origin: string): boolean => true;
 // Load OpenAPI document
 const openApiPath = path.join(__dirname, "../docs/openapi.yaml");
-let openApiDocument: any = {};
+let openApiDocument: any = {
+  openapi: "3.0.0",
+  info: {
+    title: "QuizUP API",
+    version: "1.0.0",
+    description: "QuizUP Backend API",
+  },
+  paths: {},
+};
 try {
-  const yamlFile = fs.readFileSync(openApiPath, "utf8");
-  openApiDocument = yaml.parse(yamlFile);
+  if (fs.existsSync(openApiPath)) {
+    const yamlFile = fs.readFileSync(openApiPath, "utf8");
+    openApiDocument = yaml.parse(yamlFile);
+  }
 } catch (error) {
-  console.warn("Could not load OpenAPI document:", error);
-  // Create a basic OpenAPI document as fallback
-  openApiDocument = {
-    openapi: "3.0.0",
-    info: {
-      title: "QuizUP API",
-      version: "1.0.0",
-      description: "QuizUP Backend API",
-    },
-    paths: {},
-  };
+  // Silently use fallback if file doesn't exist or can't be parsed
 }
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-app.use(
-  cors({
-    origin: true, // Allow all origins for testing
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// CORS COMPLETELY DISABLED - Nginx handles all CORS
+// app.use(cors()) - COMMENTED OUT
+
+// Log CORS configuration on startup
+console.log('🌐 CORS Configuration:');
+console.log('   NODE_ENV:', process.env.NODE_ENV);
+console.log('   CORS_ORIGIN env:', process.env.CORS_ORIGIN);
+console.log('   CORS handled by Nginx');
 
 app.use(compression());
 app.use(metricsMiddleware);
@@ -114,13 +101,49 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     status: "OK",
     timestamp: new Date().toISOString(),
     service: "Quiz Management System Backend",
     version: "1.0.0",
     environment: process.env.NODE_ENV || "development",
   });
+});
+
+// Workers/Match server statistics endpoint for monitoring
+app.get("/api/workers/stats", (req, res) => {
+  try {
+    // This endpoint provides aggregated stats from match server
+    const stats = {
+      service: "Quiz Management System - Match Workers",
+      timestamp: new Date().toISOString(),
+      activeMatches: 0, // Will be updated by match server
+      totalPlayers: 0,  // Will be updated by match server
+      workerStats: [
+        {
+          workerId: "match-server-1",
+          status: "active",
+          matches: 0,
+          players: 0,
+          uptime: process.uptime(),
+        },
+      ],
+      systemStats: {
+        memoryUsage: process.memoryUsage(),
+        cpuUsage: process.cpuUsage(),
+        uptime: process.uptime(),
+        version: process.version,
+        platform: process.platform,
+      },
+    };
+
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to get worker statistics",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 });
 
 // Debug endpoint to check routes
@@ -168,6 +191,7 @@ app.use("/api/quiz-attempts", quizAttemptRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/matches", matchRoutes);
 app.use("/api/friend-matches", friendMatchRoutes);
+app.use("/api/performance", performanceRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {
@@ -195,14 +219,22 @@ process.on("SIGTERM", async () => {
 // Start server
 async function startServer() {
   try {
+    console.log("🚀 Starting server initialization...");
+    // Initialize Redis first
+    console.log(" Initializing Redis...");
+    await initializeRedis();
+    console.log("✅ Redis initialization successful!");
+    
     // Connect to database
+    console.log("📡 Attempting to connect to database...");
     await connectDatabase();
+    console.log("✅ Database connection successful!");
     logInfo("Connected to PostgreSQL database");
 
     // Initialize custom metrics
     initMetrics();
 
-    app.listen(Number(PORT), "0.0.0.0", () => {
+    app.listen(Number(PORT), "0.0.0.0", 2048, () => {
       const networkIP = process.env.NETWORK_IP || "localhost";
       logInfo("Server started successfully", {
         port: PORT,
@@ -216,8 +248,22 @@ async function startServer() {
     });
   } catch (error) {
     logError("Failed to start server", error as Error);
+    console.error("FATAL ERROR:", error);
     process.exit(1);
   }
 }
+
+// Catch unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logError('Unhandled Promise Rejection', new Error(String(reason)));
+});
+
+// Catch uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  logError('Uncaught Exception', error);
+  process.exit(1);
+});
 
 startServer();

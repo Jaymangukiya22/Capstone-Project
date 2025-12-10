@@ -72,10 +72,10 @@ echo ============================================
 echo         First Time Tunnel Setup
 echo ============================================
 echo Creating .cloudflared directory...
-if not exist "Users/jay/.cloudflared" mkdir "Users/jay/.cloudflared"
+if not exist "Users/Aryan/.cloudflared" mkdir "Users/Aryan/.cloudflared"
 
 echo Copying configuration files...
-copy config-local.yml "Users/jay/.cloudflared/config.yml"
+copy config-local.yml "Users/Aryan/.cloudflared/config.yml"
 @REM copy 260b3937-da0e-4802-bd8b-219e47806139.json "C:\Users\Aryan\.cloudflared\"
 
 echo Setup complete! Now run option 4 to create DNS records.

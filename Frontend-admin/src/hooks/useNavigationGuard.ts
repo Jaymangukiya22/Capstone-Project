@@ -17,7 +17,10 @@ export const useNavigationGuard = ({
   const isBlockingRef = useRef(false);
 
   useEffect(() => {
-    if (!shouldBlock) return;
+    if (!shouldBlock) {
+      isBlockingRef.current = false;
+      return;
+    }
 
     isBlockingRef.current = true;
 
@@ -187,8 +190,16 @@ export const useResultsNavigationGuard = () => {
     window.history.replaceState(null, '', window.location.href);
     
     const handlePopState = () => {
-      // Always redirect to quiz selection when trying to go back from results
-      window.location.href = '/student-quiz';
+      // Check if this was a friend match
+      const friendMatchData = sessionStorage.getItem('friendMatchResults');
+      
+      if (friendMatchData) {
+        // For friend matches, go to student dashboard
+        window.location.href = '/student';
+      } else {
+        // For regular quizzes, go to quiz selection
+        window.location.href = '/student-quiz';
+      }
     };
 
     window.addEventListener('popstate', handlePopState);

@@ -274,7 +274,7 @@ SELECT
     COUNT(DISTINCT qa.user_id) as unique_users,
     AVG(qa.score) as avg_score,
     MAX(qa.score) as max_score,
-    AVG(qa.time_spent) as avg_time_taken,
+    AVG(qa.time_taken) as avg_time_taken,
     COUNT(DISTINCT qq.id) as total_questions,
     q.created_at,
     MAX(qa.completed_at) as last_attempted

@@ -22,20 +22,20 @@ const environment = getEnvironment();
 // API Configuration based on environment
 export const API_CONFIG = {
   local: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:8090/api', // Use Nginx proxy
     websocketURL: 'ws://localhost:3001',
     grafanaURL: 'http://localhost:3003',
     adminerURL: 'http://localhost:8080',
   },
   lan: {
-    baseURL: `http://${window.location.hostname}:3000`,
+    baseURL: `http://${window.location.hostname}:8090/api`, // Use Nginx proxy
     websocketURL: `ws://${window.location.hostname}:3001`,
     grafanaURL: `http://${window.location.hostname}:3003`,
     adminerURL: `http://${window.location.hostname}:8080`,
   },
   production: {
-    baseURL: 'https://api.quizdash.dpdns.org',
-    websocketURL: 'wss://match.quizdash.dpdns.org',
+    baseURL: 'https://api.quizdash.dpdns.org/api',
+    websocketURL: 'ws://localhost:3001', // FORCE LOCAL WEBSOCKET IN DEV
     grafanaURL: 'https://grafana.quizdash.dpdns.org',
     adminerURL: 'https://adminer.quizdash.dpdns.org',
   }

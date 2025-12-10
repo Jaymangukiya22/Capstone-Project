@@ -10,11 +10,12 @@ import type { QuizSettings } from "@/types/quiz-settings"
 import { defaultQuizSettings } from "@/types/quiz-settings"
 
 interface QuizSettingsTabProps {
-  quizId?: string
+  quizId?: number | null
   totalQuestions?: number
+  onSettingsChange?: (settings: QuizSettings) => void
 }
 
-export function QuizSettingsTab({ quizId = "default", totalQuestions = 0 }: QuizSettingsTabProps) {
+export function QuizSettingsTab({ quizId, totalQuestions = 0, onSettingsChange }: QuizSettingsTabProps) {
   const [settings, setSettings] = useState<QuizSettings>(defaultQuizSettings)
 
   // Load settings from localStorage on mount
@@ -87,9 +88,23 @@ export function QuizSettingsTab({ quizId = "default", totalQuestions = 0 }: Quiz
     localStorage.removeItem(`quiz_builder_${quizId}_settings`)
   }
 
-  const handleSave = () => {
-    console.log('Quiz settings saved:', settings)
-    // Here you would typically send to backend
+  const handleSave = async () => {
+    if (!quizId) {
+      alert('Please save the quiz details first before updating settings.')
+      return
+    }
+
+    try {
+      console.log('Quiz settings saved:', settings)
+      // Notify parent component
+      if (onSettingsChange) {
+        onSettingsChange(settings)
+      }
+      alert('Settings saved successfully!')
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+      alert('Failed to save settings. Please try again.')
+    }
   }
 
   const getGameTypeLabel = (type: QuizSettings['gameType']) => {

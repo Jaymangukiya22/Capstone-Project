@@ -1,30 +1,57 @@
 import { Router, Request, Response } from 'express';
 import { logInfo, logError } from '../utils/logger';
+import { getMatchService } from '../services/matchService';
+import { getRedisClient } from '../config/redis';
 
 // Simple HTTP client instead of axios
 const httpClient = {
   async get(url: string): Promise<{ data: any }> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}`);
-      (error as any).response = { status: response.status };
+    try {
+      logInfo('HTTP GET request', { url });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`);
+        (error as any).response = { status: response.status };
+        throw error;
+      }
+      const data = await response.json();
+      logInfo('HTTP GET success', { url, status: response.status });
+      return { data };
+    } catch (error: any) {
+      logError('HTTP GET failed', new Error(`URL: ${url}, Error: ${error.message}`));
       throw error;
     }
-    return { data: await response.json() };
   },
   
   async post(url: string, data: any): Promise<{ data: any }> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}`);
-      (error as any).response = { status: response.status };
+    try {
+      logInfo('HTTP POST request', { url, data });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const text = await response.text();
+        logError('HTTP POST failed', new Error(`Status: ${response.status}, Response: ${text}`));
+        const error = new Error(`HTTP ${response.status}`);
+        (error as any).response = { status: response.status };
+        throw error;
+      }
+      const responseData = await response.json();
+      logInfo('HTTP POST success', { url, status: response.status });
+      return { data: responseData };
+    } catch (error: any) {
+      logError('HTTP POST failed', new Error(`URL: ${url}, Error: ${error.message}`));
       throw error;
     }
-    return { data: await response.json() };
   }
 };
 
@@ -38,8 +65,8 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
-// Match service URL
-const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://localhost:3001';
+// Match service URL - use container name in Docker, localhost for development
+const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://quizup_matchserver:3001';
 
 /**
  * Create a friend match (1v1 with join code)
@@ -53,6 +80,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     const userId = bodyUserId || req.user?.id || 1;
     const username = bodyUsername || req.user?.username || `User${userId}`;
 
+    logInfo('Friend match request received', { quizId, userId, username, MATCH_SERVICE_URL });
+
     if (!quizId) {
       return res.status(400).json({
         success: false,
@@ -60,19 +89,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    // Call match service to create friend match
-    const response = await httpClient.post(`${MATCH_SERVICE_URL}/matches/friend`, {
-      quizId,
-      userId,
-      username
-    });
-
-    // Check if response has the expected structure
-    const matchData = response.data?.data || response.data;
+    // Create friend match using backend's MatchService
+    logInfo('Creating friend match using MatchService');
     
-    if (!matchData?.matchId || !matchData?.joinCode) {
-      throw new Error('Invalid response from match service');
-    }
+    const matchService = getMatchService();
+    const matchData = await matchService.createFriendMatch(quizId, userId);
+
+    logInfo('Friend match created successfully', { matchData });
 
     logInfo('Friend match created via API', { 
       quizId, 
@@ -91,11 +114,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     logError('Failed to create friend match', error as Error);
+    logError('Error details', new Error(`Status: ${error.response?.status}, Message: ${error.message}`));
     return res.status(500).json({
       success: false,
-      error: 'Failed to create friend match'
+      error: 'Failed to create friend match',
+      details: error.message
     });
   }
 });
@@ -115,25 +140,46 @@ router.get('/code/:joinCode', async (req, res) => {
       });
     }
 
-    // Call match service to find match by code
-    const response = await httpClient.get(`${MATCH_SERVICE_URL}/matches/code/${joinCode}`);
+    // Look up match ID from join code in Redis
+    const redis = getRedisClient();
+    const matchId = await redis.get(`joincode:${joinCode.toUpperCase()}`);
 
-    return res.json({
-      success: true,
-      data: {
-        match: response.data.data.match,
-        websocketUrl: `ws://localhost:3001`
-      }
-    });
-
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+    if (!matchId) {
+      logInfo('Match not found for join code', { joinCode });
       return res.status(404).json({
         success: false,
         error: 'No match found with that join code'
       });
     }
 
+    // Get match details from Redis
+    const matchData = await redis.get(`match:${matchId}`);
+    if (!matchData) {
+      logInfo('Match data not found in Redis', { matchId, joinCode });
+      return res.status(404).json({
+        success: false,
+        error: 'Match data not found'
+      });
+    }
+
+    const match = JSON.parse(matchData);
+
+    logInfo('Match found by join code', { joinCode, matchId });
+    return res.json({
+      success: true,
+      data: {
+        match: {
+          id: match.id,
+          quizId: match.quizId,
+          joinCode: match.joinCode,
+          status: match.status,
+          matchType: match.matchType
+        },
+        websocketUrl: `ws://${process.env.NETWORK_IP || 'localhost'}:3001`
+      }
+    });
+
+  } catch (error: any) {
     logError('Failed to find match by code', error as Error);
     return res.status(500).json({
       success: false,

@@ -40,28 +40,28 @@ export class User extends Model {
   email!: string;
 
   @AllowNull(false)
-  @Column(DataType.STRING(255))
+  @Column({ type: DataType.STRING(255), field: 'password_hash' })
   passwordHash!: string;
 
   @Default(UserRole.PLAYER)
   @Column(DataType.ENUM(...Object.values(UserRole)))
   role!: UserRole;
 
-  @Column(DataType.STRING(50))
+  @Column({ type: DataType.STRING(50), field: 'first_name' })
   firstName?: string;
 
-  @Column(DataType.STRING(50))
+  @Column({ type: DataType.STRING(50), field: 'last_name' })
   lastName?: string;
 
   @Column(DataType.STRING(255))
   avatar?: string;
 
   @Default(1200)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'elo_rating' })
   eloRating!: number;
 
   @Default(0)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'total_matches' })
   totalMatches!: number;
 
   @Default(0)
@@ -73,16 +73,18 @@ export class User extends Model {
   losses!: number;
 
   @Default(true)
-  @Column(DataType.BOOLEAN)
+  @Column({ type: DataType.BOOLEAN, field: 'is_active' })
   isActive!: boolean;
 
-  @Column(DataType.DATE)
+  @Column({ type: DataType.DATE, field: 'last_login_at' })
   lastLoginAt?: Date;
 
   @CreatedAt
+  @Column({ type: DataType.DATE, field: 'created_at' })
   createdAt!: Date;
 
   @UpdatedAt
+  @Column({ type: DataType.DATE, field: 'updated_at' })
   updatedAt!: Date;
 
   // Associations

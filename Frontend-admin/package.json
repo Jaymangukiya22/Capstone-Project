@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:analyze": "vite build --mode analyze",
+    "build:report": "vite build && vite-bundle-visualizer dist/stats.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "docs:typedoc": "typedoc --options typedoc.json",

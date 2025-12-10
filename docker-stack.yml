@@ -1,0 +1,326 @@
+# =============================================================================
+# DOCKER SWARM STACK FOR PRODUCTION DEPLOYMENT
+# Supports 4000+ concurrent users with auto-scaling
+# Usage: docker stack deploy -c docker-stack.yml quizup
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # DATABASE SERVICE (Single instance with persistent storage)
+  # =============================================================================
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: quizup_db
+      POSTGRES_USER: quizup_user
+      POSTGRES_PASSWORD: quizup_password
+      POSTGRES_MAX_CONNECTIONS: 500
+      POSTGRES_SHARED_BUFFERS: 512MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 2GB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - quizup_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+
+  # =============================================================================
+  # REDIS SERVICE (Single instance with persistence)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - quizup_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+      restart_policy:
+        condition: on-failure
+
+  # =============================================================================
+  # BACKEND SERVICE (Multiple replicas for load distribution)
+  # =============================================================================
+  backend:
+    image: quizup-backend:latest
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://quizup_user:quizup_password@postgres:5432/quizup_db
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: quizup_db
+      DB_USER: quizup_user
+      DB_PASSWORD: quizup_password
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: 7a0b42e9df5856f7cfe0094361f65630
+      CORS_ORIGIN: https://quizdash.dpdns.org,https://api.quizdash.dpdns.org
+      DB_POOL_MAX: 50
+      LOG_LEVEL: warn
+      ENABLE_DEBUG_ROUTES: 'false'
+      RATE_LIMIT_MAX_REQUESTS: 2000
+    networks:
+      - quizup_network
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      replicas: 2  # Scale based on load
+      update_config:
+        parallelism: 2
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 2
+        delay: 10s
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # =============================================================================
+  # MATCH SERVER SERVICE (Multiple replicas with worker pools)
+  # =============================================================================
+  matchserver:
+    image: quizup-matchserver:latest
+    command: npm run dev:match:pool
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://quizup_user:quizup_password@postgres:5432/quizup_db
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: quizup_db
+      DB_USER: quizup_user
+      DB_PASSWORD: quizup_password
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: 7a0b42e9df5856f7cfe0094361f65630
+      MIN_WORKERS: 4
+      MAX_WORKERS: 8
+      MAX_MATCHES: 3
+      LOG_LEVEL: warn
+      CORS_ORIGIN: https://quizdash.dpdns.org,wss://match.quizdash.dpdns.org
+    networks:
+      - quizup_network
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      replicas: 3  # Scale based on concurrent matches
+      update_config:
+        parallelism: 1
+        delay: 30s  # Longer delay for WebSocket connections
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+
+  # =============================================================================
+  # NGINX LOAD BALANCER (High availability)
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    networks:
+      - quizup_network
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend
+      - matchserver
+    deploy:
+      replicas: 2  # High availability
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+
+  # =============================================================================
+  # FRONTEND SERVICE (Static files with CDN-like caching)
+  # =============================================================================
+  frontend:
+    image: quizup-frontend:latest
+    networks:
+      - quizup_network
+    ports:
+      - "5173:80"
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 5s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+
+  # =============================================================================
+  # MONITORING SERVICE (Optional)
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    networks:
+      - quizup_network
+    ports:
+      - "9090:9090"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # =============================================================================
+  # GRAFANA DASHBOARDS (Monitoring visualization)
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - quizup_network
+    ports:
+      - "3002:3000"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+
+  # =============================================================================
+  # DATABASE ADMIN (Optional)
+  # =============================================================================
+  adminer:
+    image: adminer:latest
+    networks:
+      - quizup_network
+    ports:
+      - "8081:8080"
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  quizup_network:
+    driver: overlay
+    attachable: true
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+
+# =============================================================================
+# VOLUMES (Persistent storage)
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# =============================================================================
+# CONFIGS (External configuration files)
+# =============================================================================
+configs:
+  nginx_config:
+    file: ./nginx.conf
+  prometheus_config:
+    external: true
+    name: quizup_prometheus_config
+
+# =============================================================================
+# SECRETS (Production secrets)
+# =============================================================================
+secrets:
+  jwt_secret:
+    external: true
+    name: quizup_jwt_secret
+  db_password:
+    external: true
+    name: quizup_db_password

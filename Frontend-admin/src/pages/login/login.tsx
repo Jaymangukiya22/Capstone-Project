@@ -28,12 +28,58 @@ export function LoginForm() {
     setIsSubmitting(true);
     
     try {
+      console.log('🎯 LOGIN FORM: Starting login...');
       await login(formData);
-      // Redirect will be handled by the app after successful login
-      window.location.href = '/categories';
+      console.log('🎯 LOGIN FORM: Login completed successfully!');
+      
+      // Wait longer for localStorage to persist
+      console.log('🎯 LOGIN FORM: Waiting for localStorage to persist...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Verify all data is in localStorage
+      const token = localStorage.getItem('authToken');
+      const refreshToken = localStorage.getItem('refreshToken');
+      const userStr = localStorage.getItem('user');
+      
+      console.log('🎯 LOGIN FORM: Verification before redirect:');
+      console.log('  - authToken:', token ? 'EXISTS' : 'MISSING');
+      console.log('  - refreshToken:', refreshToken ? 'EXISTS' : 'MISSING');
+      console.log('  - user:', userStr ? 'EXISTS' : 'MISSING');
+      
+      if (!userStr) {
+        console.error('❌ LOGIN FORM: USER DATA MISSING! Cannot redirect safely.');
+        console.error('This means localStorage.setItem("user") failed or was cleared');
+        return;
+      }
+      
+      const userData = JSON.parse(userStr);
+      console.log('🎯 LOGIN FORM: User data verified:', userData);
+      console.log('🎯 LOGIN FORM: User role:', userData.role);
+      
+      // Final check before redirect
+      console.log('🎯 LOGIN FORM: All data verified, redirecting now...');
+      
+      // Force localStorage to flush by reading it back one more time
+      const finalCheck = localStorage.getItem('user');
+      console.log('🎯 LOGIN FORM: Final check before redirect - user exists:', !!finalCheck);
+      
+      // Use a longer delay to ensure localStorage is persisted
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (userData.role === 'ADMIN') {
+        console.log('🎯 LOGIN FORM: Navigating to /categories');
+        // Use pushState to change URL without reload
+        window.history.pushState({}, '', '/categories');
+        // Then force a reload to load the new page
+        window.location.reload();
+      } else {
+        console.log('🎯 LOGIN FORM: Navigating to /student-quiz');
+        window.history.pushState({}, '', '/student-quiz');
+        window.location.reload();
+      }
     } catch (error) {
       // Error is handled by the auth context
-      console.error('Login failed:', error);
+      console.error('❌ LOGIN FORM: Login failed:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -61,7 +107,10 @@ export function LoginForm() {
                 Login to your account
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Enter your email below to login to your account
+                Enter your email/username and password to login
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Admin: admin/admin | Student: student/student
               </p>
             </div>
 
@@ -80,8 +129,8 @@ export function LoginForm() {
                 <Input 
                   id="email" 
                   name="email"
-                  type="email" 
-                  placeholder="admin@example.com" 
+                  type="text" 
+                  placeholder="admin or student" 
                   value={formData.email}
                   onChange={handleInputChange}
                   required 

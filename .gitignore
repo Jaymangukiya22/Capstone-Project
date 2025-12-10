@@ -6,7 +6,7 @@ node_modules/
 *.env
 .env*
 !.env.example
-
+.env.tunnel
 # Logs
 logs/
 *.log
@@ -65,7 +65,7 @@ Thumbs.db
 /etc/cloudflared/
 
 # Database dumps
-*.sql
+# *.sql
 !docs/database-schema.sql
 
 # Backup files
@@ -77,6 +77,6 @@ Thumbs.db
 *coverage/
 *dist/
 *logs/
-
+backend/dist/
 Frontend-admin/docs/
 backend/docs/

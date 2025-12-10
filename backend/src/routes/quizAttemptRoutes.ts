@@ -19,9 +19,18 @@ import {
 const router = Router();
 
 // All routes require authentication
-// router.use(authenticateToken);
+router.use(authenticateToken);
 
-// Player routes for quiz attempts (Auth temporarily disabled for testing)
+// Get user's attempts history (must be before /:id to avoid conflicts)
+router.get('/user/history', getUserAttempts);
+
+// Get user statistics
+router.get('/user/stats', getUserStats);
+
+// Get leaderboard (global or quiz-specific)
+router.get('/leaderboard', getLeaderboard);
+
+// Player routes for quiz attempts
 router.post('/', validateRequest(startQuizSchema), startQuizAttempt);
 router.post('/start', validateRequest(startQuizSchema), startQuizAttempt);
 router.post('/:attemptId/answer', validateRequest(submitAnswerSchema), submitAnswer);
@@ -32,14 +41,5 @@ router.get('/', getUserAttempts);
 
 // Get specific attempt
 router.get('/:id', getAttemptById);
-
-// Get user's attempts history
-router.get('/user/history', getUserAttempts);
-
-// Get user statistics
-router.get('/user/stats', getUserStats);
-
-// Get leaderboard (global or quiz-specific)
-router.get('/leaderboard', getLeaderboard);
 
 export default router;

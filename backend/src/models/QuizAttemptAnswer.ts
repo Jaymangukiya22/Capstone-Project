@@ -8,6 +8,7 @@ import {
   AllowNull,
   Default,
   CreatedAt,
+  UpdatedAt,
   BelongsTo,
   ForeignKey,
 } from 'sequelize-typescript';
@@ -47,6 +48,9 @@ export class QuizAttemptAnswer extends Model {
 
   @CreatedAt
   createdAt!: Date;
+
+  @UpdatedAt
+  updatedAt!: Date;
 
   // Associations
   @BelongsTo(() => QuizAttempt, 'attemptId')

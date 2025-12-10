@@ -7,7 +7,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import { Server as SocketIOServer } from 'socket.io';
-import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption } from './models/index';
+import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, MatchPlayer as MatchPlayerModel } from './models/index';
+import { MatchType } from './types/enums';
 import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
 import { logInfo, logError } from './utils/logger';
@@ -215,6 +216,9 @@ matchserver_status 1
 `.trim();
 
     // Per-match players metric lines
+    const perMatchHeaderLines = playersPerMatch.length > 0 ? `
+# HELP matchserver_match_players Number of players in each match
+# TYPE matchserver_match_players gauge` : '';
     const perMatchLines = playersPerMatch.map(pm => `matchserver_match_players{match_id="${pm.matchId}"} ${pm.count}`).join('\n');
 
     // Worker-related gauges (computed abstraction)
@@ -232,11 +236,22 @@ matchserver_idle_workers ${workerStats.idleWorkers}
 # TYPE matchserver_workers_spawned_total counter
 matchserver_workers_spawned_total ${workersSpawned}`.trim();
 
+    const workerMatchHeaderLines = workerStats.workerMatchCounts.length > 0 ? `
+# HELP matchserver_worker_matches Matches assigned to each worker
+# TYPE matchserver_worker_matches gauge` : '';
     const workerMatchLines = workerStats.workerMatchCounts
       .map(w => `matchserver_worker_matches{worker_id="${w.worker_id}"} ${w.matches}`)
       .join('\n');
 
-    const metrics = [bundleMetrics, metricsHeader, perMatchLines, workersHeader, workerMatchLines]
+    const metrics = [
+      bundleMetrics,
+      metricsHeader,
+      perMatchHeaderLines,
+      perMatchLines,
+      workersHeader,
+      workerMatchHeaderLines,
+      workerMatchLines
+    ]
       .filter(Boolean)
       .join('\n');
 
@@ -336,7 +351,14 @@ interface MatchPlayer {
   currentQuestionIndex: number;
   isReady: boolean;
   isAI: boolean;
-  answers: any[];
+  hasSubmittedCurrent?: boolean; // Track if player submitted current question
+  answers: Array<{
+    questionId: number;
+    selectedOptions: number[];
+    isCorrect: boolean;
+    timeSpent: number;
+    points: number;
+  }>;
 }
 
 interface MatchRoom {
@@ -360,6 +382,7 @@ class EnhancedMatchService {
   private matches: Map<string, MatchRoom> = new Map();
   private userToMatch: Map<number, string> = new Map();
   private joinCodeToMatch: Map<string, string> = new Map();
+  private disconnectTimers: Map<number, NodeJS.Timeout> = new Map();
   // Simple in-process counters for Prometheus exposition
   private matchesCreatedTotal: number = 0;
   private workersSpawnedTotal: number = 0;
@@ -468,7 +491,7 @@ class EnhancedMatchService {
             as: 'options'
           }]
         }],
-        order: [['order', 'ASC']]
+        order: [['orderIndex', 'ASC']]
       });
 
       return quizQuestions.map((qq: any) => ({
@@ -630,13 +653,15 @@ class EnhancedMatchService {
           socket.join(matchId);
           socket.emit('friend_match_created', { matchId, joinCode });
 
-          // Store match in Redis/InMemory with player data
+          // Store match in Redis/InMemory with player data AND questions
           const matchDataToStore = {
             id: matchId,
             quizId: data.quizId,
             joinCode,
             status: match.status,
             createdAt: match.createdAt,
+            questions: questions,
+            timeLimit: match.timeLimit,
             players: Array.from(match.players.values()).map(p => ({
               userId: p.userId,
               username: p.username,
@@ -651,7 +676,10 @@ class EnhancedMatchService {
             playersData: matchDataToStore.players
           });
           
+          // Store match data
           await store.set(`match:${matchId}`, JSON.stringify(matchDataToStore));
+          // CRITICAL: Store joinCode mapping so friend can find the match
+          await store.set(`joinCode:${joinCode}`, matchId);
 
           logInfo('Friend match created', { 
             matchId, 
@@ -678,7 +706,7 @@ class EnhancedMatchService {
           
           // If not found in memory, check store
           if (!matchId) {
-            const storedMatchId = await store.get(`joinCode:${data.joinCode.toUpperCase()}`);
+            const storedMatchId = await store.get(`joincode:${data.joinCode.toUpperCase()}`);
             if (!storedMatchId) {
               socket.emit('error', { message: 'Invalid join code' });
               return;
@@ -700,8 +728,10 @@ class EnhancedMatchService {
             // Parse stored match data and create match object
             const storedMatch = JSON.parse(matchData);
             
-            // Load quiz questions
-            const questions = await this.loadQuizQuestions(storedMatch.quizId);
+            // Use stored questions if available, otherwise load from DB
+            const questions = storedMatch.questions && storedMatch.questions.length > 0 
+              ? storedMatch.questions 
+              : await this.loadQuizQuestions(storedMatch.quizId);
             
             // Create match in memory
             match = {
@@ -715,27 +745,30 @@ class EnhancedMatchService {
               questions,
               currentQuestionIndex: 0,
               questionStartTime: 0,
-              timeLimit: 30,
+              timeLimit: storedMatch.timeLimit || 30,
               createdAt: new Date(storedMatch.createdAt),
               matchType: 'FRIEND_1V1'
             };
             
-            // Add creator if exists
+            // IMPORTANT: Restore creator from Redis but mark as disconnected
+            // They'll update their socket when they reconnect
             if (storedMatch.players && storedMatch.players.length > 0) {
-              const creator = storedMatch.players[0];
-              const creatorPlayer: MatchPlayer = {
-                userId: creator.userId,
-                username: creator.username,
-                firstName: creator.firstName || '',
-                lastName: creator.lastName || '',
-                socketId: '',
-                score: 0,
-                currentQuestionIndex: 0,
-                isReady: false,
-                isAI: false,
-                answers: []
-              };
-              match.players.set(creator.userId, creatorPlayer);
+              for (const storedPlayer of storedMatch.players) {
+                const restoredPlayer: MatchPlayer = {
+                  userId: storedPlayer.userId,
+                  username: storedPlayer.username,
+                  firstName: storedPlayer.firstName || '',
+                  lastName: storedPlayer.lastName || '',
+                  socketId: '', // Empty socket - they're disconnected
+                  score: 0,
+                  currentQuestionIndex: 0,
+                  isReady: false,
+                  isAI: false,
+                  hasSubmittedCurrent: false,
+                  answers: []
+                };
+                match.players.set(storedPlayer.userId, restoredPlayer);
+              }
             }
             
             // Store in memory maps
@@ -745,36 +778,117 @@ class EnhancedMatchService {
             }
           }
           
-          if (!match || match.status !== 'WAITING' || match.players.size >= match.maxPlayers) {
-            socket.emit('error', { message: 'Match not available' });
+          if (!match) {
+            socket.emit('error', { message: 'Match not found' });
             return;
           }
-
-          // Check if user is already in the match
+          
+          // Check if user is already in the match (for reconnection)
           if (match.players.has(socket.data.userId)) {
             // If already in the match, just update their socket ID and proceed
             const existingPlayer = match.players.get(socket.data.userId);
             if (existingPlayer) {
               existingPlayer.socketId = socket.id;
               this.userToMatch.set(socket.data.userId, matchId);
+              
+              // Clear grace period timer if exists
+              if (this.disconnectTimers && this.disconnectTimers.has(socket.data.userId)) {
+                clearTimeout(this.disconnectTimers.get(socket.data.userId));
+                this.disconnectTimers.delete(socket.data.userId);
+                logInfo('Grace period cleared - player reconnected', {
+                  userId: socket.data.userId,
+                  matchId
+                });
+              }
+              
               socket.join(matchId);
-              socket.emit('match_joined', {
+              
+              // DIAGNOSTIC: Check if socket is in room
+              const roomSize = this.io.sockets.adapter.rooms.get(matchId)?.size || 0;
+              const socketInRoom = this.io.sockets.adapter.rooms.get(matchId)?.has(socket.id) || false;
+              
+              logInfo('🔍 RECONNECTION DIAGNOSTIC - Socket joined to room', {
                 matchId,
-                players: Array.from(match.players.values()).map(p => ({
-                  userId: p.userId,
-                  username: p.username,
-                  firstName: p.firstName,
-                  lastName: p.lastName,
-                  isReady: p.isReady
-                }))
+                userId: socket.data.userId,
+                socketId: socket.id,
+                roomSize,
+                socketInRoom,
+                matchStatus: match.status
               });
+              
+              // If match is in progress, send current question state
+              if (match.status === 'IN_PROGRESS') {
+                const currentQuestion = match.questions[match.currentQuestionIndex];
+                const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+                
+                if (currentQuestion) {
+                  logInfo('🔍 Sending next_question to reconnected player', {
+                    matchId,
+                    userId: socket.data.userId,
+                    socketId: socket.id,
+                    questionIndex: match.currentQuestionIndex
+                  });
+                  
+                  // ✅ Send next_question to the room (not just this socket) so frontend can handle it
+                  this.io.to(matchId).emit('next_question', {
+                    question: {
+                      id: currentQuestion.id,
+                      questionText: currentQuestion.questionText,
+                      options: currentQuestion.options.map((opt: any) => ({
+                        id: opt.id,
+                        optionText: opt.optionText
+                      })),
+                      timeLimit: match.timeLimit
+                    },
+                    questionIndex: match.currentQuestionIndex,
+                    totalQuestions: match.questions.length
+                  });
+                  
+                  // Notify other players that this player reconnected
+                  socket.to(matchId).emit('player_reconnected', {
+                    userId: socket.data.userId,
+                    username: socket.data.username,
+                    message: `${socket.data.username} reconnected`
+                  });
+                }
+              } else {
+                socket.emit('match_joined', {
+                  matchId,
+                  players: Array.from(match.players.values()).map(p => ({
+                    userId: p.userId,
+                    username: p.username,
+                    firstName: p.firstName,
+                    lastName: p.lastName,
+                    isReady: p.isReady
+                  }))
+                });
+              }
+              
               logInfo('Player reconnected to match', {
                 matchId,
                 userId: socket.data.userId,
-                playerCount: match.players.size
+                playerCount: match.players.size,
+                matchStatus: match.status
               });
               return;
             }
+          }
+          
+          // If match is not WAITING and player is not already in it, reject
+          if (match.status !== 'WAITING') {
+            socket.emit('error', { message: 'Match already started or completed' });
+            return;
+          }
+          
+          if (match.players.size >= match.maxPlayers && !match.players.has(socket.data.userId)) {
+            socket.emit('error', { message: 'Match is full' });
+            return;
+          }
+          
+          // Validate questions exist
+          if (!match.questions || match.questions.length === 0) {
+            socket.emit('error', { message: 'No questions available for this quiz' });
+            return;
           }
 
           // Add player to match
@@ -788,6 +902,7 @@ class EnhancedMatchService {
             currentQuestionIndex: 0,
             isReady: false,
             isAI: false,
+            hasSubmittedCurrent: false,
             answers: []
           };
 
@@ -853,6 +968,8 @@ class EnhancedMatchService {
             joinCode: match.joinCode,
             status: match.status,
             createdAt: match.createdAt,
+            questions: match.questions, // Include questions
+            timeLimit: match.timeLimit,
             players: Array.from(match.players.values()).map(p => ({
               userId: p.userId,
               username: p.username,
@@ -896,10 +1013,18 @@ class EnhancedMatchService {
             // Parse stored match data and create match object
             const storedMatch = JSON.parse(matchData);
             
-            // Load quiz questions
-            const questions = await this.loadQuizQuestions(storedMatch.quizId);
+            // Use stored questions if available, otherwise load from DB
+            const questions = storedMatch.questions && storedMatch.questions.length > 0 
+              ? storedMatch.questions 
+              : await this.loadQuizQuestions(storedMatch.quizId);
             
-            // Create match in memory
+            // Validate questions exist
+            if (!questions || questions.length === 0) {
+              socket.emit('error', { message: 'No questions available for this quiz' });
+              return;
+            }
+            
+            // Create match in memory - restore status and progress from stored data
             match = {
               id: data.matchId,
               quizId: storedMatch.quizId,
@@ -907,11 +1032,11 @@ class EnhancedMatchService {
               joinCode: storedMatch.joinCode,
               players: new Map(),
               maxPlayers: 2,
-              status: 'WAITING',
+              status: storedMatch.status || 'WAITING',
               questions,
-              currentQuestionIndex: 0,
-              questionStartTime: 0,
-              timeLimit: 30,
+              currentQuestionIndex: storedMatch.currentQuestionIndex || 0,
+              questionStartTime: storedMatch.questionStartTime || 0,
+              timeLimit: storedMatch.timeLimit || 30,
               createdAt: new Date(storedMatch.createdAt),
               matchType: 'FRIEND_1V1'
             };
@@ -925,16 +1050,23 @@ class EnhancedMatchService {
                   firstName: storedPlayer.firstName || '',
                   lastName: storedPlayer.lastName || '',
                   socketId: '', // Will be updated when they reconnect
-                  score: 0,
-                  currentQuestionIndex: 0,
+                  score: storedPlayer.score || 0, // Restore score
+                  currentQuestionIndex: storedPlayer.currentQuestionIndex || 0,
                   isReady: storedPlayer.isReady || false,
                   isAI: false,
-                  answers: []
+                  hasSubmittedCurrent: storedPlayer.hasSubmittedCurrent || false,
+                  answers: storedPlayer.answers || [] // Restore answers
                 };
                 match.players.set(storedPlayer.userId, restoredPlayer);
               }
             }
-            
+                        
+            // CRITICAL FIX: Restore questionStartTime to prevent timer loop on reconnection
+            // If questionStartTime was recently updated, keep it to prevent timer reset
+            if (storedMatch.questionStartTime) {
+              match.questionStartTime = storedMatch.questionStartTime;
+            }
+
             // Store in memory maps
             this.matches.set(data.matchId, match);
             this.joinCodeToMatch.set(storedMatch.joinCode, data.matchId);
@@ -947,6 +1079,12 @@ class EnhancedMatchService {
             if (existingPlayer) {
               // Update existing player's socket ID
               existingPlayer.socketId = socket.id;
+              logInfo('Player reconnecting to match', {
+                matchId: data.matchId,
+                userId: socket.data.userId,
+                oldSocketId: existingPlayer.socketId,
+                newSocketId: socket.id
+              });
             } else {
               // Add new player
               const player: MatchPlayer = {
@@ -959,9 +1097,16 @@ class EnhancedMatchService {
                 currentQuestionIndex: 0,
                 isReady: false,
                 isAI: false,
+                hasSubmittedCurrent: false,
                 answers: []
               };
               match.players.set(socket.data.userId, player);
+              logInfo('New player joining match', {
+                matchId: data.matchId,
+                userId: socket.data.userId,
+                socketId: socket.id,
+                totalPlayers: match.players.size
+              });
             }
             
             this.userToMatch.set(socket.data.userId, data.matchId);
@@ -975,17 +1120,72 @@ class EnhancedMatchService {
               roomSize: this.io.sockets.adapter.rooms.get(data.matchId)?.size || 0
             });
             
-            socket.emit('match_connected', { 
-              matchId: data.matchId,
-              joinCode: match.joinCode,
-              players: Array.from(match.players.values()).map(p => ({
-                userId: p.userId,
-                username: p.username,
-                firstName: p.firstName,
-                lastName: p.lastName,
-                isReady: p.isReady
-              }))
-            });
+            // Check if match is in progress and send current state
+            if (match.status === 'IN_PROGRESS') {
+              // Calculate time elapsed for current question
+              const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+              const currentQuestion = match.questions[match.currentQuestionIndex];
+              
+              if (currentQuestion) {
+                const questionForPlayer = {
+                  id: currentQuestion.id,
+                  questionText: currentQuestion.questionText,
+                  options: currentQuestion.options.map((opt: any) => ({
+                    id: opt.id,
+                    optionText: opt.optionText
+                  })),
+                  timeLimit: match.timeLimit
+                };
+                
+                // Add 15 seconds bonus for reconnection
+                const reconnectionBonus = 15000; // 15 seconds in ms
+                const newTimeLimit = match.timeLimit + 15;
+                match.questionStartTime = Date.now() - (timeElapsed - reconnectionBonus);
+                
+                // Notify ALL players about time extension
+                this.io.to(data.matchId).emit('time_extended', {
+                  message: `${socket.data.username} reconnected - 15 seconds added`,
+                  newTimeLimit,
+                  reconnectedPlayer: socket.data.username
+                });
+                
+                // Restore player's state if they have answers
+                const player = match.players.get(socket.data.userId);
+                if (player) {
+                  // Send current match state to reconnecting player
+                  socket.emit('match_reconnected', {
+                    question: questionForPlayer,
+                    questionIndex: match.currentQuestionIndex,
+                    totalQuestions: match.questions.length,
+                    timeElapsed: 0, // Reset to 0 with bonus time
+                    playerScore: player.score,
+                    playerAnswers: player.answers,
+                    hasSubmittedCurrent: player.hasSubmittedCurrent
+                  });
+                }
+                
+                logInfo('Player reconnected with 15s bonus', {
+                  matchId: data.matchId,
+                  userId: socket.data.userId,
+                  currentQuestion: match.currentQuestionIndex + 1,
+                  bonusAdded: '15 seconds',
+                  playerScore: player?.score || 0
+                });
+              }
+            } else {
+              // Match not started yet, send normal connection
+              socket.emit('match_connected', { 
+                matchId: data.matchId,
+                joinCode: match.joinCode,
+                players: Array.from(match.players.values()).map(p => ({
+                  userId: p.userId,
+                  username: p.username,
+                  firstName: p.firstName,
+                  lastName: p.lastName,
+                  isReady: p.isReady
+                }))
+              });
+            }
 
             // Broadcast updated player list to all players in the match
             this.io.to(data.matchId).emit('player_list_updated', {
@@ -1011,13 +1211,17 @@ class EnhancedMatchService {
       });
 
       // Player ready
-      socket.on('player_ready', async (data: { ready?: boolean } = {}) => {
+      socket.on('player_ready', async (data: { ready?: boolean; matchId?: string } = {}) => {
         try {
-          const matchId = this.userToMatch.get(socket.data.userId);
+          // CRITICAL FIX: Use matchId from payload first (sent by client), then fall back to userToMatch map
+          let matchId = data.matchId || this.userToMatch.get(socket.data.userId);
           if (!matchId) {
             socket.emit('error', { message: 'Not in any match' });
             return;
           }
+          
+          // Ensure userToMatch is updated with the correct matchId
+          this.userToMatch.set(socket.data.userId, matchId);
 
           const match = this.matches.get(matchId);
           if (!match) {
@@ -1054,6 +1258,8 @@ class EnhancedMatchService {
               joinCode: match.joinCode,
               status: match.status,
               createdAt: match.createdAt,
+              questions: match.questions, // Include questions
+              timeLimit: match.timeLimit,
               players: Array.from(match.players.values()).map(p => ({
                 userId: p.userId,
                 username: p.username,
@@ -1086,11 +1292,16 @@ class EnhancedMatchService {
       socket.on('submit_answer', async (data: { 
         questionId: number; 
         selectedOptions: number[]; 
-        timeSpent: number 
+        timeSpent: number;
+        matchId?: string;
       }) => {
         try {
-          const matchId = this.userToMatch.get(socket.data.userId);
+          // CRITICAL FIX: Use matchId from payload first (sent by client), then fall back to userToMatch map
+          const matchId = data.matchId || this.userToMatch.get(socket.data.userId);
           if (!matchId) return;
+          
+          // Ensure userToMatch is updated with the correct matchId
+          this.userToMatch.set(socket.data.userId, matchId);
 
           const match = this.matches.get(matchId);
           if (!match || match.status !== 'IN_PROGRESS') return;
@@ -1100,6 +1311,18 @@ class EnhancedMatchService {
 
           const currentQuestion = match.questions[match.currentQuestionIndex];
           if (!currentQuestion || currentQuestion.id !== data.questionId) return;
+
+          // CRITICAL FIX: Prevent duplicate answer submissions for the same questionId
+          const alreadyAnswered = player.answers.some(answer => answer.questionId === data.questionId);
+          if (alreadyAnswered) {
+            logInfo('Duplicate answer rejected - player already answered this question', {
+              matchId,
+              userId: socket.data.userId,
+              questionId: data.questionId,
+              currentAnswers: player.answers.length
+            });
+            return; // Reject duplicate submission
+          }
 
           // Check if answer is correct
           const correctOptionIds = currentQuestion.options
@@ -1123,6 +1346,9 @@ class EnhancedMatchService {
             timeSpent: data.timeSpent,
             points
           });
+          
+          // Mark player as submitted for current question
+          player.hasSubmittedCurrent = true;
 
           // Notify player of result
           socket.emit('answer_result', {
@@ -1131,11 +1357,22 @@ class EnhancedMatchService {
             correctOptions: correctOptionIds,
             totalScore: player.score
           });
+          
+          // Save match state to Redis for reconnection
+          await this.saveMatchState(matchId, match);
 
           // Check if all players have answered the current question
+          // FIX: Use hasSubmittedCurrent flag instead of comparing answer count
+          // This prevents counting questions twice and skipping questions
           const allAnswered = Array.from(match.players.values()).every(
-            p => p.answers.length > match.currentQuestionIndex
+            p => p.hasSubmittedCurrent === true
           );
+          
+          // Notify other players that this player submitted
+          socket.to(matchId).emit('opponent_submitted', {
+            userId: socket.data.userId,
+            username: socket.data.username
+          });
 
           logInfo('Answer submission check:', {
             matchId,
@@ -1172,6 +1409,16 @@ class EnhancedMatchService {
               this.nextQuestion(matchId);
             }
           } else {
+            // Let current player know they're waiting
+            const waitingFor = Array.from(match.players.values())
+              .filter(p => !p.hasSubmittedCurrent)
+              .map(p => p.username);
+            
+            socket.emit('waiting_for_opponent', {
+              message: `Waiting for ${waitingFor.join(', ')} to answer...`,
+              waitingFor
+            });
+            
             logInfo('Waiting for other players to answer', {
               matchId,
               playersWhoAnswered: Array.from(match.players.values())
@@ -1189,18 +1436,73 @@ class EnhancedMatchService {
 
       // Handle disconnection
       socket.on('disconnect', () => {
-        logInfo('Client disconnected', { socketId: socket.id });
+        logInfo('Player disconnect event', { 
+          socketId: socket.id,
+          userId: socket.data.userId
+        });
         
         if (socket.data.userId) {
           const matchId = this.userToMatch.get(socket.data.userId);
           if (matchId) {
             const match = this.matches.get(matchId);
             if (match) {
-              // Notify other players
-              socket.to(matchId).emit('player_disconnected', {
-                userId: socket.data.userId,
-                username: socket.data.username
-              });
+              const player = match.players.get(socket.data.userId);
+              
+              // If match is IN_PROGRESS, keep player in match for reconnection (grace period: 30 seconds)
+              if (match.status === 'IN_PROGRESS' && player) {
+                logInfo('Player disconnected during match - allowing reconnection', {
+                  userId: socket.data.userId,
+                  matchId,
+                  gracePeriod: '30 seconds',
+                  playerSocketBefore: player.socketId
+                });
+                
+                // Clear the socketId to mark player as disconnected
+                player.socketId = '';
+                
+                // Notify other players of temporary disconnect
+                socket.to(matchId).emit('player_temporarily_disconnected', {
+                  userId: socket.data.userId,
+                  username: socket.data.username,
+                  message: `${socket.data.username} disconnected - reconnecting...`
+                });
+                
+                // Set a 30-second grace period for reconnection
+                const gracePeriodTimer = setTimeout(() => {
+                  const stillDisconnected = !player.socketId || player.socketId === '';
+                  if (stillDisconnected) {
+                    logInfo('Grace period expired - removing player from match', {
+                      userId: socket.data.userId,
+                      matchId,
+                      playerSocketAfter: player.socketId
+                    });
+                    
+                    // Remove player after grace period
+                    match.players.delete(socket.data.userId);
+                    this.userToMatch.delete(socket.data.userId);
+                    
+                    // Notify other players
+                    socket.to(matchId).emit('player_permanently_disconnected', {
+                      userId: socket.data.userId,
+                      username: socket.data.username,
+                      message: `${socket.data.username} disconnected permanently`
+                    });
+                  }
+                }, 30000); // 30 second grace period
+                
+                // Store timer reference for cleanup if they reconnect
+                if (!this.disconnectTimers) this.disconnectTimers = new Map();
+                this.disconnectTimers.set(socket.data.userId, gracePeriodTimer);
+              } else {
+                // Match not in progress or player not found - remove immediately
+                match.players.delete(socket.data.userId);
+                this.userToMatch.delete(socket.data.userId);
+                
+                socket.to(matchId).emit('player_disconnected', {
+                  userId: socket.data.userId,
+                  username: socket.data.username
+                });
+              }
             }
           }
         }
@@ -1231,17 +1533,14 @@ class EnhancedMatchService {
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
+    
+    // Reset submission flags
+    Array.from(match.players.values()).forEach(p => {
+      p.hasSubmittedCurrent = false;
+    });
 
-    // Send first question
+    // Send first question to all players
     const currentQuestion = match.questions[0];
-    if (!currentQuestion) {
-      logError('First question is undefined', new Error(`Match ${matchId} has undefined first question`));
-      this.io.to(matchId).emit('error', {
-        message: 'Unable to load the first question. Please try again.'
-      });
-      return;
-    }
-
     const questionForPlayers = {
       id: currentQuestion.id,
       questionText: currentQuestion.questionText,
@@ -1257,13 +1556,17 @@ class EnhancedMatchService {
       questionIndex: 0,
       totalQuestions: match.questions.length
     });
+    
+    // Save initial match state
+    await this.saveMatchState(matchId, match);
 
-    // Set timer for question
-    setTimeout(() => {
-      this.nextQuestion(matchId);
-    }, match.timeLimit * 1000);
+    logInfo('Match started - waiting for both players to submit', { 
+      matchId, 
+      playerCount: match.players.size,
+      message: 'NO AUTO-ADVANCE - Questions advance only when both players submit'
+    });
 
-    logInfo('Match started', { matchId, players: match.players.size });
+    // NO AUTO-ADVANCE TIMER - Questions only advance when both players submit
   }
 
   private async nextQuestion(matchId: string) {
@@ -1277,6 +1580,11 @@ class EnhancedMatchService {
       this.endMatch(matchId);
       return;
     }
+    
+    // Reset submission flags for all players
+    Array.from(match.players.values()).forEach(p => {
+      p.hasSubmittedCurrent = false;
+    });
 
     // Send next question
     const currentQuestion = match.questions[match.currentQuestionIndex];
@@ -1292,18 +1600,67 @@ class EnhancedMatchService {
 
     match.questionStartTime = Date.now();
 
+    // DIAGNOSTIC: Check room before emitting
+    const roomSize = this.io.sockets.adapter.rooms.get(matchId)?.size || 0;
+    const socketsInRoom = Array.from(this.io.sockets.adapter.rooms.get(matchId) || []);
+    
+    logInfo('🔍 EMITTING next_question to room', {
+      matchId,
+      questionIndex: match.currentQuestionIndex,
+      roomSize,
+      socketsInRoom: socketsInRoom.length,
+      players: Array.from(match.players.keys())
+    });
+
     this.io.to(matchId).emit('next_question', {
       question: questionForPlayers,
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
     });
+    
+    // Save state after advancing question
+    await this.saveMatchState(matchId, match);
 
-    // Set timer for question
-    setTimeout(() => {
-      this.nextQuestion(matchId);
-    }, match.timeLimit * 1000);
+    // NO AUTO-ADVANCE TIMER - Questions only advance when both players submit
+    logInfo('Next question sent - waiting for both players to submit', {
+      matchId,
+      questionIndex: match.currentQuestionIndex,
+      totalQuestions: match.questions.length
+    });
   }
 
+  private async saveMatchState(matchId: string, match: any) {
+    try {
+      const matchState = {
+        id: matchId,
+        quizId: match.quizId,
+        joinCode: match.joinCode,
+        status: match.status,
+        currentQuestionIndex: match.currentQuestionIndex,
+        questionStartTime: match.questionStartTime,
+        timeLimit: match.timeLimit,
+        createdAt: match.createdAt,
+        questions: match.questions,
+        players: Array.from(match.players.values()).map((p: any) => ({
+          userId: p.userId,
+          username: p.username,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          score: p.score,
+          currentQuestionIndex: p.currentQuestionIndex,
+          isReady: p.isReady,
+          hasSubmittedCurrent: p.hasSubmittedCurrent,
+          answers: p.answers
+        }))
+      };
+      
+      await store.set(`match:${matchId}`, JSON.stringify(matchState));
+      logInfo('Match state saved for reconnection', { matchId, questionIndex: match.currentQuestionIndex });
+    } catch (error) {
+      logError('Failed to save match state', error as Error);
+    }
+  }
+  
   private async endMatch(matchId: string) {
     const match = this.matches.get(matchId);
     if (!match) {
@@ -1319,6 +1676,9 @@ class EnhancedMatchService {
       const totalAnswers = player.answers.length;
       const correctAnswers = player.answers.filter(answer => answer.isCorrect).length;
       const accuracy = totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0;
+      
+      // Calculate total time spent
+      const totalTimeSpent = player.answers.reduce((sum, answer) => sum + (answer.timeSpent || 0), 0);
 
       return {
         userId: player.userId,
@@ -1329,12 +1689,15 @@ class EnhancedMatchService {
         answers: player.answers,
         correctAnswers,
         totalAnswers,
-        accuracy
+        accuracy,
+        timeSpent: totalTimeSpent
       };
     });
 
     // Sort by score (highest first)
     results.sort((a, b) => b.score - a.score);
+    
+    const winnerId = results.length > 0 ? results[0].userId : null;
 
     logInfo('Match completed - final results calculated', {
       matchId,
@@ -1345,7 +1708,8 @@ class EnhancedMatchService {
         score: r.score,
         correctAnswers: r.correctAnswers,
         totalAnswers: r.totalAnswers,
-        accuracy: r.accuracy
+        accuracy: r.accuracy,
+        timeSpent: r.timeSpent
       })),
       winner: results[0] ? { 
         userId: results[0].userId, 
@@ -1354,6 +1718,92 @@ class EnhancedMatchService {
         accuracy: results[0].accuracy
       } : null
     });
+
+    // 🔥 SAVE TO DATABASE
+    try {
+      // Find or create match record
+      let dbMatch = await Match.findOne({ where: { matchId } });
+      
+      if (!dbMatch) {
+        // Create new match record
+        dbMatch = await Match.create({
+          matchId,
+          quizId: match.quizId,
+          type: MatchType.FRIEND_MATCH,
+          status: 'COMPLETED',
+          maxPlayers: 2,
+          startedAt: match.createdAt || new Date(),
+          endedAt: new Date(),
+          winnerId
+        });
+        
+        logInfo('Match record created in database', { matchId, dbMatchId: dbMatch.id });
+      } else {
+        // Update existing match
+        await dbMatch.update({
+          status: 'COMPLETED',
+          endedAt: new Date(),
+          winnerId
+        });
+        
+        logInfo('Match record updated in database', { matchId, dbMatchId: dbMatch.id });
+      }
+
+      // Save player results
+      for (const result of results) {
+        let playerRecord = await MatchPlayerModel.findOne({
+          where: {
+            matchId: dbMatch.id,
+            userId: result.userId
+          }
+        });
+
+        if (!playerRecord) {
+          // Create new player record
+          await MatchPlayerModel.create({
+            matchId: dbMatch.id,
+            userId: result.userId,
+            status: 'FINISHED',
+            score: result.score,
+            correctAnswers: result.correctAnswers,
+            timeSpent: result.timeSpent,
+            joinedAt: new Date(Date.now() - (result.timeSpent || 0) * 1000),
+            finishedAt: new Date()
+          });
+          
+          logInfo('Player record created in database', { 
+            matchId, 
+            userId: result.userId, 
+            score: result.score,
+            correctAnswers: result.correctAnswers
+          });
+        } else {
+          // Update existing player record
+          await playerRecord.update({
+            status: 'FINISHED',
+            score: result.score,
+            correctAnswers: result.correctAnswers,
+            timeSpent: result.timeSpent,
+            finishedAt: new Date()
+          });
+          
+          logInfo('Player record updated in database', { 
+            matchId, 
+            userId: result.userId, 
+            score: result.score 
+          });
+        }
+      }
+
+      logInfo('✅ Match data saved to database successfully', { 
+        matchId, 
+        dbMatchId: dbMatch.id,
+        playersCount: results.length 
+      });
+    } catch (dbError) {
+      logError('❌ Failed to save match data to database', dbError as Error);
+      // Continue with broadcast even if DB save fails
+    }
 
     // Create the complete match data that ALL players will receive
     const completionData = {
@@ -1415,7 +1865,7 @@ app.post('/matches/friend', async (req, res) => {
       quizId,
       creatorId: userId,
       creatorName: username,
-      status: 'waiting',
+      status: 'WAITING',
       players: [{
         userId,
         username,

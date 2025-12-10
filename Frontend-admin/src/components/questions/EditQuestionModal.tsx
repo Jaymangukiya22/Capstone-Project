@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -151,6 +152,11 @@ export function EditQuestionModal({ question, open, onOpenChange, onSave }: Edit
           <DialogTitle>
             {isNewQuestion ? "Add New Question" : "Edit Question"}
           </DialogTitle>
+          <DialogDescription>
+            {isNewQuestion 
+              ? "Create a new question for your quiz. Fill in the question text, options, and select the correct answer." 
+              : "Edit the question details, options, and settings below."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">

@@ -1,101 +1,84 @@
-# Multi-stage Dockerfile for Quiz App Backend
-FROM node:18-slim AS base
-
-# Set working directory
+# Hyper-optimized Multi-stage Dockerfile for QuizUP Backend
+FROM node:20-alpine AS base
+RUN apk add --no-cache curl bash && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -u 1001 -S nodejs -G nodejs
 WORKDIR /app
-
-# Install system dependencies required for building and runtime
-RUN apt-get update && apt-get install -y \
-    postgresql-client \
-    redis-tools \
-    curl \
-    bash \
-    openssl \
-    ca-certificates \
-    build-essential \
-    python3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user early
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 --ingroup nodejs nextjs
 
 # Development stage
 FROM base AS development
-
-# Copy package files for dependency installation
-COPY --chown=nextjs:nodejs package*.json ./
-COPY --chown=nextjs:nodejs tsconfig.json ./
-
-# Configure npm for better network handling
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm config set fetch-retry-mintimeout 20000 && \
-    npm config set fetch-retry-maxtimeout 120000 && \
-    npm config set fetch-timeout 300000 && \
-    npm config set cache /tmp/.npm && \
-    npm config set update-notifier false
-
-# Install ALL dependencies (including devDependencies for hot-reloading)
-RUN npm ci --verbose
-
-# Copy source code and configuration files
-COPY --chown=nextjs:nodejs ./src ./src
-COPY --chown=nextjs:nodejs ./scripts ./scripts
-COPY --chown=nextjs:nodejs ./start.sh ./start-server.js ./
-
-# Create necessary directories with proper permissions
-RUN mkdir -p logs uploads /tmp/.npm && \
-    chown -R nextjs:nodejs /app /tmp/.npm
-
-USER nextjs
-
-# Expose ports (3000 for API, 3001 for WebSocket)
+COPY --chown=nodejs:nodejs package*.json tsconfig.json ./
+RUN npm ci --silent --no-audit --no-fund --prefer-offline
+COPY --chown=nodejs:nodejs ./src ./src
+COPY --chown=nodejs:nodejs ./scripts ./scripts
+COPY --chown=nodejs:nodejs ./docs ./docs
+COPY --chown=nodejs:nodejs ./tests ./tests
+COPY --chown=nodejs:nodejs ./start.sh ./start-server.js ./pre-build.js ./
+RUN chmod +x start.sh start-server.js && \
+    mkdir -p logs uploads && \
+    chown -R nodejs:nodejs logs uploads
+USER nodejs
 EXPOSE 3000 3001
-
-# Health check for API server
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=2 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
+CMD ["npm", "run", "dev"]
 
-# Default command - will be overridden by docker-compose for hot-reloading
-CMD ["./start.sh"]
+# Build stage
+FROM development AS build
+USER root
+# 1. Create dist folder
+RUN mkdir -p /app/dist && chown -R nodejs:nodejs /app/dist
+USER nodejs
+# 2. Build
+RUN npm run build
+USER root
+# 3. Prune dev dependencies. 
+# REMOVED: "chown -R nodejs:nodejs" (This saves ~220s. We handle ownership during COPY in the next stage)
+RUN npm prune --production 2>&1
 
 # Production stage
-FROM base AS production
+FROM node:20-alpine AS production
+# 1. Setup User
+RUN apk add --no-cache curl bash && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -u 1001 -S nodejs -G nodejs
+WORKDIR /app
 
-# Copy package files
-COPY --chown=nextjs:nodejs package*.json ./
+# 2. OPTIMIZATION: Create directories BEFORE copying heavy node_modules
+# This prevents the "layer initialization hang" you were experiencing.
+RUN mkdir -p logs uploads && chown -R nodejs:nodejs logs uploads
 
-# Install only production dependencies
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm config set fetch-retry-mintimeout 20000 && \
-    npm config set fetch-retry-maxtimeout 120000 && \
-    npm config set fetch-timeout 300000 && \
-    npm config set cache /tmp/.npm && \
-    npm ci --only=production --verbose && \
-    npm cache clean --force
+# 3. Copy artifacts (Heavy lifting)
+# The --chown flag here handles permissions efficiently during the copy
+COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=development --chown=nodejs:nodejs /app/docs ./docs
+COPY --from=development --chown=nodejs:nodejs /app/start-server.js ./
+COPY --from=development --chown=nodejs:nodejs /app/package.json ./
+COPY --from=development --chown=nodejs:nodejs /app/tsconfig.json ./
+COPY --chown=nodejs:nodejs .env ./
 
-# Copy built application from development stage
-COPY --from=development --chown=nextjs:nodejs /app/dist ./dist
-COPY --from=development --chown=nextjs:nodejs /app/start.sh ./start-server.js ./
-
-# Copy necessary runtime files
-COPY --chown=nextjs:nodejs ./scripts ./scripts
-
-# Make startup scripts executable
-RUN chmod +x start.sh start-server.js
-
-# Create necessary directories
-RUN mkdir -p logs uploads && \
-    chown -R nextjs:nodejs /app
-
-USER nextjs
-
-# Expose ports
+USER nodejs
 EXPOSE 3000 3001
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=2 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
+CMD [ "node", "dist/server.js" ]
 
-# Production command
-CMD ["node", "start-server.js"]
+# Master Server stage - lean production image for match server pool
+FROM node:20-alpine AS matchserver-master
+RUN apk add --no-cache curl bash && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -u 1001 -S nodejs -G nodejs
+WORKDIR /app
+
+# Copy only what is needed to run the compiled match server
+COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=development --chown=nodejs:nodejs /app/package.json ./
+
+ENV SERVICE_TYPE=master
+USER nodejs
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+CMD ["node", "dist/matchServerMaster.js"]

@@ -26,21 +26,23 @@ export class QuestionBankOption extends Model {
 
   @ForeignKey(() => QuestionBankItem)
   @AllowNull(false)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'question_id' })
   questionId!: number;
 
   @AllowNull(false)
-  @Column(DataType.TEXT)
+  @Column({ type: DataType.TEXT, field: 'option_text' })
   optionText!: string;
 
   @Default(false)
-  @Column(DataType.BOOLEAN)
+  @Column({ type: DataType.BOOLEAN, field: 'is_correct' })
   isCorrect!: boolean;
 
   @CreatedAt
+  @Column({ type: DataType.DATE, field: 'created_at' })
   createdAt!: Date;
 
   @UpdatedAt
+  @Column({ type: DataType.DATE, field: 'updated_at' })
   updatedAt!: Date;
 
   // Associations

@@ -19,6 +19,9 @@ import { EditQuestionModal } from "@/components/questions/EditQuestionModal"
 import { QuestionCard } from "@/components/questions/QuestionCard"
 import { BulkActionBar } from "@/components/questions/BulkActionBar"
 import { QuestionBankModal } from "@/components/questions/QuestionBankModal"
+import { quizService } from "@/services/quizService"
+import { apiClient } from "@/services/api"
+import { questionBankService } from "@/services/questionBankService"
 
 // Mock data for development
 const mockQuestions: Question[] = [
@@ -61,10 +64,11 @@ const mockQuestions: Question[] = [
 ]
 
 interface QuestionsTabProps {
-  quizId?: string
+  quizId?: number | null
+  onQuestionsChange?: (questions: Question[]) => void
 }
 
-export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
+export function QuestionsTab({ quizId, onQuestionsChange }: QuestionsTabProps) {
   const [state, setState] = useState<QuestionsState>({
     questions: [],
     selectedQuestionIds: [],
@@ -78,21 +82,83 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null)
   const [showQuestionBankModal, setShowQuestionBankModal] = useState(false)
 
-  // Load questions from localStorage on mount
+  // Load questions from backend when quiz ID is available
   useEffect(() => {
-    const savedQuestions = localStorage.getItem(`quiz_builder_${quizId}_questions`)
-    if (savedQuestions) {
-      try {
-        const questions = JSON.parse(savedQuestions)
-        setState(prev => ({ ...prev, questions }))
-      } catch (error) {
-        console.error("Failed to load saved questions:", error)
-        setState(prev => ({ ...prev, questions: mockQuestions }))
+    const loadQuestions = async () => {
+      if (!quizId) {
+        console.log('No quiz ID available, skipping question load')
+        setState(prev => ({ ...prev, questions: [], isLoading: false }))
+        return
       }
-    } else {
-      setState(prev => ({ ...prev, questions: mockQuestions }))
+
+      console.log('Loading questions for quiz ID:', quizId)
+      try {
+        setState(prev => ({ ...prev, isLoading: true }))
+        
+        // Fetch quiz with questions from backend
+        const response = await apiClient.get(`/quizzes/${quizId}`)
+        console.log('Quiz data response:', response.data)
+        const quizData = response.data.data.quiz || response.data.data
+        
+        if (quizData.questions && quizData.questions.length > 0) {
+          console.log('Found', quizData.questions.length, 'questions for quiz')
+          // Convert backend format to frontend format
+          const convertedQuestions: Question[] = quizData.questions.map((q: any) => ({
+            id: String(q.id || q.questionId), // Use id (question bank ID) or fallback to questionId
+            text: q.questionText,
+            options: q.options.map((opt: any) => ({
+              id: String(opt.id),
+              text: opt.optionText
+            })),
+            correctOptionId: String(q.options.find((opt: any) => opt.isCorrect)?.id || ''),
+            type: 'multiple-choice' as const,
+            difficulty: (q.difficulty || 'MEDIUM').toLowerCase().replace('medium', 'intermediate') as 'easy' | 'intermediate' | 'hard',
+            tags: [],
+            points: 10, // Default value
+            timeLimit: 30, // Default value
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }))
+          
+          setState(prev => ({ ...prev, questions: convertedQuestions, isLoading: false }))
+          
+          // Save to localStorage for offline persistence
+          localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(convertedQuestions))
+          
+          // Notify parent
+          if (onQuestionsChange) {
+            onQuestionsChange(convertedQuestions)
+          }
+        } else {
+          console.log('No questions found in database for quiz', quizId)
+          // No questions in database, try loading from localStorage
+          const savedQuestions = localStorage.getItem(`quiz_builder_${quizId}_questions`)
+          if (savedQuestions) {
+            console.log('Loading questions from localStorage')
+            const questions = JSON.parse(savedQuestions)
+            setState(prev => ({ ...prev, questions, isLoading: false }))
+            if (onQuestionsChange) {
+              onQuestionsChange(questions)
+            }
+          } else {
+            setState(prev => ({ ...prev, questions: [], isLoading: false }))
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load questions:", error)
+        // Fallback to localStorage
+        const savedQuestions = localStorage.getItem(`quiz_builder_${quizId}_questions`)
+        if (savedQuestions) {
+          const questions = JSON.parse(savedQuestions)
+          setState(prev => ({ ...prev, questions, isLoading: false }))
+        } else {
+          setState(prev => ({ ...prev, questions: [], isLoading: false }))
+        }
+      }
     }
-  }, [quizId])
+
+    loadQuestions()
+  }, [quizId, onQuestionsChange])
 
   // Filter and search questions
   const filteredQuestions = state.questions.filter(question => {
@@ -127,13 +193,111 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
     setShowEditModal(true)
   }
 
-  const handleSaveEditedQuestion = (updatedQuestion: Question) => {
-    setState(prev => ({
-      ...prev,
-      questions: prev.questions.map(q => 
-        q.id === updatedQuestion.id ? updatedQuestion : q
-      )
-    }))
+  const handleSaveEditedQuestion = async (updatedQuestion: Question) => {
+    // Check if this is a new question (ID starts with "new_")
+    const isNewQuestion = updatedQuestion.id.startsWith('new_')
+    
+    if (isNewQuestion && quizId) {
+      try {
+        // First, we need to get the quiz's category ID
+        const quizResponse = await apiClient.get(`/quizzes/${quizId}`)
+        const categoryId = quizResponse.data.data.quiz.categoryId
+        
+        if (!categoryId) {
+          alert('Quiz must have a category before adding questions.')
+          return
+        }
+
+        // Find the correct option
+        const correctOption = updatedQuestion.options.find(opt => opt.id === updatedQuestion.correctOptionId)
+        if (!correctOption) {
+          alert('Please select a correct answer.')
+          return
+        }
+
+        // Create question in Question Bank
+        const questionBankData = {
+          questionText: updatedQuestion.text,
+          categoryId: categoryId,
+          difficulty: updatedQuestion.difficulty.toUpperCase() as 'EASY' | 'MEDIUM' | 'HARD',
+          options: updatedQuestion.options.map(opt => ({
+            optionText: opt.text,
+            isCorrect: opt.id === updatedQuestion.correctOptionId
+          }))
+        }
+
+        console.log('Creating question in Question Bank:', questionBankData)
+        const createdQuestion = await questionBankService.createQuestion(questionBankData)
+        console.log('Question created with ID:', createdQuestion.id)
+        console.log('Created question object:', createdQuestion)
+
+        // Update the question with the real ID and options from Question Bank
+        const questionWithRealId: Question = {
+          ...updatedQuestion,
+          id: String(createdQuestion.id),
+          options: createdQuestion.options ? createdQuestion.options.map(opt => ({
+            id: String(opt.id),
+            text: opt.optionText
+          })) : updatedQuestion.options,
+          correctOptionId: createdQuestion.options ? 
+            String(createdQuestion.options.find(opt => opt.isCorrect)?.id || '') :
+            updatedQuestion.correctOptionId
+        }
+
+        setState(prev => {
+          const updatedQuestions = prev.questions.map(q => 
+            q.id === updatedQuestion.id ? questionWithRealId : q
+          )
+          
+          console.log('Updated questions after creation:', updatedQuestions)
+          
+          // Save to localStorage
+          if (quizId) {
+            localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(updatedQuestions))
+          }
+          
+          // Notify parent
+          if (onQuestionsChange) {
+            onQuestionsChange(updatedQuestions)
+          }
+          
+          return {
+            ...prev,
+            questions: updatedQuestions
+          }
+        })
+
+        console.log('Question created successfully with ID:', createdQuestion.id)
+        alert('Question created and added successfully! You can now see it in the list.')
+      } catch (error) {
+        console.error('Failed to create question:', error)
+        alert('Failed to create question. Please try again.')
+        return
+      }
+    } else {
+      // Existing question, just update locally
+      setState(prev => {
+        const updatedQuestions = prev.questions.map(q => 
+          q.id === updatedQuestion.id ? updatedQuestion : q
+        )
+        
+        // Save to localStorage
+        if (quizId) {
+          localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(updatedQuestions))
+        }
+        
+        // Notify parent
+        if (onQuestionsChange) {
+          onQuestionsChange(updatedQuestions)
+        }
+        
+        return {
+          ...prev,
+          questions: updatedQuestions
+        }
+      })
+    }
+    
     setShowEditModal(false)
     setEditingQuestion(null)
   }
@@ -215,17 +379,94 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
     setShowEditModal(true)
   }
 
-  const handleImportQuestions = (questions: Question[]) => {
-    setState(prev => ({
-      ...prev,
-      questions: [...prev.questions, ...questions]
-    }))
+  const handleImportQuestions = async (questions: Question[]) => {
+    if (!quizId) {
+      alert('Please save the quiz details first before importing questions.')
+      return
+    }
+
+    try {
+      // Get the quiz's category ID
+      const quizResponse = await apiClient.get(`/quizzes/${quizId}`)
+      const categoryId = quizResponse.data.data.quiz.categoryId
+      
+      if (!categoryId) {
+        alert('Quiz must have a category before adding questions.')
+        return
+      }
+
+      // Create all questions in Question Bank
+      const createdQuestions: Question[] = []
+      for (const question of questions) {
+        try {
+          const questionBankData = {
+            questionText: question.text,
+            categoryId: categoryId,
+            difficulty: (question.difficulty?.toUpperCase() || 'MEDIUM') as 'EASY' | 'MEDIUM' | 'HARD',
+            options: question.options.map(opt => ({
+              optionText: opt.text,
+              isCorrect: opt.id === question.correctOptionId
+            }))
+          }
+
+          const createdQuestion = await questionBankService.createQuestion(questionBankData)
+          
+          // Update the question with the real ID and options from Question Bank
+          createdQuestions.push({
+            ...question,
+            id: String(createdQuestion.id),
+            options: createdQuestion.options ? createdQuestion.options.map(opt => ({
+              id: String(opt.id),
+              text: opt.optionText
+            })) : question.options,
+            correctOptionId: createdQuestion.options ? 
+              String(createdQuestion.options.find(opt => opt.isCorrect)?.id || '') :
+              question.correctOptionId
+          })
+        } catch (error) {
+          console.error('Failed to create question:', question.text, error)
+          // Continue with other questions
+        }
+      }
+
+      if (createdQuestions.length > 0) {
+        setState(prev => {
+          const updatedQuestions = [...prev.questions, ...createdQuestions]
+          
+          console.log('Questions after CSV import:', updatedQuestions)
+          
+          // Save to localStorage
+          if (quizId) {
+            localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(updatedQuestions))
+          }
+          
+          // Notify parent
+          if (onQuestionsChange) {
+            onQuestionsChange(updatedQuestions)
+          }
+          
+          return {
+            ...prev,
+            questions: updatedQuestions
+          }
+        })
+
+        console.log('CSV import completed:', createdQuestions.length, 'questions')
+        alert(`Successfully imported ${createdQuestions.length} out of ${questions.length} questions! They should now be visible in the list.`)
+      } else {
+        alert('Failed to import questions. Please check the CSV format.')
+      }
+    } catch (error) {
+      console.error('Failed to import questions:', error)
+      alert('Failed to import questions. Please try again.')
+    }
   }
 
   const handleAddFromQuestionBank = (questionBankQuestions: any[]) => {
     // Convert Question Bank questions to Quiz Builder format
+    // Use the actual question bank ID (as string) so it can be parsed later
     const convertedQuestions = questionBankQuestions.map(q => ({
-      id: `qb_${q.id}_${Date.now()}`,
+      id: String(q.id), // Keep the original question bank ID
       text: q.text,
       options: [
         { id: `${q.id}_a`, text: q.options.A },
@@ -243,10 +484,23 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
       updatedAt: new Date()
     }))
     
-    setState(prev => ({
-      ...prev,
-      questions: [...prev.questions, ...convertedQuestions]
-    }))
+    setState(prev => {
+      const updatedQuestions = [...prev.questions, ...convertedQuestions]
+      // Save to localStorage immediately
+      if (quizId) {
+        localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(updatedQuestions))
+      }
+      // Notify parent component
+      if (onQuestionsChange) {
+        onQuestionsChange(updatedQuestions)
+      }
+      return {
+        ...prev,
+        questions: updatedQuestions
+      }
+    })
+    
+    console.log(`Added ${convertedQuestions.length} questions from Question Bank`)
   }
 
   const handleBulkDelete = () => {
@@ -257,9 +511,41 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
     }))
   }
 
-  const handleSaveQuestions = () => {
-    localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(state.questions))
-    console.log("Questions saved:", state.questions)
+  const handleSaveQuestions = async () => {
+    if (!quizId) {
+      alert('Please save the quiz details first before adding questions.')
+      return
+    }
+
+    try {
+      // Save to localStorage for persistence
+      localStorage.setItem(`quiz_builder_${quizId}_questions`, JSON.stringify(state.questions))
+      
+      // Get question IDs (convert string IDs to numbers if they're numeric)
+      const questionIds = state.questions
+        .map(q => {
+          const id = parseInt(q.id)
+          return isNaN(id) ? null : id
+        })
+        .filter(id => id !== null) as number[]
+
+      if (questionIds.length > 0) {
+        // Save to backend
+        await quizService.assignQuestionsToQuiz(quizId, questionIds)
+        console.log("Questions saved to quiz:", quizId, questionIds)
+        alert(`Successfully added ${questionIds.length} questions to the quiz!`)
+      } else {
+        alert('No valid questions to save. Please add questions from the Question Bank.')
+      }
+      
+      // Notify parent component
+      if (onQuestionsChange) {
+        onQuestionsChange(state.questions)
+      }
+    } catch (error) {
+      console.error('Failed to save questions:', error)
+      alert('Failed to save questions. Please try again.')
+    }
   }
 
   const handleResetQuestions = () => {
@@ -276,6 +562,25 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
 
   return (
     <div className="space-y-6">
+      {/* Warning if no quiz ID */}
+      {!quizId && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-yellow-600 dark:text-yellow-400 text-sm">
+              ⚠️ Please save the quiz details first before adding questions.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {state.isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading questions...</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -285,15 +590,29 @@ export function QuestionsTab({ quizId = "default" }: QuestionsTabProps) {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={() => setShowQuestionBankModal(true)}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowQuestionBankModal(true)}
+            disabled={!quizId}
+          >
             <Search className="mr-2 h-4 w-4" />
             Add from Question Bank
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowImportDialog(true)}
+            disabled={!quizId}
+          >
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button size="sm" onClick={handleAddQuestion}>
+          <Button 
+            size="sm" 
+            onClick={handleAddQuestion}
+            disabled={!quizId}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Question
           </Button>

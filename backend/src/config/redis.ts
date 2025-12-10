@@ -1,112 +1,43 @@
-import { createClient } from 'redis';
-import { logInfo, logError } from '../utils/logger';
+import Redis from 'ioredis';
 
-// Create Redis client with fallback to in-memory if unavailable
-class RedisWrapper {
-  private client: any = null;
-  private inMemoryStore: Map<string, { value: string; expiry?: number }> = new Map();
-  private isConnected: boolean = false;
+let redisClient: Redis | null = null;
+let redisPub: Redis | null = null;
+let redisSub: Redis | null = null;
+let initPromise: Promise<void> | null = null;
 
-  async connect() {
-    try {
-      this.client = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379',
-        socket: {
-          connectTimeout: 2000
-        }
-      });
+export async function initializeRedis() {
+  if (initPromise) return initPromise;
+  
+  if (!redisClient) {
+    initPromise = (async () => {
+      const url = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
-      this.client.on('error', (err: any) => {
-        logError('Redis Client Error', err);
-        this.isConnected = false;
-      });
+      redisClient = new Redis(url);
+      redisPub = new Redis(url);
+      redisSub = new Redis(url);
 
-      await this.client.connect();
-      this.isConnected = true;
-      logInfo('Connected to Redis');
-    } catch (error) {
-      logInfo('Redis unavailable, using in-memory fallback');
-      this.isConnected = false;
-    }
+      // Wait for connections to be ready
+      await Promise.all([
+        redisClient.ping(),
+        redisPub.ping(),
+        redisSub.ping()
+      ]);
+
+      console.log('✅ Redis initialized successfully');
+    })();
+    
+    await initPromise;
   }
-
-  async setEx(key: string, seconds: number, value: string): Promise<void> {
-    if (this.isConnected && this.client) {
-      try {
-        await this.client.setEx(key, seconds, value);
-        return;
-      } catch (error) {
-        // Fall through to in-memory
-      }
-    }
-    
-    // In-memory fallback
-    const expiry = Date.now() + (seconds * 1000);
-    this.inMemoryStore.set(key, { value, expiry });
-  }
-
-  async get(key: string): Promise<string | null> {
-    if (this.isConnected && this.client) {
-      try {
-        return await this.client.get(key);
-      } catch (error) {
-        // Fall through to in-memory
-      }
-    }
-    
-    // In-memory fallback
-    const item = this.inMemoryStore.get(key);
-    if (!item) return null;
-    
-    if (item.expiry && Date.now() > item.expiry) {
-      this.inMemoryStore.delete(key);
-      return null;
-    }
-    
-    return item.value;
-  }
-
-  async del(key: string): Promise<void> {
-    if (this.isConnected && this.client) {
-      try {
-        await this.client.del(key);
-        return;
-      } catch (error) {
-        // Fall through to in-memory
-      }
-    }
-    
-    // In-memory fallback
-    this.inMemoryStore.delete(key);
-  }
-
-  async exists(key: string): Promise<boolean> {
-    if (this.isConnected && this.client) {
-      try {
-        const result = await this.client.exists(key);
-        return result === 1;
-      } catch (error) {
-        // Fall through to in-memory
-      }
-    }
-    
-    // In-memory fallback
-    const item = this.inMemoryStore.get(key);
-    if (!item) return false;
-    
-    if (item.expiry && Date.now() > item.expiry) {
-      this.inMemoryStore.delete(key);
-      return false;
-    }
-    
-    return true;
-  }
+  
+  return initPromise || Promise.resolve();
 }
 
-// Export singleton instance
-export const redis = new RedisWrapper();
+export function getRedisClient(): Redis {
+  if (!redisClient) throw new Error('Redis not initialized. Call initializeRedis() first.');
+  return redisClient;
+}
 
-// Initialize connection
-redis.connect().catch(error => {
-  logError('Failed to initialize Redis connection', error);
-});
+export function getRedisPubSub(): { pub: Redis; sub: Redis } {
+  if (!redisPub || !redisSub) throw new Error('Redis not initialized. Call initializeRedis() first.');
+  return { pub: redisPub, sub: redisSub };
+}

@@ -22,11 +22,22 @@ const getApiBaseUrl = (): string => {
     return 'http://localhost:8090/api';
   }
   
-  // For network access, use nginx load balancer port
+  // For network access (LAN), use nginx load balancer port
+  if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+    return `${protocol}//${hostname}:8090/api`;
+  }
+  
+  // Default: use current hostname with nginx port
   return `${protocol}//${hostname}:8090/api`;
 };
 
 const getWebSocketUrl = (): string => {
+  // FIXED VERSION: ALWAYS USE LOCALHOST FOR WEBSOCKET IN DEVELOPMENT
+  if (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+    console.log('🔌 Using local WebSocket: ws://localhost:3001');
+    return 'ws://localhost:3001';
+  }
+  
   const { protocol, hostname } = window.location;
   
   // Check if we're running through Cloudflare tunnel
@@ -44,11 +55,6 @@ const getWebSocketUrl = (): string => {
   if (hostname.includes('loca.lt')) {
     const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
     return `${wsProtocol}//${hostname}/socket.io`;
-  }
-  
-  // If accessing from localhost
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'ws://localhost:3001';
   }
   
   // For network access
@@ -76,9 +82,13 @@ export const apiClient = axios.create({
 // Add auth token to requests if available
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('🔑 Auth token found and added to request:', config.url);
+    } else {
+      console.warn('⚠️ No auth token found in localStorage for request:', config.url);
+      console.warn('📋 Available localStorage keys:', Object.keys(localStorage));
     }
     return config;
   },
@@ -92,10 +102,15 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Unauthorized - clear token and redirect to login
-      localStorage.removeItem('token');
+      // Unauthorized - clear all auth data and redirect to login
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      if (window.location.pathname !== '/login') {
+      localStorage.removeItem('quizmaster_user');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userId');
+      
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
         window.location.href = '/login';
       }
     }

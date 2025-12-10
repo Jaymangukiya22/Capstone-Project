@@ -40,7 +40,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       passwordHash,
       firstName,
       lastName,
-      role: role || UserRole.ADMIN  // Changed from PLAYER to ADMIN for testing
+      role: UserRole.PLAYER  // Changed from PLAYER to ADMIN for testing
     });
     console.log('User created successfully:', user.id);
 
@@ -78,7 +78,20 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    logError('Registration error', error as Error);
+    const err: any = error;
+    console.error('Detailed registration error:', {
+      name: err?.name,
+      message: err?.message,
+      parent: err?.parent,
+      original: err?.original,
+    });
+    logError('Registration error', err as Error, {
+      body: req.body,
+      name: err?.name,
+      message: err?.message,
+      parent: err?.parent,
+      original: err?.original,
+    });
     res.status(500).json({
       success: false,
       error: 'Registration failed',
@@ -91,9 +104,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
+    // Find user by email or username (email field can contain username)
     const user = await User.findOne({
-      where: { email }
+      where: {
+        [email.includes('@') ? 'email' : 'username']: email
+      }
     });
 
     if (!user || !user.isActive) {
@@ -157,11 +172,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
+    console.error('Detailed login error:', error);
     logError('Login error', error as Error);
     res.status(500).json({
       success: false,
       error: 'Login failed',
-      message: 'An error occurred during login'
+      message: 'An error occurred during login',
+      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     });
   }
 };

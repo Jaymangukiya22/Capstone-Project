@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import QuizHeader from './quiz-interface/QuizHeader';
 import QuestionCard from './quiz-interface/QuestionCard';
 import QuizNavigation from './quiz-interface/QuizNavigation';
@@ -8,6 +8,43 @@ import { toast } from '@/lib/toast';
 import { Users, Wifi, WifiOff } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { useQuizNavigationGuard } from '@/hooks/useNavigationGuard';
+import { matchStateManager } from '@/utils/matchStateManager';
+
+// --- OPTIMIZATION 1: Memoized Components to prevent re-renders ---
+const MemoizedQuestionCard = memo(QuestionCard);
+const MemoizedQuizNavigation = memo(QuizNavigation);
+const MemoizedQuizSidebar = memo(QuizSidebar);
+
+// --- OPTIMIZATION 2: Isolated Timer Component ---
+// This prevents the main component from re-rendering every second
+const MatchTimer = memo(({ timeRemaining, onTimeUp, totalTime, questionKey }: { timeRemaining: number, onTimeUp: () => void, totalTime: number, questionKey: string }) => {
+  const [displayTime, setDisplayTime] = useState(timeRemaining);
+  
+  useEffect(() => {
+    setDisplayTime(timeRemaining);
+  }, [timeRemaining]);
+
+  useEffect(() => {
+    if (displayTime <= 0) {
+      onTimeUp();
+      return;
+    }
+    const timer = setInterval(() => {
+      setDisplayTime(prev => {
+        if (prev <= 1) {
+          onTimeUp();
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [displayTime, onTimeUp]);
+
+  return null; // Timer manages logic only, doesn't render
+});
+
 interface FriendMatchQuestion {
   id: number;
   questionText: string;
@@ -28,6 +65,8 @@ interface MatchPlayer {
 
 
 const FriendMatchInterface: React.FC = () => {
+  console.log('🎮 [COMPONENT] FriendMatchInterface component rendered/mounted');
+  
   // Match state
   const [matchId, setMatchId] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState<string>('');
@@ -51,32 +90,105 @@ const FriendMatchInterface: React.FC = () => {
   const [quizTitle, setQuizTitle] = useState('Friend Match');
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [isMatchCompleted, setIsMatchCompleted] = useState(false);
+  const [isWaitingForOpponent, setIsWaitingForOpponent] = useState(false);
+  const [waitingForOpponentName, setWaitingForOpponentName] = useState('opponent');
   
   // Navigation guard to prevent going back during friend match
   const { disableGuard } = useQuizNavigationGuard(!isLoading && !isWaitingForPlayers, isMatchCompleted);
   
-  // WebSocket connection ref
+  // WebSocket connection / submission refs
   const wsConnected = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSubmittedCurrentQuestion = useRef(false); // Prevent double submission
+  const hasSentClientReadyRef = useRef(false);
 
   // Get answered questions set for progress tracking
   const answeredQuestions = new Set(answers.keys());
+
+  // Check for reconnection on mount
+  useEffect(() => {
+    const savedState = matchStateManager.getMatchState();
+    if (savedState && savedState.matchId && savedState.isMatchStarted) {
+      console.log('🔄 Reconnection detected! Restoring match state:', savedState);
+      
+      // Restore state
+      setMatchId(savedState.matchId);
+      gameWebSocket.setMatchId(savedState.matchId);
+      setJoinCode(savedState.joinCode);
+      setCurrentQuestion(savedState.currentQuestion);
+      setTotalQuestions(savedState.totalQuestions);
+      setCurrentQuestionData(savedState.currentQuestionData);
+      setQuestionTimeRemaining(savedState.questionTimeRemaining);
+      setQuestionStartTime(savedState.questionStartTime);
+      setIsWaitingForPlayers(false);
+      setIsLoading(false); // Mark as loaded since we have saved state
+      
+      // Restore answers
+      const restoredAnswers = new Map<number, number[]>();
+      Object.entries(savedState.answers || {}).forEach(([key, value]) => {
+        restoredAnswers.set(parseInt(key), value);
+      });
+      setAnswers(restoredAnswers);
+      
+      // Update sessionStorage with reconnection info
+      sessionStorage.setItem('friendMatch', JSON.stringify({
+        mode: savedState.mode,
+        joinCode: savedState.joinCode,
+        matchId: savedState.matchId,
+        websocketUrl: savedState.websocketUrl
+      }));
+      
+      console.log('✅ Match state restored! Current question:', savedState.currentQuestion, 'of', savedState.totalQuestions);
+      
+      toast({
+        title: "Reconnecting...",
+        description: `Restoring your match progress - Question ${savedState.currentQuestion} of ${savedState.totalQuestions}`,
+      });
+    }
+  }, []);
 
   // Initialize friend match from sessionStorage
   useEffect(() => {
     const initializeFriendMatch = async () => {
       try {
+        console.log('🎮 [INIT] FriendMatchInterface mounted - checking for friendMatch in sessionStorage');
         const matchInfo = sessionStorage.getItem('friendMatch');
+        console.log('🎮 [INIT] friendMatch from sessionStorage:', matchInfo);
         if (!matchInfo) {
-          console.error('No friend match info found');
+          console.error('❌ [INIT] No friend match info found in sessionStorage');
           return;
         }
 
-        const { mode, joinCode, matchId: storedMatchId, websocketUrl } = JSON.parse(matchInfo);
-        console.log('🎮 Initializing friend match:', { mode, joinCode, matchId: storedMatchId });
+        const { mode, joinCode, matchId: storedMatchId, websocketUrl, quizName } = JSON.parse(matchInfo);
+        
+        // Set quiz title from sessionStorage
+        if (quizName) {
+          setQuizTitle(quizName);
+        }
+        
+        // Check if we'dreconnecting - if we have a saved matchId, we should reconnect
+        const savedState = matchStateManager.getMatchState();
+        
+        // CRITICAL: If saved matchId doesn't match current matchId, clear old state
+        if (savedState && savedState.matchId && savedState.matchId !== storedMatchId) {
+          console.log('🧹 Clearing old match state - different match detected');
+          matchStateManager.clearMatchState();
+          localStorage.removeItem('friendMatchState');
+          sessionStorage.removeItem('friendMatchState');
+        }
+        
+        const isReconnecting = savedState && savedState.matchId === storedMatchId;
+        
+        if (isReconnecting) {
+          console.log('⏭️ Reconnection detected - matchId exists, reconnecting to WebSocket');
+          // Still need to reconnect to WebSocket with the saved match info
+          await connectToMatch(websocketUrl, mode, joinCode, true);
+          return;
+        }
+
+        console.log('🎮 Initializing friend match:', { mode, joinCode, matchId: storedMatchId, quizName });
 
         // Clear ALL previous match session data to allow replay
-        // Clear all autostart keys
         Object.keys(sessionStorage).forEach(key => {
           if (key.startsWith('autostart_') || key.startsWith('started_')) {
             sessionStorage.removeItem(key);
@@ -86,10 +198,11 @@ const FriendMatchInterface: React.FC = () => {
         setJoinCode(joinCode);
         if (storedMatchId) {
           setMatchId(storedMatchId);
+          gameWebSocket.setMatchId(storedMatchId);
         }
 
         // Connect to WebSocket
-        await connectToMatch(websocketUrl, mode, joinCode);
+        await connectToMatch(websocketUrl, mode, joinCode, false);
         
       } catch (error) {
         console.error('Error initializing friend match:', error);
@@ -104,8 +217,11 @@ const FriendMatchInterface: React.FC = () => {
     initializeFriendMatch();
   }, []);
 
-  const connectToMatch = async (websocketUrl: string, mode: 'create' | 'join', joinCode?: string) => {
+  const connectToMatch = async (_websocketUrl: string, mode: 'create' | 'join', joinCode?: string, isReconnecting: boolean = false) => {
     try {
+      // Import WEBSOCKET_URL from api config to use the correct environment variable
+      const { WEBSOCKET_URL } = await import('@/services/api');
+      
       // Get real user info from localStorage
       let userId = 1;
       let username = 'Player1';
@@ -128,12 +244,13 @@ const FriendMatchInterface: React.FC = () => {
         }
       }
 
-      // Set up event listeners BEFORE connecting, pass mode and joinCode
-      setupWebSocketListeners(mode, joinCode);
+      // Set up event listeners BEFORE connecting, pass mode, joinCode, and userId
+      setupWebSocketListeners(mode, joinCode, isReconnecting, userId);
 
-      // Connect to WebSocket - pass the full user data
-      console.log('Connecting with user data:', { userId, username, firstName, lastName });
-      await gameWebSocket.connect(websocketUrl, userId, username);
+      // Connect to WebSocket - use the environment-aware WEBSOCKET_URL instead of passed parameter
+      // Note: Authentication is handled automatically in the connect method
+      console.log('Connecting with user data:', { userId, username, firstName, lastName, isReconnecting, wsUrl: WEBSOCKET_URL });
+      await gameWebSocket.connect(WEBSOCKET_URL, userId, username);
       setIsConnected(true);
       wsConnected.current = true;
 
@@ -150,7 +267,7 @@ const FriendMatchInterface: React.FC = () => {
     }
   };
 
-  const setupWebSocketListeners = (mode: 'create' | 'join', joinCode?: string) => {
+  const setupWebSocketListeners = (mode: 'create' | 'join', joinCode?: string, isReconnecting: boolean = false, userId?: number) => {
     let hasPerformedAction = false; // Flag to prevent duplicate actions
     
     // Clear any existing listeners first to prevent duplicates
@@ -159,7 +276,10 @@ const FriendMatchInterface: React.FC = () => {
     // Authentication success - perform actions after authentication
     gameWebSocket.on('authenticated', (data: any) => {
       console.log('🔐 Authenticated:', data);
-      console.log('🔍 Mode:', mode, 'MatchId:', matchId, 'JoinCode:', joinCode);
+      // Use saved state matchId on reconnect to avoid race with React state
+      const savedState = matchStateManager.getMatchState();
+      const reconnectMatchId = isReconnecting && savedState ? savedState.matchId : matchId;
+      console.log('🔍 Mode:', mode, 'MatchId:', reconnectMatchId ?? matchId, 'JoinCode:', joinCode, 'Reconnecting:', isReconnecting);
       
       // Prevent duplicate actions
       if (hasPerformedAction) {
@@ -168,14 +288,28 @@ const FriendMatchInterface: React.FC = () => {
       }
       hasPerformedAction = true;
       
+      // ✅ CRITICAL FIX: Prevent multiple connect_to_match calls
+      // Use a flag to ensure we only emit once per authentication
+      let connectEmitted = false;
+      
+      // If reconnecting, just connect to the existing match using saved matchId
+      if (isReconnecting && reconnectMatchId && !connectEmitted) {
+        console.log('🔄 Reconnecting to match:', reconnectMatchId);
+        gameWebSocket.emit('connect_to_match', { matchId: reconnectMatchId });
+        connectEmitted = true;
+        return;
+      }
+      
       // Now that we're authenticated, perform the appropriate action
-      if (mode === 'create' && matchId) {
+      if (mode === 'create' && matchId && !connectEmitted) {
         console.log('🎯 Authenticated! Now connecting to match:', matchId);
         gameWebSocket.emit('connect_to_match', { matchId });
-      } else if (mode === 'join' && joinCode) {
+        connectEmitted = true;
+      } else if (mode === 'join' && joinCode && !connectEmitted) {
         console.log('🎯 Authenticated! Now joining match with code:', joinCode);
         gameWebSocket.joinMatchByCode(joinCode);
-      } else if (joinCode && !matchId) {
+        connectEmitted = true;
+      } else if (joinCode && !matchId && !connectEmitted) {
         // Simple fix: treat based on mode
         
         // Simple fix: If mode is 'create', treat as creator, otherwise join
@@ -203,7 +337,8 @@ const FriendMatchInterface: React.FC = () => {
           console.log('🎯 Authenticated! Now joining match with code:', joinCode);
           gameWebSocket.joinMatchByCode(joinCode);
         }
-      } else {
+        connectEmitted = true;
+      } else if (!connectEmitted) {
         console.error('❌ No valid action after authentication!', { mode, matchId, joinCode });
       }
     });
@@ -213,27 +348,62 @@ const FriendMatchInterface: React.FC = () => {
       console.log('🔗 Connected to match:', data);
       setJoinCode(data.joinCode);
 
-      // Store matchId in state if not already set
-      if (!matchId && data.matchId) {
+      // CRITICAL: Store matchId and save to localStorage/session immediately for reconnection
+      if (data.matchId && !matchId) {
         console.log('💾 Setting matchId from match_connected:', data.matchId);
         setMatchId(data.matchId);
+        gameWebSocket.setMatchId(data.matchId);
+
+        // Update friendMatch session entry with real matchId
+        const friendMatchInfo = sessionStorage.getItem('friendMatch');
+        if (friendMatchInfo) {
+          try {
+            const parsed = JSON.parse(friendMatchInfo);
+            parsed.matchId = data.matchId;
+            parsed.joinCode = data.joinCode || parsed.joinCode;
+            sessionStorage.setItem('friendMatch', JSON.stringify(parsed));
+          } catch (e) {
+            console.error('Failed to update friendMatch session with matchId:', e);
+          }
+        }
+
+        // Save to session immediately for reconnection
+        const matchInfo = sessionStorage.getItem('friendMatch');
+        if (matchInfo) {
+          const parsed = JSON.parse(matchInfo);
+          const initialPlayers = data.players || [];
+          matchStateManager.saveMatchState({
+            matchId: data.matchId,
+            joinCode: data.joinCode,
+            websocketUrl: parsed.websocketUrl,
+            mode: parsed.mode,
+            currentQuestion: 0,
+            totalQuestions: 0,
+            answers: {},
+            players: initialPlayers,
+            isWaitingForPlayers: initialPlayers.length < 2,
+            isMatchStarted: false,
+            currentQuestionData: null,
+            questionStartTime: Date.now(),
+            questionTimeRemaining: 30,
+            timestamp: Date.now()
+          });
+        }
       }
 
       const initialPlayers = data.players || [];
       console.log('📋 Creator connected, setting players:', initialPlayers);
       setPlayers([...initialPlayers]);
-
-      // AUTO-START: If we have 2 players when creator connects, auto-start
-      const autoStartKey = `autostart_${data.matchId}`;
-      const hasAlreadyAutoStarted = sessionStorage.getItem(autoStartKey);
-
-      if (initialPlayers.length === 2 && !hasAlreadyAutoStarted) {
-        console.log('🚀 AUTO-STARTING: 2 players detected on creator connect');
-        sessionStorage.setItem(autoStartKey, 'true');
-        setTimeout(() => {
-          gameWebSocket.setReady(true);
-        }, 1000);
+      
+      // We're connected, so stop the overall loading state
+      setIsLoading(false);
+      
+      // If we have 2 players, also stop waiting for players
+      if (initialPlayers.length === 2) {
+        setIsWaitingForPlayers(false);
       }
+
+      // DON'T auto-start when creator connects - wait for actual second player to join
 
       toast({
         title: "Connected to Match!",
@@ -258,17 +428,57 @@ const FriendMatchInterface: React.FC = () => {
       console.log('📋 Initial players on join:', joinedPlayers);
       setPlayers([...joinedPlayers]);
       
-      // AUTO-START: If we have 2 players on join, automatically set ready
-      const autoStartKey = `autostart_${data.matchId}`;
-      const hasAlreadyAutoStarted = sessionStorage.getItem(autoStartKey);
-      
-      if (joinedPlayers.length === 2 && !hasAlreadyAutoStarted) {
-        console.log('🚀 AUTO-STARTING: 2 players detected on match join');
-        sessionStorage.setItem(autoStartKey, 'true');
-        setTimeout(() => {
-          gameWebSocket.setReady(true);
-        }, 1000);
+      // CRITICAL: Save matchId immediately when joined so reconnection works
+      if (data.matchId && !matchId) {
+        console.log('💾 Setting matchId from match_joined:', data.matchId);
+        setMatchId(data.matchId);
+        gameWebSocket.setMatchId(data.matchId);
+
+        // Update friendMatch session entry with real matchId for joiners
+        const friendMatchInfo = sessionStorage.getItem('friendMatch');
+        if (friendMatchInfo) {
+          try {
+            const parsed = JSON.parse(friendMatchInfo);
+            parsed.matchId = data.matchId;
+            parsed.joinCode = parsed.joinCode || joinCode;
+            sessionStorage.setItem('friendMatch', JSON.stringify(parsed));
+          } catch (e) {
+            console.error('Failed to update friendMatch session with matchId (joiner):', e);
+          }
+        }
+
+        // Save to session immediately for reconnection
+        const matchInfo = sessionStorage.getItem('friendMatch');
+        if (matchInfo) {
+          const parsed = JSON.parse(matchInfo);
+          matchStateManager.saveMatchState({
+            matchId: data.matchId,
+            joinCode: parsed.joinCode,
+            websocketUrl: parsed.websocketUrl,
+            mode: parsed.mode,
+            currentQuestion: 0,
+            totalQuestions: 0,
+            answers: {},
+            players: joinedPlayers,
+            isWaitingForPlayers: joinedPlayers.length < 2,
+            isMatchStarted: false,
+            currentQuestionData: null,
+            questionStartTime: Date.now(),
+            questionTimeRemaining: 30,
+            timestamp: Date.now()
+          });
+        }
       }
+      
+      // We're connected, so stop the overall loading state
+      setIsLoading(false);
+      
+      // If we have 2 players, also stop waiting for players
+      if (joinedPlayers.length === 2) {
+        setIsWaitingForPlayers(false);
+      }
+      
+      // DON'T auto-start immediately on join - let player_list_updated handle it
       
       toast({
         title: "Match Joined!",
@@ -279,10 +489,97 @@ const FriendMatchInterface: React.FC = () => {
     // Player joined
     gameWebSocket.on('player_joined', (data: any) => {
       console.log('Player joined:', data);
+      // A player joined — we are no longer in a loading state
+      setIsLoading(false);
+      // If this makes us 2 players, stop waiting
+      if (players.length + 1 >= 2) {
+        setIsWaitingForPlayers(false);
+      }
       toast({
         title: "Player Joined",
         description: `${data.username} joined the match`,
       });
+    });
+
+    // Fallback handshake: some clients may miss LOAD_GAME_SCENE due to
+    // reconnect timing. Use match_ready_acknowledged as a backup trigger
+    // to send CLIENT_READY exactly once per client.
+    gameWebSocket.on('match_ready_acknowledged', (data: any) => {
+      console.log('🟢 MATCH_READY_ACK received:', data);
+
+      try {
+        const targetMatchId = data.matchId || matchId;
+
+        // Get userId from localStorage directly to be safe
+        let currentUserId = userId;
+        if (!currentUserId) {
+          try {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            currentUserId = userData.id;
+          } catch (e) {
+            console.error('User ID parse error in match_ready_acknowledged', e);
+          }
+        }
+
+        if (targetMatchId && currentUserId) {
+          if (hasSentClientReadyRef.current) {
+            console.log('⚠️ CLIENT_READY already sent - skipping match_ready_acknowledged emit');
+            return;
+          }
+
+          hasSentClientReadyRef.current = true;
+          console.log('🚀 EMIT CLIENT_READY from match_ready_acknowledged', { targetMatchId, currentUserId });
+          gameWebSocket.emitClientReady(targetMatchId, currentUserId);
+        } else {
+          console.error('❌ Cannot emit CLIENT_READY from match_ready_acknowledged: Missing ID', { targetMatchId, currentUserId });
+        }
+      } catch (error) {
+        console.error('❌ Error in match_ready_acknowledged handler', error);
+      }
+    });
+
+    // ✅ NEW: LOAD_GAME_SCENE - Server tells us to load the game UI
+    // This happens when all players have joined, but before the match starts
+    gameWebSocket.onLoadGameScene((data: any) => {
+      console.log('🎮 LOAD_GAME_SCENE received - game UI loaded, emitting CLIENT_READY', data);
+      
+      try {
+        // Update players
+        const newPlayers = data.players || [];
+        setPlayers([...newPlayers]);
+        setIsWaitingForPlayers(false);
+        setIsLoading(false);
+        
+        // ✅ CRITICAL FIX: Emit CLIENT_READY immediately, bypassing state checks
+        // Use the matchId directly from the event data if available, fallback to state
+        const targetMatchId = data.matchId || matchId;
+        
+        // Get userId from localStorage directly to be safe
+        let currentUserId = userId;
+        if (!currentUserId) {
+          try {
+            const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            currentUserId = userData.id;
+          } catch (e) {
+            console.error('User ID parse error', e);
+          }
+        }
+
+        if (targetMatchId && currentUserId) {
+          if (hasSentClientReadyRef.current) {
+            console.log('⚠️ CLIENT_READY already sent - skipping LOAD_GAME_SCENE emit');
+          } else {
+            hasSentClientReadyRef.current = true;
+            console.log('🚀 IMMEDIATE EMIT: CLIENT_READY', { targetMatchId, currentUserId });
+            // Force the emit even if React state is lagging
+            gameWebSocket.emitClientReady(targetMatchId, currentUserId);
+          }
+        } else {
+          console.error('❌ Cannot emit CLIENT_READY: Missing ID', { targetMatchId, currentUserId });
+        }
+      } catch (error) {
+        console.error('❌ Error in LOAD_GAME_SCENE handler', error);
+      }
     });
 
     // Player list updated
@@ -292,16 +589,15 @@ const FriendMatchInterface: React.FC = () => {
       // Update players without re-render key to avoid loops
       setPlayers([...newPlayers]);
       
-      // AUTO-START: If we have 2 players, automatically set both as ready (only once per session)
-      const autoStartKey = `autostart_${matchId}`;
-      const hasAlreadyAutoStarted = sessionStorage.getItem(autoStartKey);
-      
-      if (newPlayers.length === 2 && !hasAlreadyAutoStarted) {
-        console.log('🚀 AUTO-STARTING: 2 players detected');
-        sessionStorage.setItem(autoStartKey, 'true');
-        setTimeout(() => {
-          gameWebSocket.setReady(true);
-        }, 1000);
+      // If we have 2 players, stop waiting and loading spinners
+      if (newPlayers.length === 2) {
+        setIsWaitingForPlayers(false);
+        setIsLoading(false);
+        
+        // ✅ CHANGED: Don't auto-start here anymore
+        // Wait for LOAD_GAME_SCENE event from server instead
+        // This ensures proper synchronization
+        console.log('✅ 2 players connected - waiting for LOAD_GAME_SCENE from server');
       }
     });
 
@@ -325,55 +621,101 @@ const FriendMatchInterface: React.FC = () => {
 
     // Match started
     gameWebSocket.on('match_started', (data: any) => {
-      // Prevent duplicate processing with unique timestamp
-      const matchStartKey = `started_${matchId}_${Date.now()}`;
-      const existingKeys = Object.keys(sessionStorage).filter(key => key.startsWith(`started_${matchId}_`));
-
-      if (existingKeys.length > 0) {
-        console.log('🚫 Match already started, ignoring duplicate event');
+      console.log('🎮 MATCH_STARTED event:', data);
+      
+      // CRITICAL: Reset submission flag for first question
+      hasSubmittedCurrentQuestion.current = false;
+      
+      // Validate question data exists
+      if (!data.question || !data.question.questionText) {
+        console.error('❌ Match started but no question data received!', data);
+        toast({
+          title: "Error",
+          description: "No quiz questions available. Please contact support.",
+          variant: "destructive"
+        });
         return;
       }
-
-      console.log('🚀 MATCH STARTED EVENT RECEIVED!', data);
-      console.log('Current matchId when match started:', matchId);
+      
+      const matchStartKey = `started_${matchId}_${Date.now()}`;
       sessionStorage.setItem(matchStartKey, 'true');
-
-      setIsWaitingForPlayers(false);
-      setIsLoading(false);
+      
+      // Set question data FIRST before changing loading states
       setCurrentQuestionData(data.question);
       setCurrentQuestion(1);
-
+      
+      // Calculate time remaining if reconnecting
+      let timeRemaining = data.question.timeLimit || 30;
+      if (data.timeElapsed) {
+        timeRemaining = Math.max(0, timeRemaining - Math.floor(data.timeElapsed / 1000));
+        console.log('⏱️ Reconnecting - time elapsed:', data.timeElapsed, 'ms, remaining:', timeRemaining, 's');
+      }
+      
       // Set totalQuestions with fallback
       const totalQs = data.totalQuestions || data.questions?.length || 10;
       setTotalQuestions(totalQs);
       console.log('📊 Total questions set to:', totalQs);
-
-      setQuestionTimeRemaining(data.question.timeLimit || 30);
+      
+      setQuestionTimeRemaining(timeRemaining);
       setQuestionStartTime(Date.now());
+      
+      // THEN update loading states
+      setIsWaitingForPlayers(false);
+      setIsLoading(false);
 
       toast({
         title: "Match Started!",
-        description: "Good luck!",
+        description: `Get ready! ${totalQs} questions to go!`,
       });
+    });
+
+    // Player list updated (legacy handler - now mirrors the primary handler above)
+    // NOTE: We no longer auto-start or emit player_ready here. The server
+    // drives the flow via LOAD_GAME_SCENE and CLIENT_READY.
+    gameWebSocket.on('player_list_updated', (data: any) => {
+      const newPlayers = data.players || [];
+
+      // Update players without re-render key to avoid loops
+      setPlayers([...newPlayers]);
+
+      // If we have 2 players, stop waiting and loading spinners
+      if (newPlayers.length === 2) {
+        setIsWaitingForPlayers(false);
+        setIsLoading(false);
+        console.log('✅ 2 players connected - waiting for LOAD_GAME_SCENE from server');
+      }
     });
 
     // Next question
     gameWebSocket.on('next_question', (data: any) => {
       console.log('📝 NEXT QUESTION EVENT:', data);
       
-      // Reset timer and update question
+      // CRITICAL: Reset submission flag for new question
+      hasSubmittedCurrentQuestion.current = false;
+      
+      // Reset waiting state
+      setIsWaitingForOpponent(false);
+      setWaitingForOpponentName('opponent');
+      
+      // Update question data
       setCurrentQuestionData(data.question);
-      setCurrentQuestion(data.questionIndex + 1); // Use server's question index
+      setCurrentQuestion(data.questionIndex + 1);
       setQuestionTimeRemaining(data.question.timeLimit || 30);
       setQuestionStartTime(Date.now());
-      setIsSubmitting(false);
       
-      // Update totalQuestions if provided in the event
       if (data.totalQuestions) {
         setTotalQuestions(data.totalQuestions);
       }
       
+      // CRITICAL: Unlock UI after all state updates
+      setIsSubmitting(false);
+      
       console.log(`📝 Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
+    });
+
+    // Question timeout - auto-advance when 30 seconds pass
+    gameWebSocket.on('question_timeout', (data: any) => {
+      console.log('⏱️ QUESTION TIMEOUT:', data);
     });
 
     // Individual player progression (for independent advancement)
@@ -405,17 +747,59 @@ const FriendMatchInterface: React.FC = () => {
 
     // Answer result
     gameWebSocket.on('answer_result', (data: any) => {
-      console.log('Answer result:', data);
-      // Show feedback to user
+      console.log('✅ Answer result received:', data);
       if (data.isCorrect) {
-        toast({
-          title: "Correct!",
-          description: `+${data.points} points`,
-        });
+        // toast({
+        //   title: "Correct! ✓",
+        //   description: `+${data.points} points (Total: ${data.totalScore})`,
+        // });
+      } else {
+        // toast({
+        //   title: "Incorrect",
+        //   description: `0 points (Total: ${data.totalScore})`,
+        //   variant: "destructive"
+        // });
       }
     });
 
-    // Player answered
+    // Waiting for opponent
+    gameWebSocket.on('waiting_for_opponent', (data: any) => {
+      console.log('⏳ Waiting for opponent:', data);
+
+      // Only show "waiting" if we actually submitted the *current* question.
+      // After next_question arrives we reset hasSubmittedCurrentQuestion to false,
+      // so any late/stale waiting_for_opponent events from the previous question
+      // will be ignored and won't lock the Next button on the new question.
+      if (!hasSubmittedCurrentQuestion.current) {
+        console.log('⚠️ Ignoring waiting_for_opponent - no active submission for this question');
+        return;
+      }
+
+      setIsWaitingForOpponent(true);
+      if (data.waitingFor && data.waitingFor.length > 0) {
+        setWaitingForOpponentName(data.waitingFor[0]);
+      }
+      toast({
+        title: "Waiting...",
+        description: data.message || `Waiting for ${data.waitingFor.join(', ')}...`,
+      });
+    });
+
+    // Opponent submitted answer - clear waiting state
+    gameWebSocket.on('opponent_submitted', (data: any) => {
+      console.log('✅ Opponent submitted answer:', data);
+      
+      // Clear waiting state since opponent has answered
+      setIsWaitingForOpponent(false);
+      setWaitingForOpponentName('opponent');
+      
+      toast({
+        title: "Opponent Answered",
+        description: `${data.username} submitted their answer`,
+      });
+    });
+
+    // Player answered (legacy handler)
     gameWebSocket.on('player_answered', (data: any) => {
       console.log('Player answered:', data);
       // Show that opponent answered
@@ -429,6 +813,13 @@ const FriendMatchInterface: React.FC = () => {
     gameWebSocket.on('match_completed', (data: any) => {
       console.log('🎯 MATCH COMPLETED EVENT RECEIVED!');
       console.log('Raw match completion data:', JSON.stringify(data, null, 2));
+
+      // Mark match as completed to disable navigation guard
+      setIsMatchCompleted(true);
+      disableGuard();
+      
+      // Clear match state from localStorage
+      matchStateManager.clearMatchState();
 
       // Get current user info for debugging
       const userData = localStorage.getItem('user');
@@ -472,9 +863,16 @@ const FriendMatchInterface: React.FC = () => {
         description: `Winner: ${data.winner?.username || 'Unknown'}`,
       });
 
+      // Clear friend match data before navigating to results
+      sessionStorage.removeItem('friendMatch');
+      sessionStorage.removeItem('friendMatchState');
+      localStorage.removeItem('friendMatchState');
+      
       // Navigate to results page
       setTimeout(() => {
         console.log('🏁 Match completed - navigating to final results page');
+        // Replace history to prevent going back to match lobby
+        window.history.replaceState(null, '', '/quiz-results');
         window.location.pathname = '/quiz-results';
       }, 2000);
     });
@@ -509,8 +907,8 @@ const FriendMatchInterface: React.FC = () => {
     });
   };
 
-  // Handle answer selection
-  const handleAnswerSelect = (answer: string) => {
+  // --- OPTIMIZATION 3: UseCallback for heavy handlers ---
+  const handleAnswerSelect = useCallback((answer: string) => {
     if (!currentQuestionData) return;
 
     // Find the selected option ID
@@ -518,48 +916,95 @@ const FriendMatchInterface: React.FC = () => {
     if (!selectedOption) return;
 
     setAnswers(prev => new Map(prev.set(currentQuestion, [selectedOption.id])));
-  };
+  }, [currentQuestionData, currentQuestion]);
 
-  // Submit current answer
-  const submitCurrentAnswer = () => {
-    if (!currentQuestionData) {
-      console.log('❌ No current question data to submit');
+  // Submit current answer with useCallback to prevent re-creation
+  const submitCurrentAnswer = useCallback(
+    async (options?: { allowEmpty?: boolean; reason?: 'timeout' | 'manual' }) => {
+      const allowEmpty = options?.allowEmpty ?? false;
+
+      // Prevent double submission for the same question
+      if (hasSubmittedCurrentQuestion.current) {
+        console.log('⚠️ Already submitted this question, ignoring duplicate submission', options);
+        return;
+      }
+
+      if (!currentQuestionData) {
+        console.log('❌ No current question data to submit');
+        return;
+      }
+
+      const selectedOptions = answers.get(currentQuestion) || [];
+      const optionsToSend = selectedOptions.length > 0 ? selectedOptions : [];
+
+      if (!allowEmpty && optionsToSend.length === 0) {
+        toast({
+          title: "Please Select an Answer",
+          description: "You must select an option before submitting.",
+          variant: "destructive"
+        });
+        console.log('❌ No options selected - cannot submit');
+        return;
+      }
+
+      const rawTimeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
+      const questionLimit = currentQuestionData.timeLimit || 30;
+      const timeSpent = Math.min(Math.max(rawTimeSpent, 0), questionLimit);
+
+      console.log('📤 Submitting answer:', {
+        questionId: currentQuestionData.id,
+        selectedOptions,
+        rawTimeSpent,
+        timeSpent,
+        questionLimit,
+        currentQuestion,
+        reason: options?.reason || 'manual'
+      });
+
+      try {
+        setIsSubmitting(true);
+        hasSubmittedCurrentQuestion.current = true;
+
+        gameWebSocket.submitAnswer(currentQuestionData.id, optionsToSend, timeSpent);
+
+        // Safety timeout: If server doesn't respond in 5 seconds, unlock the UI
+        const safetyTimer = setTimeout(() => {
+          console.log("⚠️ Safety timeout triggered - Server didn't respond in 5 seconds, unlocking UI");
+          setIsSubmitting(false);
+          hasSubmittedCurrentQuestion.current = false;
+        }, 5000);
+
+        timerRef.current = safetyTimer;
+      } catch (error) {
+        console.error('❌ Error submitting answer:', error);
+        setIsSubmitting(false);
+        hasSubmittedCurrentQuestion.current = false;
+        toast({
+          title: "Submission Error",
+          description: "Failed to submit answer. Please try again.",
+          variant: "destructive"
+        });
+      }
+    },
+    [answers, currentQuestion, currentQuestionData, questionStartTime]
+  );
+
+  // Auto-advance to next question when time runs out
+  const handleQuestionTimeUp = useCallback(async () => {
+    console.log('⏰ Question time up! Auto-advancing...');
+
+    // If the question just started, this is likely a stale timer from the
+    // previous question – ignore it so we don't create a phantom submission.
+    const elapsedMs = Date.now() - questionStartTime;
+    if (elapsedMs < 500) {
+      console.log('⏰ Ignoring stale timeout - question just changed', { elapsedMs });
       return;
     }
 
-    const selectedOptions = answers.get(currentQuestion) || [];
-    const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
-
-    console.log('📤 Submitting answer:', {
-      questionId: currentQuestionData.id,
-      selectedOptions,
-      timeSpent,
-      currentQuestion
-    });
-
-    try {
-      if (selectedOptions.length > 0) {
-        gameWebSocket.submitAnswer(currentQuestionData.id, selectedOptions, timeSpent);
-      } else {
-        console.log('⚠️ No options selected, submitting empty answer');
-        gameWebSocket.submitAnswer(currentQuestionData.id, [], timeSpent);
-      }
-    } catch (error) {
-      console.error('❌ Error submitting answer:', error);
-      toast({
-        title: "Submission Error",
-        description: "Failed to submit answer. Please try again.",
-        variant: "destructive"
-      });
+    if (!hasSubmittedCurrentQuestion.current) {
+      await submitCurrentAnswer({ allowEmpty: true, reason: 'timeout' });
     }
-  };
 
-  // Auto-advance to next question when time runs out
-  const handleQuestionTimeUp = async () => {
-    console.log('⏰ Question time up! Auto-advancing...');
-    // Submit current answer (even if empty)
-    await submitCurrentAnswer();
-    
     const isLastQuestion = currentQuestion === totalQuestions;
     if (isLastQuestion) {
       console.log('⏰ Last question - submitting quiz...');
@@ -568,7 +1013,7 @@ const FriendMatchInterface: React.FC = () => {
       console.log('⏰ Moving to next question...');
       // The server will send the next question automatically
     }
-  };
+  }, [currentQuestion, totalQuestions, questionStartTime, submitCurrentAnswer]);
 
   // Navigation handlers
   const handleNext = () => {
@@ -587,9 +1032,9 @@ const FriendMatchInterface: React.FC = () => {
     }, 1000);
   };
 
-  // Handle time up
+  // Handle time up from header timer – delegate to the main timeout handler
   const handleTimeUp = () => {
-    submitCurrentAnswer();
+    handleQuestionTimeUp();
   };
 
   // Function to get display name for a player
@@ -600,9 +1045,57 @@ const FriendMatchInterface: React.FC = () => {
     return player.username;
   };
 
+  // Helper function to save state
+  const saveCurrentState = () => {
+    if (!matchId || isMatchCompleted || isWaitingForPlayers || !currentQuestionData) {
+      return;
+    }
+
+    const matchInfo = sessionStorage.getItem('friendMatch');
+    if (!matchInfo) {
+      return;
+    }
+
+    try {
+      const { mode, websocketUrl } = JSON.parse(matchInfo);
+      
+      // Convert answers Map to plain object for storage
+      const answersObj: Record<number, number[]> = {};
+      answers.forEach((value, key) => {
+        answersObj[key] = value;
+      });
+      
+      console.log('💾 Saving match state - Q' + currentQuestion + '/' + totalQuestions + ', Answers: ' + answers.size);
+      
+      matchStateManager.saveMatchState({
+        matchId,
+        joinCode,
+        websocketUrl,
+        mode,
+        currentQuestion,
+        totalQuestions,
+        answers: answersObj,
+        players,
+        isWaitingForPlayers,
+        isMatchStarted: !isWaitingForPlayers,
+        currentQuestionData,
+        questionStartTime,
+        questionTimeRemaining,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error('❌ Error saving match state:', error);
+    }
+  };
+
+  // Save match state whenever key values change
+  useEffect(() => {
+    saveCurrentState();
+  }, [matchId, currentQuestion, answers, currentQuestionData, questionTimeRemaining, isMatchCompleted, isWaitingForPlayers]);
+
   // Timer countdown effect for individual questions
   useEffect(() => {
-    if (questionTimeRemaining <= 0 || isLoading || isWaitingForPlayers) return;
+    if (questionTimeRemaining <= 0 || isLoading || isWaitingForPlayers || !currentQuestionData) return;
 
     const questionTimer = setInterval(() => {
       setQuestionTimeRemaining(prev => {
@@ -616,13 +1109,18 @@ const FriendMatchInterface: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(questionTimer);
-  }, [questionTimeRemaining, currentQuestion, totalQuestions, isLoading, isWaitingForPlayers]);
+  }, [questionTimeRemaining, currentQuestion, totalQuestions, isLoading, isWaitingForPlayers, currentQuestionData]);
 
   // Remove duplicate timer - using the one above
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Only clear state if match is completed
+      if (isMatchCompleted) {
+        matchStateManager.clearMatchState();
+      }
+      
       if (wsConnected.current) {
         gameWebSocket.disconnect();
       }
@@ -630,7 +1128,7 @@ const FriendMatchInterface: React.FC = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, []);
+  }, [isMatchCompleted]);
 
   // Show loading state
   if (isLoading) {
@@ -696,60 +1194,29 @@ const FriendMatchInterface: React.FC = () => {
                       <span className="font-medium">{getPlayerDisplayName(player)}</span>
                       <span className="text-xs text-muted-foreground">@{player.username}</span>
                     </div>
-                    <span className={`text-sm font-medium px-2 py-1 rounded ${player.isReady ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
-                      {player.isReady ? '✓ Ready' : 'Waiting...'}
+                    <span className="text-sm font-medium px-2 py-1 rounded bg-blue-500/20 text-blue-500">
+                      Connected
                     </span>
                   </div>
                 ))}
               </div>
               
-              {players.length >= 1 && (
-                <div className="mt-4">
-                  {/* Debug info */}
-                  <div className="text-xs text-muted-foreground mb-2 p-2 bg-gray-100 rounded">
-                    <div>Players Count: {players.length}</div>
-                    <div>All Ready: {players.every(p => p.isReady) ? 'Yes' : 'No'}</div>
-                    <div>Players State: {JSON.stringify(players.map(p => ({id: p.userId, name: p.username, ready: p.isReady})))}</div>
-                    <div className="text-red-600 font-bold">🔴 READY BUTTON SHOULD BE VISIBLE BELOW</div>
+              {players.length === 2 && (
+                <div className="mt-6 text-center">
+                  <div className="text-green-500 font-semibold text-lg animate-pulse">
+                    🚀 Both players connected!
                   </div>
-                  
-                  {/* Get current user */}
-                  {(() => {
-                    const userData = localStorage.getItem('user');
-                    let currentUserId = 1;
-                    if (userData) {
-                      try {
-                        const user = JSON.parse(userData);
-                        currentUserId = user.id;
-                      } catch (e) {}
-                    }
-                    
-                    const currentPlayer = players.find(p => p.userId === currentUserId);
-                    const isCurrentPlayerReady = currentPlayer?.isReady || false;
-                    
-                    return (
-                      <button
-                        onClick={() => {
-                          console.log('🔘 READY BUTTON CLICKED!');
-                          console.log('Current player:', currentPlayer);
-                          console.log('Current ready status:', isCurrentPlayerReady);
-                          console.log('Setting ready status to:', !isCurrentPlayerReady);
-                          console.log('All players:', players);
-                          console.log('🚀 SENDING player_ready event');
-                          gameWebSocket.setReady(!isCurrentPlayerReady);
-                        }}
-                        className={`w-full px-4 py-2 rounded-md transition-colors ${
-                          isCurrentPlayerReady 
-                            ? 'bg-green-500 text-white hover:bg-green-600' 
-                            : 'bg-primary text-primary-foreground hover:bg-primary/90'
-                        }`}
-                        disabled={players.length < 1}
-                      >
-                        {isCurrentPlayerReady ? '✓ Ready!' : "I'm Ready!"}
-                      </button>
-                    );
-                  })()
-                  }
+                  <div className="text-sm text-muted-foreground mt-2">
+                    Starting match in a moment...
+                  </div>
+                </div>
+              )}
+              
+              {players.length === 1 && (
+                <div className="mt-6 text-center">
+                  <div className="text-yellow-500 text-lg">
+                    ⏳ Waiting for your friend to join...
+                  </div>
                 </div>
               )}
             </div>
@@ -764,10 +1231,13 @@ const FriendMatchInterface: React.FC = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">No question data available.</p>
+          <p className="text-muted-foreground mb-2">Preparing your first question...</p>
+          <p className="text-xs text-muted-foreground">
+            If this takes too long, please go back and restart the match.
+          </p>
           <button 
             onClick={() => window.location.pathname = '/student-quiz'}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
           >
             Back to Quiz Selection
           </button>
@@ -792,6 +1262,14 @@ const FriendMatchInterface: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-hidden">
+      {/* Isolated Timer - prevents parent re-renders every second */}
+      <MatchTimer 
+        timeRemaining={questionTimeRemaining} 
+        totalTime={currentQuestionData?.timeLimit || 30}
+        onTimeUp={handleQuestionTimeUp}
+        questionKey={`${currentQuestion}-${currentQuestionData?.id}`}
+      />
+
       {/* Navigation Warning Banner */}
       {!isLoading && !isWaitingForPlayers && !isMatchCompleted && (
         <div className="bg-amber-50 border-b border-amber-200 p-3">
@@ -841,7 +1319,7 @@ const FriendMatchInterface: React.FC = () => {
           {/* Quiz Sidebar - hidden on mobile and tablet */}
           <div className="hidden xl:block xl:w-80 2xl:w-96 flex-shrink-0 border-r border-border">
             <div className="h-full overflow-y-auto p-4">
-              <QuizSidebar
+              <MemoizedQuizSidebar
                 questions={Array(totalQuestions).fill(null).map((_, i) => ({
                   id: i + 1,
                   question: `Question ${i + 1}`,
@@ -858,7 +1336,7 @@ const FriendMatchInterface: React.FC = () => {
           <div className="flex-1 flex flex-col min-h-0">
             {/* Question Card - Takes available space, scrollable if needed */}
             <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 overflow-y-auto">
-              <QuestionCard
+              <MemoizedQuestionCard
                 question={questionForCard}
                 selectedAnswer={currentAnswer}
                 onAnswerSelect={handleAnswerSelect}
@@ -869,13 +1347,15 @@ const FriendMatchInterface: React.FC = () => {
 
             {/* Navigation - Fixed at bottom with ultra-compact padding for iPhone */}
             <div className="flex-shrink-0 px-3 py-1 sm:px-4 sm:py-2 md:px-6 md:py-3 border-t border-border bg-background/95 backdrop-blur-sm">
-              <QuizNavigation
+              <MemoizedQuizNavigation
                 currentQuestion={currentQuestion}
                 totalQuestions={totalQuestions}
                 hasAnswer={!!currentAnswer}
                 onNext={handleNext}
                 onSubmit={handleSubmit}
                 isSubmitting={isSubmitting}
+                isWaitingForOpponent={isWaitingForOpponent}
+                opponentName={waitingForOpponentName}
               />
             </div>
           </div>

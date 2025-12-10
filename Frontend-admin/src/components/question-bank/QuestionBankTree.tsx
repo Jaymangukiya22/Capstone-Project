@@ -9,6 +9,7 @@ interface QuestionBankTreeProps {
   quizzes: ApiQuiz[]
   selectedItem: { type: 'category' | 'subcategory' | 'quiz' | 'global'; id: string } | null
   onSelectItem: (type: 'category' | 'subcategory' | 'quiz' | 'global', id: string) => void
+  categoryCounts?: Record<number, number>
 }
 
 interface TreeNodeProps {
@@ -20,6 +21,7 @@ interface TreeNodeProps {
   expandedNodes: Set<string>
   onToggleNode: (nodeId: string) => void
   allCategories: ApiCategory[]
+  categoryCounts?: Record<number, number>
 }
 
 function TreeNode({ 
@@ -30,7 +32,8 @@ function TreeNode({
   onSelectItem, 
   expandedNodes, 
   onToggleNode,
-  allCategories 
+  allCategories,
+  categoryCounts = {}
 }: TreeNodeProps) {
   const nodeId = `category-${category.id}`
   const isExpanded = expandedNodes.has(nodeId)
@@ -39,6 +42,7 @@ function TreeNode({
   const subcategories = allCategories.filter(cat => cat.parentId === category.id)
   const categoryQuizzes = quizzes.filter(quiz => quiz.categoryId === category.id)
   const hasChildren = subcategories.length > 0 || categoryQuizzes.length > 0
+  const questionCount = categoryCounts[category.id] || 0
   
   // Debug logging for this category
   console.log(`📂 Category "${category.name}" (ID: ${category.id}):`, {
@@ -73,6 +77,7 @@ function TreeNode({
         onClick={handleSelect}
       >
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           className="h-4 w-4 p-0 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -99,6 +104,11 @@ function TreeNode({
         
         {/* Count badges */}
         <div className="ml-auto flex items-center space-x-1">
+          {questionCount > 0 && (
+            <span className="text-xs bg-purple-100 dark:bg-purple-700 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded font-medium">
+              {questionCount} Q
+            </span>
+          )}
           {subcategories.length > 0 && (
             <span className="text-xs bg-blue-100 dark:bg-blue-700 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded">
               {subcategories.length} sub
@@ -127,6 +137,7 @@ function TreeNode({
               expandedNodes={expandedNodes}
               onToggleNode={onToggleNode}
               allCategories={allCategories}
+              categoryCounts={categoryCounts}
             />
           ))}
           
@@ -175,7 +186,7 @@ function QuizNode({ quiz, level, selectedItem, onSelectItem }: QuizNodeProps) {
   )
 }
 
-export function QuestionBankTree({ categories, quizzes, selectedItem, onSelectItem }: QuestionBankTreeProps) {
+export function QuestionBankTree({ categories, quizzes, selectedItem, onSelectItem, categoryCounts = {} }: QuestionBankTreeProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
 
   const handleToggleNode = (nodeId: string) => {
@@ -189,12 +200,29 @@ export function QuestionBankTree({ categories, quizzes, selectedItem, onSelectIt
   }
 
   // Debug logging
-  console.log('🏗️ QuestionBankTree - Categories:', categories)
+  console.log('🏗️ QuestionBankTree - ALL Categories received:', categories)
+  console.log('📊 Category breakdown:')
+  console.log('  - Total categories:', categories.length)
+  console.log('  - Root categories (parentId = null):', categories.filter(cat => cat.parentId === null).length)
+  console.log('  - Child categories (parentId != null):', categories.filter(cat => cat.parentId !== null).length)
+  console.log('  - Categories with counts:', Object.entries(categoryCounts).map(([id, count]) => `ID ${id}: ${count} questions`))
   console.log('🎯 QuestionBankTree - Quizzes:', quizzes)
 
   // Filter to get only root categories (no parent)
   const rootCategories = categories.filter(cat => cat.parentId === null)
   console.log('📁 Root categories:', rootCategories)
+  
+  // ALSO show orphaned categories (categories that have questions but invalid/missing parent)
+  const orphanedCategories = categories.filter(cat => {
+    // Category has questions but its parent doesn't exist
+    const hasQuestions = (categoryCounts[cat.id] || 0) > 0
+    const parentExists = cat.parentId === null || categories.some(c => c.id === cat.parentId)
+    return hasQuestions && !parentExists
+  })
+  
+  if (orphanedCategories.length > 0) {
+    console.log('⚠️ ORPHANED Categories (have questions but parent missing):', orphanedCategories)
+  }
 
   return (
     <div className="space-y-1">
@@ -211,25 +239,57 @@ export function QuestionBankTree({ categories, quizzes, selectedItem, onSelectIt
       </div>
 
       {/* Category Tree */}
-      {rootCategories.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          <Folder className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">No categories found</p>
-        </div>
+      {categories.length === 0 ? (
+        <div className="text-sm text-gray-500 italic px-3 py-2">No categories found</div>
       ) : (
-        rootCategories.map((category) => (
-          <TreeNode
-            key={category.id}
-            category={category}
-            level={0}
-            quizzes={quizzes}
-            selectedItem={selectedItem}
-            onSelectItem={onSelectItem}
-            expandedNodes={expandedNodes}
-            onToggleNode={handleToggleNode}
-            allCategories={categories}
-          />
-        ))
+        <>
+          {/* First show root categories */}
+          {rootCategories.map((category) => (
+            <TreeNode
+              key={category.id}
+              category={category}
+              level={0}
+              quizzes={quizzes}
+              selectedItem={selectedItem}
+              onSelectItem={onSelectItem}
+              expandedNodes={expandedNodes}
+              onToggleNode={handleToggleNode}
+              allCategories={categories}
+              categoryCounts={categoryCounts}
+            />
+          ))}
+          
+          {/* Then show all categories with questions that aren't in the tree */}
+          {categories
+            .filter(cat => {
+              const hasQuestions = (categoryCounts[cat.id] || 0) > 0
+              const isRoot = cat.parentId === null
+              return hasQuestions && !isRoot
+            })
+            .map((category) => (
+              <div key={category.id}>
+                <div className="mx-3 mt-2 mb-1 text-xs text-gray-500">
+                  {category.parentId ? `⚠️ Orphaned (parent: ${category.parentId})` : ''}
+                </div>
+                <div
+                  className={cn(
+                    "flex items-center space-x-2 py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
+                    selectedItem?.type === 'category' && selectedItem.id === category.id.toString() && "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                  )}
+                  onClick={() => onSelectItem('category', category.id.toString())}
+                >
+                  <Folder className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm font-medium truncate">{category.name}</span>
+                  <div className="ml-auto">
+                    <span className="text-xs bg-purple-100 dark:bg-purple-700 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded font-medium">
+                      {categoryCounts[category.id] || 0} Q
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          }
+        </>
       )}
     </div>
   )

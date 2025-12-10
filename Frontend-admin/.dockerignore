@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+npm-debug.log
+# package-lock.json  # COMMENTED OUT - We need this for npm ci in Docker!
+
+# Build output
+dist
+build
+.vite
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache
+.eslintcache

@@ -1,0 +1,231 @@
+{
+  "title": "Quiz Match Simple Dashboard",
+  "uid": "quiz-match-simple",
+  "tags": ["quiz", "match-server", "simple"],
+  "timezone": "browser",
+  "schemaVersion": 30,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "🎯 Current Status",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "title": "Active Matches",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "matchserver_active_matches_total{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 1500, "color": "yellow" },
+              { "value": 1900, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Connected Users",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "expr": "matchserver_connected_users_total{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 3000, "color": "yellow" },
+              { "value": 3800, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Active Workers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "matchserver_active_workers{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 400, "color": "yellow" },
+              { "value": 480, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total Matches Created",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "targets": [
+        {
+          "expr": "matchserver_matches_created_total{job=\"match-server-master\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "📈 Trends",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+    {
+      "title": "Match Activity",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "matchserver_active_matches_total{job=\"match-server-master\"}",
+          "legendFormat": "Active Matches",
+          "refId": "A"
+        },
+        {
+          "expr": "matchserver_connected_users_total{job=\"match-server-master\"}",
+          "legendFormat": "Connected Users",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "title": "Worker Activity",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "matchserver_active_workers{job=\"match-server-master\"}",
+          "legendFormat": "Active Workers",
+          "refId": "A"
+        },
+        {
+          "expr": "matchserver_idle_workers{job=\"match-server-master\"}",
+          "legendFormat": "Idle Workers",
+          "refId": "B"
+        },
+        {
+          "expr": "matchserver_total_workers{job=\"match-server-master\"}",
+          "legendFormat": "Total Workers",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "⚡ Performance",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+    },
+    {
+      "title": "API Latency (ms)",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))) * 1000",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))) * 1000",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"match-server-master\"}[5m]))) * 1000",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ms",
+          "min": 0
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 200,
+          "colorMode": "warning",
+          "op": "gt"
+        },
+        {
+          "value": 500,
+          "colorMode": "critical",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "type": "graph",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"match-server-master\"}[1m]))",
+          "legendFormat": "Total Requests",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"match-server-master\", status_code=~\"5..\"}[1m]))",
+          "legendFormat": "5xx Errors",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "req/s",
+          "min": 0
+        }
+      ]
+    }
+  ]
+}

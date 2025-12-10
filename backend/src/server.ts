@@ -234,7 +234,7 @@ async function startServer() {
     // Initialize custom metrics
     initMetrics();
 
-    app.listen(Number(PORT), "0.0.0.0", () => {
+    app.listen(Number(PORT), "0.0.0.0", 2048, () => {
       const networkIP = process.env.NETWORK_IP || "localhost";
       logInfo("Server started successfully", {
         port: PORT,

@@ -6,9 +6,10 @@ import { logInfo, logError } from '../utils/logger';
 const MAX_MATCHES_PER_WORKER = parseInt(process.env.MAX_MATCHES_PER_WORKER || '5', 10);
 const MIN_WORKERS = parseInt(process.env.MIN_WORKERS || '10', 10);
 const MAX_WORKERS = parseInt(process.env.MAX_WORKERS || '500', 10);
-const SCALE_UP_THRESHOLD = parseFloat(process.env.SCALE_UP_THRESHOLD || '0.8');
+const SCALE_UP_THRESHOLD = parseFloat(process.env.SCALE_UP_THRESHOLD || '0.5'); // LOWERED from 0.8 to spawn workers earlier
 const SCALE_DOWN_THRESHOLD = parseFloat(process.env.SCALE_DOWN_THRESHOLD || '0.3');
-const SCALE_CHECK_INTERVAL = parseInt(process.env.SCALE_CHECK_INTERVAL || '30000', 10);
+const SCALE_CHECK_INTERVAL = parseInt(process.env.SCALE_CHECK_INTERVAL || '5000', 10); // REDUCED from 30s to 5s for faster response
+const PROACTIVE_SPAWN_THRESHOLD = parseFloat(process.env.PROACTIVE_SPAWN_THRESHOLD || '0.6'); // Spawn workers at 60% capacity
 
 interface WorkerInfo {
   worker: Worker;
@@ -17,17 +18,19 @@ interface WorkerInfo {
   capacity: number;
   activeMatches: Set<string>;
   lastHeartbeat: number;
-  status: 'active' | 'idle' | 'dead';
+  status: 'initializing' | 'active' | 'idle' | 'dead';
 }
 
 export class EnhancedWorkerPool {
   private workers: Map<number, WorkerInfo> = new Map();
   private matchToWorker: Map<string, number> = new Map();
+  private matchLastActivity: Map<string, number> = new Map();
   private userToMatch: Map<number, string> = new Map();
   private io: SocketIOServer;
   private redis: Redis;
   private scaleCheckInterval: NodeJS.Timeout | null = null;
   private matchesCreatedTotal: number = 0;
+  private trackedMatches: Set<string> = new Set(); // Track unique matches to prevent double-counting
 
   constructor(io: SocketIOServer, redis: Redis) {
     this.io = io;
@@ -78,7 +81,7 @@ export class EnhancedWorkerPool {
       capacity: MAX_MATCHES_PER_WORKER,
       activeMatches: new Set(),
       lastHeartbeat: Date.now(),
-      status: 'idle'
+      status: 'initializing'
     };
 
     this.workers.set(worker.id, workerInfo);
@@ -119,6 +122,14 @@ export class EnhancedWorkerPool {
         // Already updated lastHeartbeat above
         break;
 
+      case 'worker_ready':
+        workerInfo.status = 'idle';
+        logInfo('Worker ready', {
+          workerId: worker.id,
+          capacity: workerInfo.capacity
+        });
+        break;
+
       case 'emit_to_match':
         // Worker wants to emit to all players in a match
         logInfo('Worker pool forwarding emit_to_match', { 
@@ -126,6 +137,9 @@ export class EnhancedWorkerPool {
           event: message.event,
           workerId: worker.id 
         });
+        if (message.matchId) {
+          this.updateMatchActivity(message.matchId);
+        }
         this.io.to(message.matchId).emit(message.event, message.data);
         break;
 
@@ -148,8 +162,14 @@ export class EnhancedWorkerPool {
     workerInfo.pendingMatches = Math.max(0, workerInfo.pendingMatches - 1);
     workerInfo.activeMatches.add(matchId);
     this.matchToWorker.set(matchId, workerId);
+    this.matchLastActivity.set(matchId, Date.now());
     this.userToMatch.set(userId, matchId);
-    this.matchesCreatedTotal++;
+    
+    // CRITICAL FIX: Only increment counter once per unique match
+    if (!this.trackedMatches.has(matchId)) {
+      this.trackedMatches.add(matchId);
+      this.matchesCreatedTotal++;
+    }
 
     if (workerInfo.matchCount === 1) {
       workerInfo.status = 'active';
@@ -171,6 +191,9 @@ export class EnhancedWorkerPool {
     workerInfo.matchCount = Math.max(0, workerInfo.matchCount - 1);
     workerInfo.activeMatches.delete(matchId);
     this.matchToWorker.delete(matchId);
+    this.matchLastActivity.delete(matchId);
+    // Remove from tracked matches when completed
+    this.trackedMatches.delete(matchId);
 
     if (workerInfo.matchCount === 0) {
       workerInfo.status = 'idle';
@@ -199,6 +222,7 @@ export class EnhancedWorkerPool {
     // Reassign all matches from dead worker
     workerInfo.activeMatches.forEach(matchId => {
       this.matchToWorker.delete(matchId);
+      this.matchLastActivity.delete(matchId);
       
       // Notify players that match ended due to server error
       this.io.to(matchId).emit('match_error', {
@@ -230,7 +254,7 @@ export class EnhancedWorkerPool {
     let minLoad = Infinity;
 
     for (const workerInfo of this.workers.values()) {
-      if (workerInfo.status === 'dead') continue;
+      if (workerInfo.status === 'dead' || workerInfo.status === 'initializing') continue;
 
       // Calculate load including both actual and pending matches
       const totalLoad = workerInfo.matchCount + workerInfo.pendingMatches;
@@ -251,11 +275,28 @@ export class EnhancedWorkerPool {
       return null;
     }
 
-    // If all workers at high load, spawn new one
-    if (minLoad >= 0.9 && this.workers.size < MAX_WORKERS) {
-      const newWorker = this.spawnWorker();
-      selectedWorker = this.workers.get(newWorker.id)!;
-      logInfo('Spawned new worker for match', { matchId, workerId: newWorker.id });
+    // PROACTIVE SCALING: Spawn workers BEFORE reaching full capacity
+    // This prevents the "avalanche" problem where matches pile up faster than workers spawn
+    if (minLoad >= PROACTIVE_SPAWN_THRESHOLD && this.workers.size < MAX_WORKERS) {
+      // Calculate how many workers we need based on pending match rate
+      const workersNeeded = Math.ceil((this.getTotalMatches() + 10) / MAX_MATCHES_PER_WORKER);
+      const workersToSpawn = Math.min(
+        workersNeeded - this.workers.size,
+        MAX_WORKERS - this.workers.size,
+        3 // Spawn maximum 3 workers per assignment to avoid explosion
+      );
+      
+      if (workersToSpawn > 0) {
+        for (let i = 0; i < workersToSpawn; i++) {
+          const newWorker = this.spawnWorker();
+          logInfo('PROACTIVE worker spawn', { 
+            matchId, 
+            workerId: newWorker.id, 
+            reason: 'load_threshold', 
+            threshold: `${(minLoad * 100).toFixed(1)}%` 
+          });
+        }
+      }
     }
 
     const assignedWorkerId = selectedWorker.worker.id;
@@ -305,26 +346,80 @@ export class EnhancedWorkerPool {
     }, SCALE_CHECK_INTERVAL);
   }
 
+  private updateMatchActivity(matchId: string) {
+    this.matchLastActivity.set(matchId, Date.now());
+  }
+
+  private cleanupStaleMatches() {
+    const idleTimeoutMs = parseInt(process.env.MATCH_IDLE_TIMEOUT_MS || '300000', 10); // 5 minutes
+    const now = Date.now();
+
+    for (const [matchId, lastActivity] of this.matchLastActivity.entries()) {
+      if (now - lastActivity > idleTimeoutMs) {
+        const workerId = this.matchToWorker.get(matchId);
+        const workerInfo = workerId !== undefined ? this.workers.get(workerId) : undefined;
+
+        if (workerInfo) {
+          if (workerInfo.activeMatches.has(matchId)) {
+            workerInfo.activeMatches.delete(matchId);
+          }
+
+          if (workerInfo.matchCount > 0) {
+            workerInfo.matchCount = Math.max(0, workerInfo.matchCount - 1);
+            if (workerInfo.matchCount === 0 && workerInfo.status !== 'dead') {
+              workerInfo.status = 'idle';
+            }
+          }
+        }
+
+        this.matchToWorker.delete(matchId);
+        this.matchLastActivity.delete(matchId);
+
+        this.io.to(matchId).emit('match_error', {
+          message: 'Match timed out due to inactivity.'
+        });
+
+        logInfo('Cleaned up idle match from worker pool', {
+          matchId,
+          workerId
+        });
+      }
+    }
+  }
+
   private checkAndScale() {
+    this.cleanupStaleMatches();
+
     const totalCapacity = this.workers.size * MAX_MATCHES_PER_WORKER;
     const totalMatches = this.matchToWorker.size;
     const utilization = totalMatches / totalCapacity;
 
-    logInfo('Checking scaling', {
+    logInfo('Auto-scaling check', {
       totalWorkers: this.workers.size,
       totalMatches,
       totalCapacity,
       utilization: `${(utilization * 100).toFixed(1)}%`
     });
 
-    // Scale up
+    // AGGRESSIVE SCALE-UP: Spawn workers faster during burst load
     if (utilization >= SCALE_UP_THRESHOLD && this.workers.size < MAX_WORKERS) {
+      // Calculate deficit: how many workers do we actually need?
+      const workersNeeded = Math.ceil(totalMatches / MAX_MATCHES_PER_WORKER);
+      const workersDeficit = workersNeeded - this.workers.size;
+      
+      // Spawn up to 5 workers at once during high load (was 1 per interval)
       const workersToAdd = Math.min(
-        Math.ceil((totalMatches - totalCapacity * SCALE_UP_THRESHOLD) / MAX_MATCHES_PER_WORKER),
+        Math.max(workersDeficit, 1),
+        5, // Spawn maximum 5 workers per 5-second interval
         MAX_WORKERS - this.workers.size
       );
 
-      logInfo('Scaling up', { workersToAdd, currentWorkers: this.workers.size });
+      logInfo('AGGRESSIVE SCALE-UP', { 
+        workersToAdd, 
+        currentWorkers: this.workers.size,
+        workersNeeded,
+        totalMatches
+      });
       
       for (let i = 0; i < workersToAdd; i++) {
         this.spawnWorker();
@@ -334,7 +429,7 @@ export class EnhancedWorkerPool {
     // Scale down (only truly idle workers, and only if we have excess capacity)
     // NEVER scale down below MIN_WORKERS or if any worker has active matches
     const workersWithMatches = Array.from(this.workers.values()).filter(w => w.matchCount > 0).length;
-    const canScaleDown = this.workers.size > MIN_WORKERS && workersWithMatches > 0;
+    const canScaleDown = this.workers.size > MIN_WORKERS;
 
     if (utilization <= SCALE_DOWN_THRESHOLD && canScaleDown) {
       // Only remove workers beyond MIN_WORKERS, and only if they're truly idle

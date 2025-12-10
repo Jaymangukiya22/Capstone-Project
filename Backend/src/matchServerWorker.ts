@@ -58,6 +58,11 @@ class WorkerMatchService {
   constructor(redis: any) {
     this.redis = redis;
     this.startHeartbeat();
+    // Notify master that this worker is fully initialized and ready to accept matches
+    this.notifyMaster({
+      type: 'worker_ready',
+      maxMatches: MAX_MATCHES
+    });
   }
 
   private startHeartbeat() {
@@ -257,6 +262,22 @@ class WorkerMatchService {
       }
 
       this.matches.set(matchId, match);
+
+      // Inform master that this match now exists on this worker so it can
+      // correctly track active matches and utilization, even for matches that
+      // originated via HTTP/Redis instead of a direct create_match message.
+      this.notifyMaster({
+        type: 'match_created',
+        matchId,
+        userId
+      });
+
+      logInfo(`Worker ${workerId}: MATCH INITIALIZED FROM REDIS`, {
+        matchId,
+        quizId: storedMatch.quizId,
+        playersInRedis: Array.isArray(storedMatch.players) ? storedMatch.players.length : 0,
+        matchesInThisWorker: this.matches.size
+      });
     }
 
     if (match.status !== 'WAITING' && !match.players.has(userId)) {
@@ -483,7 +504,36 @@ class WorkerMatchService {
 
     if (!match.players.has(userId)) {
       logError(`Worker ${workerId}: Player still not in match after retries`, new Error(`User ${userId} not in match ${matchId}`));
-      throw new Error('Player not in match');
+      return;
+    }
+
+    if (match.players.size < match.maxPlayers) {
+      try {
+        const latestData = await this.redis.get(`match:${matchId}`);
+        if (latestData) {
+          const latest = JSON.parse(latestData);
+          if (latest.players && Array.isArray(latest.players)) {
+            for (const p of latest.players) {
+              if (!match.players.has(p.userId)) {
+                match.players.set(p.userId, {
+                  userId: p.userId,
+                  username: p.username,
+                  firstName: p.firstName,
+                  lastName: p.lastName,
+                  socketId: '',
+                  score: p.score || 0,
+                  currentQuestionIndex: p.currentQuestionIndex || 0,
+                  isReady: p.isReady || false,
+                  answers: p.answers || [],
+                  hasSubmittedCurrent: p.hasSubmittedCurrent || false
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        logError(`Worker ${workerId}: Failed to merge latest players from Redis for playerReady`, error as Error);
+      }
     }
 
     const player = match.players.get(userId)!;
@@ -748,6 +798,10 @@ class WorkerMatchService {
     }
 
     if (match.status !== 'IN_PROGRESS') {
+      if (match.status === 'COMPLETED') {
+        logInfo(`Worker ${workerId}: Ignored late answer for completed match`, { matchId, userId, status: match.status });
+        return;
+      }
       logError(`Worker ${workerId}: Match not in progress`, new Error(`Status: ${match.status}`));
       throw new Error('Match not in progress');
     }
@@ -788,7 +842,7 @@ class WorkerMatchService {
     }
 
     // Check for duplicate submission
-    if (player.hasSubmittedCurrent) {
+    if (player.hasSubmittedCurrent) { 
       logInfo(`Worker ${workerId}: Duplicate answer rejected`, { matchId, userId, questionId });
       return;
     }

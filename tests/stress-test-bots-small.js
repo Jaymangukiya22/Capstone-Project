@@ -8,6 +8,8 @@
 
 const io = require('socket.io-client');
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 
 // ============================================================================
 // CONFIG
@@ -15,10 +17,36 @@ const axios = require('axios');
 // Parse command-line argument for number of matches
 const NUM_MATCHES = parseInt(process.argv[2]) || 1;
 const TOTAL_USERS = NUM_MATCHES * 2; // 2 users per match
+const RAW_LOGIN_BATCH = parseInt(process.argv[3] || process.env.LOGIN_BATCH_SIZE || '20', 10);
+const LOGIN_BATCH_SIZE = Number.isNaN(RAW_LOGIN_BATCH) || RAW_LOGIN_BATCH <= 0 ? 20 : RAW_LOGIN_BATCH;
 const API_URL = process.env.API_URL || 'https://api.quizdash.dpdns.org';
 const SOCKET_URL = process.env.SOCKET_URL || 'https://match.quizdash.dpdns.org';
 const QUIZ_ID = 110;
 const THINK_TIME_MS = 1000;
+
+// HTTP client with keep-alive to avoid port exhaustion during local stress tests
+const parsedApiUrl = new URL(API_URL);
+const isHttps = parsedApiUrl.protocol === 'https:';
+
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: Infinity,
+  maxFreeSockets: 256
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: Infinity,
+  maxFreeSockets: 256
+});
+
+// Shared Axios instance for all bots
+const apiClient = axios.create({
+  baseURL: API_URL,
+  httpAgent: isHttps ? undefined : httpAgent,
+  httpsAgent: isHttps ? httpsAgent : undefined,
+  timeout: 10000
+});
 
 // Metrics
 const metrics = {
@@ -34,7 +62,9 @@ const metrics = {
   startTime: Date.now(),
   // Track which matches have started/completed to avoid double-counting
   startedMatches: new Set(),
-  completedMatches: new Set()
+  completedMatches: new Set(),
+  // Track unique bot+match joins to avoid over-counting on reconnects
+  joinedMatchesSet: new Set()
 };
 
 console.log(`
@@ -54,6 +84,39 @@ Starting in 2 seconds...
 `);
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function withRetry(fn, options = {}) {
+  const {
+    attempts = 3,
+    baseDelay = 300,
+    maxDelay = 3000,
+    factor = 2,
+    jitter = 0.3,
+    label = 'operation'
+  } = options;
+
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const result = await fn();
+      if (result === false || result === null) {
+        throw new Error(`${label} returned falsy result`);
+      }
+      return result;
+    } catch (e) {
+      lastError = e;
+      if (attempt === attempts) {
+        break;
+      }
+      const base = Math.min(maxDelay, baseDelay * Math.pow(factor, attempt - 1));
+      const jitterOffset = base * jitter * (Math.random() * 2 - 1);
+      const delay = Math.max(0, base + jitterOffset);
+      console.log(`Retrying ${label} (attempt ${attempt + 1}/${attempts}) after ${Math.round(delay)}ms: ${e.message}`);
+      await sleep(delay);
+    }
+  }
+  throw lastError || new Error(`${label} failed`);
+}
 
 function logProgress(message) {
   const elapsed = Math.floor((Date.now() - metrics.startTime) / 1000);
@@ -81,6 +144,7 @@ function logMetrics() {
 class Bot {
   constructor(id) {
     this.id = id;
+    this.botKey = `bot-${id}`;
     this.email = `stresstest_${id}@test.com`;
     this.password = '1234567890';
     this.token = null;
@@ -96,33 +160,44 @@ class Bot {
     this.players = [];
     this.hasEmittedReady = false; // Track if player_ready has been emitted
     this.matchHasStarted = false; // Track if match_started has been received
+    this.matchIsCompleted = false;
   }
 
   async login() {
-    try {
-      const res = await axios.post(`${API_URL}/api/auth/login`, {
+    const attemptLogin = async () => {
+      const res = await apiClient.post('/api/auth/login', {
         email: this.email,
         password: this.password
       }, {
-        timeout: 10000
+        timeout: 10000,
+        headers: {
+          'X-Bot-ID': this.botKey
+        }
       });
 
       this.token = res.data.token;
       this.userData = res.data.user || res.data.data?.user || res.data;
-      
+
       if (!this.userData || !this.userData.id) {
-        const err = `Bot ${this.id} login response missing user data`;
-        console.error(`❌ ${err}`);
-        metrics.errors++;
-        metrics.errorList.push({ type: 'login', bot: this.id, error: err });
-        return false;
+        throw new Error('login response missing user data');
       }
-      
+
+      return true;
+    };
+
+    try {
+      await withRetry(() => attemptLogin(), {
+        attempts: 3,
+        baseDelay: 300,
+        maxDelay: 3000,
+        label: `login bot ${this.id}`
+      });
+
       metrics.usersLoggedIn++;
       console.log(`✅ Bot ${this.id} logged in (ID: ${this.userData.id})`);
       return true;
     } catch (e) {
-      const err = `Bot ${this.id} login failed: ${e.message}`;
+      const err = `Bot ${this.id} login failed after retries: ${e.message}`;
       console.error(`❌ ${err}`);
       metrics.errors++;
       metrics.errorList.push({ type: 'login', bot: this.id, error: e.message });
@@ -140,7 +215,11 @@ class Bot {
           reconnection: true,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
-          reconnectionAttempts: 5
+          reconnectionAttempts: 5,
+          extraHeaders: {
+            "X-Bot-ID": this.botKey,
+            "X-Forwarded-For": `192.168.${Math.floor(this.id / 255)}.${this.id % 255}`
+          }
         });
 
         this.socket.on('connect', () => {
@@ -149,6 +228,17 @@ class Bot {
               userId: this.userData.id,
               username: this.userData.username
             });
+
+            // If this bot was already in a match before a disconnect, re-join it
+            if (this.matchId && this.joinCode) {
+              console.log(`🔄 Bot ${this.id} re-joining match ${this.matchId} after reconnection`);
+              this.socket.emit('join_match', {
+                matchId: this.matchId,
+                joinCode: this.joinCode,
+                userId: this.userData.id,
+                username: this.userData.username
+              });
+            }
           } else {
             console.error(`❌ Bot ${this.id}: userData is null, cannot authenticate`);
             resolve(false);
@@ -165,8 +255,27 @@ class Bot {
         this.socket.on('match_joined', (data) => {
           this.matchId = data.matchId;
           this.players = data.players || [];
-          metrics.matchesJoined++;
-          console.log(`✅ Bot ${this.id} joined match ${this.matchId}`);
+
+          // Only count unique bot+match joins to avoid inflating metrics on reconnects
+          const joinKey = `${this.id}-${this.matchId}`;
+          if (!metrics.joinedMatchesSet.has(joinKey)) {
+            metrics.joinedMatchesSet.add(joinKey);
+            metrics.matchesJoined++;
+          }
+
+          console.log(`✅ Bot ${this.id} joined match ${this.matchId} (players now: ${this.players.length})`);
+
+          // PROACTIVE READY: if both players are already present when we join (e.g. after reconnect),
+          // don't wait for another player_list_updated event that may never come.
+          if (this.players.length === 2 && !this.hasEmittedReady && !this.matchHasStarted && !this.matchIsCompleted) {
+            this.hasEmittedReady = true;
+            console.log(`✅ Bot ${this.id} PROACTIVE READY - Room full on join for match ${this.matchId}`);
+            this.socket.emit('player_ready', {
+              matchId: this.matchId,
+              userId: this.userData.id,
+              ready: true
+            });
+          }
           
           resolve(true);
         });
@@ -186,6 +295,10 @@ class Bot {
             });
             console.log(`✅ Bot ${this.id} emitted player_ready`);
           }
+          if (data.players.length < 2 && this.hasEmittedReady) {
+            console.log(`⚠️ Match ${this.matchId} dropped to ${data.players.length} players. Resetting Ready State.`);
+            this.hasEmittedReady = false; 
+          }          
         });
 
         this.socket.on('match_started', (data) => {
@@ -214,6 +327,7 @@ class Bot {
         });
 
         this.socket.on('match_completed', (data) => {
+          this.matchIsCompleted = true;
           // Only increment once per match, not per bot
           if (!metrics.completedMatches.has(this.matchId)) {
             metrics.completedMatches.add(this.matchId);
@@ -224,13 +338,27 @@ class Bot {
         });
 
         this.socket.on('error', (error) => {
-          console.error(`❌ Bot ${this.id} socket error: ${error}`);
+          let detail;
+          if (typeof error === 'string') {
+            detail = error;
+          } else if (error && error.message) {
+            detail = error.message;
+          } else {
+            try {
+              detail = JSON.stringify(error);
+            } catch (_) {
+              detail = String(error);
+            }
+          }
+          console.error(`❌ Bot ${this.id} socket error: ${detail}`);
           metrics.errors++;
-          metrics.errorList.push({ type: 'socket', bot: this.id, error: String(error) });
+          metrics.errorList.push({ type: 'socket', bot: this.id, error });
         });
 
         this.socket.on('disconnect', () => {
           this.isConnected = false;
+          // Reset ready flag so bot can re-declare readiness after reconnection
+          this.hasEmittedReady = false;
         });
 
         setTimeout(() => {
@@ -256,20 +384,38 @@ class Bot {
   async createMatch() {
     if (!this.isCreator) return null;
 
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/friend-matches`,
+    const attemptCreate = async () => {
+      const res = await apiClient.post(
+        '/api/friend-matches',
         {
           quizId: QUIZ_ID,
           userId: this.userData.id
         },
         {
-          headers: { Authorization: `Bearer ${this.token}` },
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'X-Bot-ID': this.botKey
+          },
           timeout: 10000
         }
       );
 
-      const { matchId, joinCode } = res.data.data;
+      return res.data && res.data.data ? res.data.data : null;
+    };
+
+    try {
+      const data = await withRetry(() => attemptCreate(), {
+        attempts: 3,
+        baseDelay: 300,
+        maxDelay: 3000,
+        label: `create match bot ${this.id}`
+      });
+
+      if (!data || !data.matchId || !data.joinCode) {
+        throw new Error('invalid match creation response');
+      }
+
+      const { matchId, joinCode } = data;
       this.matchId = matchId;
       this.joinCode = joinCode;
       metrics.matchesCreated++;
@@ -277,7 +423,7 @@ class Bot {
 
       return { matchId, joinCode };
     } catch (e) {
-      const err = `Bot ${this.id} failed to create match: ${e.message}`;
+      const err = `Bot ${this.id} failed to create match after retries: ${e.message}`;
       console.error(`❌ ${err}`);
       metrics.errors++;
       metrics.errorList.push({ type: 'match_creation', bot: this.id, error: e.message });
@@ -314,6 +460,10 @@ class Bot {
 
   async answerQuestion(questionData) {
     await sleep(Math.random() * THINK_TIME_MS + 500);
+
+    if (this.matchIsCompleted) {
+      return;
+    }
 
     if (!this.socket || !this.socket.connected || !this.matchId) {
       return;
@@ -356,17 +506,17 @@ class Bot {
 async function runSwarm() {
   const bots = [];
 
-  logProgress('🤖 Initializing 20 bots...');
+  logProgress(`🤖 Initializing ${TOTAL_USERS} bots...`);
   for (let i = 1; i <= TOTAL_USERS; i++) {
     bots.push(new Bot(i));
   }
 
-  logProgress('🔐 Logging in all bots (sequential to avoid 503 errors)...');
-  const LOGIN_BATCH = 1; // Sequential logins to avoid overwhelming backend
+  logProgress(`🔐 Logging in all bots in batches of ${LOGIN_BATCH_SIZE}...`);
+  const LOGIN_BATCH = LOGIN_BATCH_SIZE;
   for (let i = 0; i < bots.length; i += LOGIN_BATCH) {
     const batch = bots.slice(i, i + LOGIN_BATCH);
     await Promise.all(batch.map(b => b.login()));
-    await sleep(200); // Small delay between logins
+    await sleep(300); // Small delay between batches
   }
   
   const successfulBots = bots.filter(b => b.token !== null);
@@ -402,6 +552,7 @@ async function runSwarm() {
   logProgress('🔗 Connecting players to matches...');
   for (const pair of matchPairs) {
     pair.creator.connectToMatch(pair.matchId);
+    await sleep(100);
     pair.joiner.joinMatch(pair.matchId, pair.joinCode);
     await sleep(200);
   }
@@ -474,12 +625,17 @@ async function runSwarm() {
     // Print errors grouped by type
     Object.entries(errorsByType).forEach(([type, errors]) => {
       console.log(`\n📌 ${type.toUpperCase()} (${errors.length} errors):`);
-      errors.slice(0, 5).forEach((err, idx) => {
-        console.log(`   ${idx + 1}. Bot ${err.bot}: ${err.error}`);
+      errors.forEach((err, idx) => {
+        let detail = err.error;
+        if (detail && typeof detail !== 'string') {
+          try {
+            detail = JSON.stringify(detail);
+          } catch (_) {
+            detail = String(detail);
+          }
+        }
+        console.log(`   ${idx + 1}. Bot ${err.bot}: ${detail}`);
       });
-      if (errors.length > 5) {
-        console.log(`   ... and ${errors.length - 5} more`);
-      }
     });
     
     console.log(`\n════════════════════════════════════════════════════════════════`);

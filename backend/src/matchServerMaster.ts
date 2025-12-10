@@ -78,6 +78,9 @@ async function startMaster() {
   // Prometheus metrics
   app.get('/metrics', async (req, res) => {
     const stats = workerPool.getStats();
+    const detailedStats = workerPool.getDetailedStats();
+    
+    // Base metrics
     const metrics = `
 # HELP matchserver_total_workers Total worker processes
 # TYPE matchserver_total_workers gauge
@@ -91,25 +94,51 @@ matchserver_active_workers ${stats.activeWorkers}
 # TYPE matchserver_idle_workers gauge
 matchserver_idle_workers ${stats.idleWorkers}
 
-# HELP matchserver_total_matches Total active matches
+# HELP matchserver_active_matches_total Total active matches
+# TYPE matchserver_active_matches_total gauge
+matchserver_active_matches_total ${workerPool.getTotalMatches()}
+
+# HELP matchserver_connected_users Total connected users/players
+# TYPE matchserver_connected_users gauge
+matchserver_connected_users ${workerPool.getTotalPlayers()}
+
+# HELP matchserver_total_matches Total active matches (alias)
 # TYPE matchserver_total_matches gauge
 matchserver_total_matches ${workerPool.getTotalMatches()}
 
-# HELP matchserver_total_players Total connected players
+# HELP matchserver_total_players Total connected players (alias)
 # TYPE matchserver_total_players gauge
 matchserver_total_players ${workerPool.getTotalPlayers()}
 
-# HELP matchserver_matches_created_total Total matches created
+# HELP matchserver_matches_created_total Total matches created since startup
 # TYPE matchserver_matches_created_total counter
 matchserver_matches_created_total ${workerPool.getMatchesCreated()}
 
-# HELP matchserver_uptime_seconds Master uptime
+# HELP matchserver_uptime_seconds Master uptime in seconds
 # TYPE matchserver_uptime_seconds counter
 matchserver_uptime_seconds ${Math.floor(process.uptime())}
-`.trim();
+`;
+    
+    // Per-worker metrics
+    let perWorkerMetrics = '';
+    if (detailedStats.workers && detailedStats.workers.length > 0) {
+      perWorkerMetrics = `
+# HELP matchserver_worker_matches Matches assigned to each worker
+# TYPE matchserver_worker_matches gauge
+${detailedStats.workers.map(w => 
+  `matchserver_worker_matches{worker_id="${w.workerId}",pid="${w.pid}",status="${w.status}"} ${w.matchCount}`
+).join('\n')}
+
+# HELP matchserver_worker_utilization Worker utilization percentage
+# TYPE matchserver_worker_utilization gauge
+${detailedStats.workers.map(w => 
+  `matchserver_worker_utilization{worker_id="${w.workerId}",pid="${w.pid}"} ${parseFloat(w.utilization)}`
+).join('\n')}
+`;
+    }
     
     res.set('Content-Type', 'text/plain');
-    res.send(metrics);
+    res.send((metrics + perWorkerMetrics).trim());
   });
 
   // Create friend match (HTTP API)
@@ -491,8 +520,8 @@ matchserver_uptime_seconds ${Math.floor(process.uptime())}
     const forwardEvents = [
       'player_ready',
       'submit_answer',
-      'CLIENT_READY',
-      'disconnect'
+      'CLIENT_READY'
+      // 'disconnect'
     ];
 
     forwardEvents.forEach(eventName => {

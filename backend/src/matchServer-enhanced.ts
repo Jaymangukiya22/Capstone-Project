@@ -216,6 +216,9 @@ matchserver_status 1
 `.trim();
 
     // Per-match players metric lines
+    const perMatchHeaderLines = playersPerMatch.length > 0 ? `
+# HELP matchserver_match_players Number of players in each match
+# TYPE matchserver_match_players gauge` : '';
     const perMatchLines = playersPerMatch.map(pm => `matchserver_match_players{match_id="${pm.matchId}"} ${pm.count}`).join('\n');
 
     // Worker-related gauges (computed abstraction)
@@ -233,11 +236,22 @@ matchserver_idle_workers ${workerStats.idleWorkers}
 # TYPE matchserver_workers_spawned_total counter
 matchserver_workers_spawned_total ${workersSpawned}`.trim();
 
+    const workerMatchHeaderLines = workerStats.workerMatchCounts.length > 0 ? `
+# HELP matchserver_worker_matches Matches assigned to each worker
+# TYPE matchserver_worker_matches gauge` : '';
     const workerMatchLines = workerStats.workerMatchCounts
       .map(w => `matchserver_worker_matches{worker_id="${w.worker_id}"} ${w.matches}`)
       .join('\n');
 
-    const metrics = [bundleMetrics, metricsHeader, perMatchLines, workersHeader, workerMatchLines]
+    const metrics = [
+      bundleMetrics,
+      metricsHeader,
+      perMatchHeaderLines,
+      perMatchLines,
+      workersHeader,
+      workerMatchHeaderLines,
+      workerMatchLines
+    ]
       .filter(Boolean)
       .join('\n');
 

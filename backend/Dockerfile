@@ -64,11 +64,21 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=2 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 CMD [ "node", "dist/server.js" ]
 
-# Master Server stage
-FROM development AS matchserver-master
+# Master Server stage - lean production image for match server pool
+FROM node:20-alpine AS matchserver-master
+RUN apk add --no-cache curl bash && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -u 1001 -S nodejs -G nodejs
+WORKDIR /app
+
+# Copy only what is needed to run the compiled match server
+COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=development --chown=nodejs:nodejs /app/package.json ./
+
 ENV SERVICE_TYPE=master
 USER nodejs
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
-CMD ["npx", "ts-node", "src/matchServerMaster.ts"]
+CMD ["node", "dist/matchServerMaster.js"]

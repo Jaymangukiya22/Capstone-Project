@@ -74,10 +74,10 @@ export function SignUpForm() {
   };
   return (
 
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col md:flex-row">
 
         {/* Right Side - Image/Illustration (50%) */}
-      <div className="w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 relative overflow-hidden">
+      <div className="hidden md:block md:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute inset-0" style={{
@@ -123,13 +123,15 @@ export function SignUpForm() {
             <span className="text-white font-bold text-lg">Q</span>
           </div>
           <div className="ml-3">
-            <span className="font-bold text-xl text-white dark:text-white">QuizMaster</span>
+            <span className="font-bold text-xl text-gray-900 dark:text-white md:text-white">
+              QuizMaster
+            </span>
           </div>
         </div>
       </div>
 
       {/* Right Side - Signup Form (50%) */}
-      <div className="w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 bg-white dark:bg-gray-900">
+      <div className="w-full md:w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 pt-24 md:pt-0 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md mx-auto">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
@@ -148,7 +150,7 @@ export function SignUpForm() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="firstName" className="text-sm font-medium text-gray-700 dark:text-gray-300">First Name</Label>
                     <Input 

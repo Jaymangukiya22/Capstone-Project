@@ -85,7 +85,7 @@ export function LoginForm() {
     }
   };
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col md:flex-row">
       {/* Logo at top-left corner */}
       <div className="absolute top-6 left-6 z-20">
         <div className="flex items-center">
@@ -99,7 +99,7 @@ export function LoginForm() {
       </div>
 
       {/* Left Side - Login Form (50%) */}
-      <div className="w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 bg-white dark:bg-gray-900">
+      <div className="w-full md:w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 pt-24 md:pt-0 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md mx-auto">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
@@ -181,7 +181,7 @@ export function LoginForm() {
       </div>
       
       {/* Right Side - Image/Illustration (50%) */}
-      <div className="w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 relative overflow-hidden">
+      <div className="hidden md:block md:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute inset-0" style={{

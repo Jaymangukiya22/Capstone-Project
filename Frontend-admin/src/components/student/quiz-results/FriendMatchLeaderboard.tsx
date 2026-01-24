@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Crown, Medal, Award, Users, Zap } from 'lucide-react';
+import { Trophy, Crown, Medal, Users, Zap } from 'lucide-react';
 
 interface FriendMatchPlayer {
   rank: number;
@@ -42,23 +42,23 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
 
   
   return (
-    <div className="bg-card rounded-lg shadow-sm border p-6">
+    <div className="bg-card rounded-lg shadow-sm border p-4 sm:p-6">
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-foreground flex items-center">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
             <Users size={24} className="mr-3 text-primary" />
             Friend Match Results
           </h2>
-          <div className="text-right">
+          <div className="text-left sm:text-right min-w-0">
             <p className="text-sm text-muted-foreground">Match ID</p>
-            <p className="text-xs font-mono text-muted-foreground">{matchId}</p>
+            <p className="text-xs font-mono text-muted-foreground break-all">{matchId}</p>
           </div>
         </div>
         
         {/* Winner announcement */}
         {winner && (
           <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Trophy size={24} className="text-yellow-600 mr-3" />
               <div className="text-center">
                 <p className="text-yellow-800 dark:text-yellow-200 font-semibold text-lg">
@@ -83,21 +83,23 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
             <div
               key={player?.userId || index}
               className={`
-                flex items-center justify-between p-6 rounded-lg border-2 transition-all duration-200
+                flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 rounded-lg border-2 transition-all duration-200
                 ${isWinner 
                   ? 'border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 shadow-lg' 
                   : 'border-border bg-background hover:bg-muted/50'
                 }
               `}
             >
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 min-w-0">
                 <div className="flex items-center justify-center w-12 h-12">
                   {getRankIcon(rank)}
                 </div>
                 
-                <div>
-                  <div className="flex items-center space-x-3">
-                    <h3 className={`text-xl font-bold ${isWinner ? 'text-yellow-700 dark:text-yellow-300' : 'text-foreground'}`}>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h3
+                      className={`text-lg sm:text-xl font-bold truncate ${isWinner ? 'text-yellow-700 dark:text-yellow-300' : 'text-foreground'}`}
+                    >
                       {player?.username || `Player ${index + 1}`}
                     </h3>
                     {isWinner && (
@@ -109,7 +111,7 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-1">
                     <span>{player?.correctAnswers || 0}/{player?.totalAnswers || 1} correct</span>
                     <span>•</span>
                     <span>{percentage}% accuracy</span>
@@ -117,10 +119,10 @@ const FriendMatchLeaderboard: React.FC<FriendMatchLeaderboardProps> = ({
                 </div>
               </div>
               
-              <div className="text-right">
-                <div className="flex items-center space-x-3">
+              <div className="text-left sm:text-right">
+                <div className="flex items-center justify-between sm:justify-end gap-3">
                   <div className="text-right">
-                    <div className={`text-2xl font-bold ${isWinner ? 'text-yellow-600' : 'text-foreground'}`}>
+                    <div className={`text-xl sm:text-2xl font-bold ${isWinner ? 'text-yellow-600' : 'text-foreground'}`}>
                       {player?.score || 0}
                     </div>
                     <div className="text-xs text-muted-foreground">points</div>

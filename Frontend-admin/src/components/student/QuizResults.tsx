@@ -284,7 +284,7 @@ export function QuizResults() {
               */}
 
               {/* 4. SCORE BREAKDOWN */}
-              <div className="rounded-xl border bg-card/50 backdrop-blur-sm p-6 animate-in slide-in-from-bottom duration-500 delay-300">
+              <div className="rounded-xl border bg-card/50 backdrop-blur-sm p-4 sm:p-6 animate-in slide-in-from-bottom duration-500 delay-300">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 rounded-lg bg-purple-500/10">
                     <Award className="w-5 h-5 text-purple-500" />
@@ -303,7 +303,7 @@ export function QuizResults() {
                     </div>
                     <div className="flex-1">
                       <h4 className="font-semibold text-sm mb-1">Scoring Formula</h4>
-                      <code className="text-xs bg-background/50 px-2 py-1 rounded">
+                      <code className="block text-xs bg-background/50 px-2 py-1 rounded break-words whitespace-normal">
                         Points = 100 (base) + (15s - timeSpent) × 2 (time bonus)
                       </code>
                       <p className="text-xs text-muted-foreground mt-2">
@@ -319,16 +319,16 @@ export function QuizResults() {
                     const timeBonus = Math.max(0, Math.floor((15 - answer.timeSpent) * 2));
                     const basePoints = 100;
                     return (
-                      <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
+                      <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
                             answer.isCorrect ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
                           }`}>
                             {index + 1}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">Question {index + 1}</span>
+                              <span className="font-medium text-sm truncate">Question {index + 1}</span>
                               {answer.isCorrect ? (
                                 <span className="text-xs text-green-500">✓ Correct</span>
                               ) : (
@@ -346,7 +346,7 @@ export function QuizResults() {
                             </div>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                           <div className="font-bold text-lg">{answer.points}</div>
                           <div className="text-xs text-muted-foreground">
                             {basePoints} + {timeBonus} bonus

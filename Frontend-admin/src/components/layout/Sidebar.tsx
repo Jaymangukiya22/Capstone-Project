@@ -179,7 +179,7 @@ export function Sidebar() {
   const panelTitle = user?.role === 'ADMIN' ? 'Admin Panel' : 'Student Portal';
   
   return (
-    <div className="flex h-screen w-full lg:w-64 flex-col bg-white dark:bg-gray-900 lg:border-r border-gray-200 dark:border-gray-800">
+    <div className="flex h-full w-full lg:w-64 flex-col bg-white dark:bg-gray-900 lg:border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
       {/* Header */}
       <div className="flex h-16 items-center px-6 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center space-x-3">

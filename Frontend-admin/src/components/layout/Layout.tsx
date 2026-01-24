@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Sidebar } from "./Sidebar"
 import { TopNavigation } from "./TopNavigation"
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Menu } from 'lucide-react'
 
@@ -15,13 +15,16 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar - Hidden on mobile */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block h-screen">
         <Sidebar />
       </div>
 
       {/* Mobile Sidebar - Sheet */}
       <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-        <SheetContent side="left" className="p-0 w-[85vw] max-w-[320px]">
+        <SheetContent
+          side="left"
+          className="p-0 w-[85vw] max-w-[320px] h-full overflow-y-auto"
+        >
           <Sidebar />
         </SheetContent>
       </Sheet>

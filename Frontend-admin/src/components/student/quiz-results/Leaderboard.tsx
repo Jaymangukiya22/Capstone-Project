@@ -52,14 +52,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, totalQuestions 
   };
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border p-6">
+    <div className="bg-card rounded-lg shadow-sm border p-4 sm:p-6">
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-foreground flex items-center">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
             <Trophy size={24} className="mr-3 text-yellow-500" />
             Leaderboard
           </h2>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <p className="text-sm text-muted-foreground">Your Rank</p>
             <p className="text-2xl font-bold text-primary">#{currentStudentRank}</p>
           </div>
@@ -86,7 +86,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, totalQuestions 
             <div
               key={entry.id}
               className={`
-                flex items-center justify-between p-4 rounded-lg border transition-all duration-200 animate-in slide-in-from-left duration-400
+                flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg border transition-all duration-200 animate-in slide-in-from-left duration-400
                 ${isCurrentStudent 
                   ? 'bg-primary/10 border-primary/30 shadow-md' 
                   : 'bg-background border-border hover:bg-muted/50'
@@ -94,14 +94,16 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, totalQuestions 
               `}
               style={{ animationDelay: `${index * 100}ms` }}
             >
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 min-w-0">
                 <div className="flex items-center justify-center w-8 h-8">
                   {getRankIcon(rank)}
                 </div>
                 
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className={`font-semibold ${isCurrentStudent ? 'text-primary' : 'text-foreground'}`}>
+                <div className="min-w-0">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <h3
+                      className={`font-semibold truncate ${isCurrentStudent ? 'text-primary' : 'text-foreground'}`}
+                    >
                       {entry.name}
                     </h3>
                     {isCurrentStudent && (
@@ -116,8 +118,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, totalQuestions 
                 </div>
               </div>
               
-              <div className="text-right">
-                <div className="flex items-center space-x-2">
+              <div className="text-left sm:text-right">
+                <div className="flex items-center justify-between sm:justify-end gap-2">
                   <span className="text-lg font-bold text-foreground">
                     {entry.score}/{entry.totalQuestions}
                   </span>

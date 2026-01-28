@@ -13,14 +13,38 @@ import { MatchPlayer } from '../src/models/MatchPlayer';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+const getDatabaseConfig = () => {
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    return {
+      host: url.hostname,
+      port: Number(url.port || '5432'),
+      database: url.pathname.replace(/^\//, ''),
+      username: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+    };
+  }
+
+  return {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'quizup_test',
+    username: process.env.DB_USER || 'quizup_user',
+    password: process.env.DB_PASSWORD || 'quizup_password',
+  };
+};
+
+const databaseConfig = getDatabaseConfig();
+
 // Test database configuration
 export const testSequelize = new Sequelize({
   dialect: 'postgres',
-  host: process.env.DB_HOST || 'postgres',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'quizup_test',
-  username: process.env.DB_USER || 'quizup_user',
-  password: process.env.DB_PASSWORD || 'quizup_password',
+  host: databaseConfig.host,
+  port: databaseConfig.port,
+  database: databaseConfig.database,
+  username: databaseConfig.username,
+  password: databaseConfig.password,
   logging: false, // Disable logging during tests
   models: [
     Category,

@@ -7,6 +7,9 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '18'
   POSTGRES_VERSION: '15'
@@ -295,34 +298,91 @@ jobs:
         path: Frontend-admin/test-results/
         retention-days: 7
 
-  # Security scanning
-  security:
-    name: Security Scanning
+  dependency-review:
+    name: Dependency Review (PR)
     runs-on: ubuntu-latest
-    
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      with:
+        fail-on-severity: high
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript-typescript
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: |
+          backend/package-lock.json
+          Frontend-admin/package-lock.json
+
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         scan-type: 'fs'
         scan-ref: '.'
         format: 'sarif'
         output: 'trivy-results.sarif'
-    
+
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
-    
+
+    - name: Install backend dependencies (for audit)
+      working-directory: ./backend
+      run: npm ci
+
     - name: Audit backend dependencies
       working-directory: ./backend
       run: |
         npm audit --audit-level=moderate || echo "Backend audit completed with warnings"
-    
+
+    - name: Install frontend dependencies (for audit)
+      working-directory: ./Frontend-admin
+      run: npm ci
+
     - name: Audit frontend dependencies
       working-directory: ./Frontend-admin
       run: |

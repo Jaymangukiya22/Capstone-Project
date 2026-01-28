@@ -23,6 +23,8 @@
     "seed:quick": "ts-node --transpile-only src/scripts/quickSeed.ts",
     "seed:dev": "ts-node-dev --respawn --transpile-only src/scripts/seedDatabase.ts",
     "migrate:tags": "ts-node src/scripts/migrate-tags.ts",
+    "db:migrate": "node -e \"console.log('db:migrate: no sequelize-cli migrations configured; skipping')\"",
+    "db:seed": "npm run seed:quick",
     "test": "jest --detectOpenHandles --forceExit",
     "test:watch": "jest --watch --detectOpenHandles",
     "test:coverage": "jest --coverage --detectOpenHandles --forceExit",

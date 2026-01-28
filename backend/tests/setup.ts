@@ -37,6 +37,10 @@ const getDatabaseConfig = () => {
 
 const databaseConfig = getDatabaseConfig();
 
+const isUnitTestRun = process.argv.some((arg) =>
+  arg.includes('testPathPattern=unit') || arg === 'unit'
+);
+
 // Test database configuration
 export const testSequelize = new Sequelize({
   dialect: 'postgres',
@@ -62,6 +66,9 @@ export const testSequelize = new Sequelize({
 
 // Global test setup
 beforeAll(async () => {
+  if (isUnitTestRun) {
+    return;
+  }
   try {
     // Test database connection
     await testSequelize.authenticate();
@@ -78,6 +85,9 @@ beforeAll(async () => {
 
 // Clean up after each test
 afterEach(async () => {
+  if (isUnitTestRun) {
+    return;
+  }
   try {
     // Clear all tables in reverse order to handle foreign key constraints
     // Type-safe cleanup function
@@ -108,6 +118,9 @@ afterEach(async () => {
 
 // Global test teardown
 afterAll(async () => {
+  if (isUnitTestRun) {
+    return;
+  }
   try {
     await testSequelize.close();
     console.log('✅ Test database connection closed');

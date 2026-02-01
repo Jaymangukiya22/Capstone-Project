@@ -122,6 +122,7 @@ apiClient.interceptors.response.use(
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
+  pagination?: any;
   error?: string;
   message?: string;
 }

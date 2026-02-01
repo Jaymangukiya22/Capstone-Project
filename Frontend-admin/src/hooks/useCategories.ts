@@ -50,8 +50,12 @@ export function useCategories(options: UseCategoriesOptions = {}): UseCategories
         depth,
         ...params
       });
-      
-      setCategories(result.categories);
+
+      const categoriesArray = Array.isArray(result.categories)
+        ? result.categories
+        : [];
+
+      setCategories(categoriesArray);
       setPagination(result.pagination);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch categories';

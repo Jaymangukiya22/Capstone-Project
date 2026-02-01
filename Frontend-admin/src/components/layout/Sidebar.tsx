@@ -3,7 +3,6 @@ import {
   FileQuestion, 
   Users, 
   GraduationCap,
-  Target,
   Settings,
   HelpCircle,
   ClipboardList,
@@ -152,9 +151,9 @@ const studentNavigation = [
     icon: GraduationCap,
   },
   {
-    name: "Auto Matchmaking",
-    href: "/auto-matchmaking",
-    icon: Target,
+    name: "Matchmaking",
+    href: "/matchmaking",
+    icon: Users,
   },
   {
     name: "My Results",

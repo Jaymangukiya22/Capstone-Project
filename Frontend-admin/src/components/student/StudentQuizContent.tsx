@@ -38,8 +38,11 @@ export function StudentQuizContent() {
   const isLoading = quizzesLoading || categoriesLoading
 
   // Transform quizzes to include category names
-  const enrichedQuizzes: StudentQuiz[] = (quizzes || []).map(quiz => {
-    const category = categories.find(cat => cat.id === quiz.categoryId)
+  const quizzesArray = Array.isArray(quizzes) ? quizzes : []
+  const categoriesArray = Array.isArray(categories) ? categories : []
+
+  const enrichedQuizzes: StudentQuiz[] = quizzesArray.map(quiz => {
+    const category = categoriesArray.find(cat => cat.id === quiz.categoryId)
     return {
       ...quiz,
       categoryName: category?.name || 'Uncategorized'

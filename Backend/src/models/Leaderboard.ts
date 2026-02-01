@@ -15,10 +15,13 @@ import {
 import { User } from './User';
 import { Category } from './Category';
 
+
 @Table({
   tableName: 'leaderboards',
   timestamps: true,
 })
+
+
 export class Leaderboard extends Model {
   @PrimaryKey
   @AutoIncrement
@@ -83,3 +86,4 @@ export class Leaderboard extends Model {
   @BelongsTo(() => Category, 'categoryId')
   category?: Category;
 }
+

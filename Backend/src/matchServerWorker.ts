@@ -1,7 +1,7 @@
 import cluster from 'cluster';
 import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, MatchPlayer as MatchPlayerModel } from './models/index';
+import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, MatchPlayer as MatchPlayerModel, MatchAnswer } from './models/index';
 import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
 import { logInfo, logError } from './utils/logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -46,6 +46,7 @@ interface MatchRoom {
   questions: any[];
   createdAt: Date;
   joinCode?: string;
+  mode?: 'FRIEND' | 'AUTO';
   questionTimeoutId?: NodeJS.Timeout;
 }
 
@@ -158,7 +159,8 @@ class WorkerMatchService {
       timeLimit: quiz.timeLimit || 30,
       questions,
       createdAt: new Date(),
-      joinCode
+      joinCode,
+      mode: 'FRIEND'
     };
 
     // Add creator
@@ -240,7 +242,8 @@ class WorkerMatchService {
         timeLimit: storedMatch.timeLimit || 30,
         questions,
         createdAt: new Date(storedMatch.createdAt),
-        joinCode: storedMatch.joinCode
+        joinCode: storedMatch.joinCode,
+        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO')
       };
 
       // Restore players
@@ -301,7 +304,7 @@ class WorkerMatchService {
         const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
 
         this.emitToSocket(socketId, 'match_reconnected', {
-          question: this.sanitizeQuestion(currentQuestion),
+          question: this.sanitizeQuestion(currentQuestion, match.timeLimit),
           questionIndex: match.currentQuestionIndex,
           totalQuestions: match.questions.length,
           timeElapsed: Math.floor(timeElapsed / 1000),
@@ -313,7 +316,9 @@ class WorkerMatchService {
         // Pre-game reconnect: just send current lobby state
         this.emitToSocket(socketId, 'match_joined', {
           matchId,
-          players: this.getPlayerList(match)
+          players: this.getPlayerList(match),
+          quiz: match.quiz,
+          totalQuestions: match.questions.length
         });
       }
 
@@ -355,7 +360,7 @@ class WorkerMatchService {
         players: this.getPlayerList(match),
         quiz: match.quiz,
         totalQuestions: match.questions.length,
-        question: firstQuestion ? this.sanitizeQuestion(firstQuestion) : null,
+        question: firstQuestion ? this.sanitizeQuestion(firstQuestion, match.timeLimit) : null,
         questionIndex: 0
       });
 
@@ -380,7 +385,7 @@ class WorkerMatchService {
       });
     }
 
-    // ✅ NEW: Wait for CLIENT_READY signal instead of auto-starting.
+    // Wait for CLIENT_READY signal instead of auto-starting.
     // ALL PLAYERS PRESENT now means "all maxPlayers have active socket connections",
     // not just that they exist in Redis/DB.
     const connectedCount = Array.from(match.players.values()).filter(p => p.socketId && p.socketId.length > 0).length;
@@ -400,7 +405,7 @@ class WorkerMatchService {
         totalQuestions: match.questions.length
       });
     } else if (!isReconnect && connectedCount === match.maxPlayers && match.status !== 'WAITING') {
-      // ✅ LATE JOINER FIX (preserved): If match is already full and this player
+      // LATE JOINER FIX (preserved): If match is already full and this player
       // just joined as a new socket, send LOAD_GAME_SCENE directly so they don't get stuck.
       logInfo(`Worker ${workerId}: ⚠️ LATE JOINER/RECONNECT - Sending LOAD_GAME_SCENE to user ${userId}`, { 
         matchId, 
@@ -445,7 +450,8 @@ class WorkerMatchService {
         timeLimit: storedMatch.timeLimit || 30,
         questions,
         createdAt: new Date(storedMatch.createdAt),
-        joinCode: storedMatch.joinCode
+        joinCode: storedMatch.joinCode,
+        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO')
       };
 
       // Restore players
@@ -493,8 +499,8 @@ class WorkerMatchService {
                 score: p.score || 0,
                 currentQuestionIndex: p.currentQuestionIndex || 0,
                 isReady: p.isReady || false,
-                answers: p.answers || [],
-                hasSubmittedCurrent: p.hasSubmittedCurrent || false
+                hasSubmittedCurrent: p.hasSubmittedCurrent || false,
+                answers: p.answers || []
               });
             }
           }
@@ -524,8 +530,8 @@ class WorkerMatchService {
                   score: p.score || 0,
                   currentQuestionIndex: p.currentQuestionIndex || 0,
                   isReady: p.isReady || false,
-                  answers: p.answers || [],
-                  hasSubmittedCurrent: p.hasSubmittedCurrent || false
+                  hasSubmittedCurrent: p.hasSubmittedCurrent || false,
+                  answers: p.answers || []
                 });
               }
             }
@@ -560,24 +566,60 @@ class WorkerMatchService {
     }
   }
 
-  // ✅ NEW: Handle CLIENT_READY event from frontend
-  // This is called when the client has loaded the game UI and is ready to receive the first question
   public async clientReady(data: any) {
     const { matchId, userId } = data;
-    let match = this.matches.get(matchId);
+    logInfo(`Worker ${workerId}: CLIENT_READY received`, { matchId, userId });
+    await this.playerReady({ matchId, userId });
+  }
 
-    // ✅ CRITICAL: If match not in memory, try to re-hydrate from Redis
-    if (!match) {
-      logInfo(`Worker ${workerId}: Match not in local memory for CLIENT_READY, loading from Redis`, { matchId, userId });
-      const matchData = await this.redis.get(`match:${matchId}`);
-      if (!matchData) {
-        logError(`Worker ${workerId}: Match not found in Redis for CLIENT_READY`, new Error(`Match ${matchId}`));
+  private async startMatch(matchId: string) {
+    const match = this.matches.get(matchId);
+    if (!match || match.questions.length === 0) {
+      throw new Error('Cannot start match - no questions');
+    }
+
+    if (match.status !== 'WAITING') {
+      logInfo(
+        `Worker ${workerId}: Match already started or in progress - skipping duplicate start`,
+        { matchId, currentStatus: match.status }
+      );
       return;
     }
 
+    match.status = 'IN_PROGRESS';
+    match.currentQuestionIndex = 0;
+    match.questionStartTime = Date.now();
+
+    Array.from(match.players.values()).forEach(p => {
+      p.hasSubmittedCurrent = false;
+    });
+
+    await this.saveMatchState(matchId, match);
+
+    const currentQuestion = match.questions[0];
+    this.emitToMatch(matchId, 'match_started', {
+      question: this.sanitizeQuestion(currentQuestion, match.timeLimit),
+      questionIndex: 0,
+      totalQuestions: match.questions.length
+    });
+
+    logInfo(`Worker ${workerId}: Match started - waiting for player answers`, {
+      matchId,
+      playerCount: match.players.size
+    });
+  }
+
+  public async submitAnswer(data: any) {
+    const { matchId, userId } = data;
+    const clientData = data.data || {};
+    const { questionId, selectedOptions, timeSpent } = clientData;
+
+    let match = this.matches.get(matchId);
+    if (!match) {
+      const matchData = await this.redis.get(`match:${matchId}`);
+      if (!matchData) throw new Error('Match not found');
       const storedMatch = JSON.parse(matchData);
       const questions = await this.loadQuizQuestions(storedMatch.quizId);
-
       match = {
         id: matchId,
         quizId: storedMatch.quizId,
@@ -590,10 +632,10 @@ class WorkerMatchService {
         timeLimit: storedMatch.timeLimit || 30,
         questions,
         createdAt: new Date(storedMatch.createdAt),
-        joinCode: storedMatch.joinCode
+        joinCode: storedMatch.joinCode,
+        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO')
       };
 
-      // Restore players
       if (storedMatch.players && Array.isArray(storedMatch.players)) {
         for (const p of storedMatch.players) {
           match.players.set(p.userId, {
@@ -601,7 +643,7 @@ class WorkerMatchService {
             username: p.username,
             firstName: p.firstName,
             lastName: p.lastName,
-            socketId: '',
+            socketId: p.socketId || '',
             score: p.score || 0,
             currentQuestionIndex: p.currentQuestionIndex || 0,
             isReady: p.isReady || false,
@@ -614,195 +656,7 @@ class WorkerMatchService {
       this.matches.set(matchId, match);
     }
 
-    // ✅ CRITICAL: Handle race where CLIENT_READY arrives before player is fully attached
-    let player = match.players.get(userId);
-    if (!player) {
-      let retries = 0;
-      const maxRetries = 10;
-
-      while (!player && retries < maxRetries) {
-        logInfo(`Worker ${workerId}: Player not yet in match for CLIENT_READY, retrying... (${retries + 1}/${maxRetries})`, {
-          matchId,
-          userId
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms backoff
-        retries++;
-
-        const updatedData = await this.redis.get(`match:${matchId}`);
-        if (updatedData) {
-          const updated = JSON.parse(updatedData);
-          if (updated.players && Array.isArray(updated.players)) {
-            for (const p of updated.players) {
-              if (!match.players.has(p.userId)) {
-                match.players.set(p.userId, {
-                  userId: p.userId,
-                  username: p.username,
-                  firstName: p.firstName,
-                  lastName: p.lastName,
-                  socketId: '',
-                  score: p.score || 0,
-                  currentQuestionIndex: p.currentQuestionIndex || 0,
-                  isReady: p.isReady || false,
-                  answers: p.answers || [],
-                  hasSubmittedCurrent: p.hasSubmittedCurrent || false
-                });
-              }
-            }
-          }
-        }
-
-        player = match.players.get(userId);
-      }
-    }
-
-    if (!player) {
-      logError(`Worker ${workerId}: Player still not found for CLIENT_READY after retries`, new Error(`User ${userId}`));
-      return;
-    }
-
-    logInfo(`Worker ${workerId}: CLIENT_READY received from player`, { matchId, userId, username: player.username });
-
-    // Mark player as ready (for game scene loading)
-    player.isReady = true;
-
-    // Persist updated readiness so other workers / reconnects see it
-    await this.saveMatchState(matchId, match);
-
-    // Check if ALL players have sent CLIENT_READY
-    const allClientReady = Array.from(match.players.values()).every(p => p.isReady);
-    if (allClientReady && match.players.size === match.maxPlayers && match.status === 'WAITING') {
-      logInfo(`Worker ${workerId}: ✅ ALL CLIENTS READY - STARTING MATCH NOW`, {
-        matchId,
-        playerCount: match.players.size
-      });
-      await this.startMatch(matchId);
-    }
-  }
-
-  private async startMatch(matchId: string) {
-    const match = this.matches.get(matchId);
-    if (!match || match.questions.length === 0) {
-      throw new Error('Cannot start match - no questions');
-    }
-    
-    // CRITICAL FIX: Prevent starting match multiple times
-    if (match.status !== 'WAITING') {
-      logInfo(`Worker ${workerId}: Match already started or in progress - skipping duplicate start`, {
-        matchId,
-        currentStatus: match.status
-      });
-      return;
-    }
-
-    match.status = 'IN_PROGRESS';
-    match.currentQuestionIndex = 0;
-    match.questionStartTime = Date.now();
-
-    // Reset submission flags
-    Array.from(match.players.values()).forEach(p => {
-      p.hasSubmittedCurrent = false;
-    });
-
-    await this.saveMatchState(matchId, match);
-
-    const currentQuestion = match.questions[0];
-    this.emitToMatch(matchId, 'match_started', {
-      question: this.sanitizeQuestion(currentQuestion),
-      questionIndex: 0,
-      totalQuestions: match.questions.length
-    });
-
-    // ✅ NO TIMER HERE - Timer will be set when first player submits answer
-    // This prevents multiple timers from running and causing questions to auto-advance
-
-    logInfo(`Worker ${workerId}: Match started - waiting for player answers`, { matchId, playerCount: match.players.size });
-  }
-
-  public async submitAnswer(data: any) {
-    // CRITICAL FIX: Master sends data nested in .data property
-    // Extract matchId, userId, username from top level (sent by master)
-    // Extract questionId, selectedOptions, timeSpent from data.data (client payload)
-    const { matchId, userId, username, socketId } = data;
-    const clientData = data.data || {};
-    const { questionId, selectedOptions, timeSpent } = clientData;
-    
-    // DEBUG: Log which worker received the submission
-    logInfo(`Worker ${workerId}: SUBMIT_ANSWER received`, {
-      matchId,
-      userId,
-      questionId,
-      selectedOptions,
-      timeSpent,
-      matchExistsInThisWorker: this.matches.has(matchId),
-      allMatchesInThisWorker: Array.from(this.matches.keys()),
-      totalMatchesInWorker: this.matches.size,
-      dataStructure: Object.keys(data),
-      clientDataStructure: Object.keys(clientData)
-    });
-
-    let match = this.matches.get(matchId);
-
-    // FIX B: Re-hydrate from Redis if not found locally
-    if (!match) {
-      logInfo(`Worker ${workerId}: Match not in local memory, attempting to load from Redis...`, { matchId });
-      try {
-        const matchData = await this.redis.get(`match:${matchId}`);
-        if (matchData) {
-          const storedMatch = JSON.parse(matchData);
-          const questions = await this.loadQuizQuestions(storedMatch.quizId);
-          
-          match = {
-            id: matchId,
-            quizId: storedMatch.quizId,
-            quiz: storedMatch.quiz,
-            players: new Map(),
-            status: storedMatch.status || 'WAITING',
-            currentQuestionIndex: storedMatch.currentQuestionIndex || 0,
-            questionStartTime: storedMatch.questionStartTime || 0,
-            maxPlayers: 2,
-            timeLimit: storedMatch.timeLimit || 30,
-            questions,
-            createdAt: new Date(storedMatch.createdAt),
-            joinCode: storedMatch.joinCode
-          };
-
-          // Restore players
-          if (storedMatch.players && Array.isArray(storedMatch.players)) {
-            for (const p of storedMatch.players) {
-              match.players.set(p.userId, {
-                userId: p.userId,
-                username: p.username,
-                firstName: p.firstName,
-                lastName: p.lastName,
-                socketId: '',
-                score: p.score || 0,
-                currentQuestionIndex: p.currentQuestionIndex || 0,
-                isReady: p.isReady || false,
-                answers: p.answers || [],
-                hasSubmittedCurrent: p.hasSubmittedCurrent || false
-              });
-            }
-          }
-
-          this.matches.set(matchId, match);
-          logInfo(`Worker ${workerId}: ✅ Match re-hydrated from Redis`, { matchId, playerCount: match.players.size });
-        } else {
-          logError(`Worker ${workerId}: CRITICAL - Match not found in Redis either!`, new Error(`Match ${matchId}`));
-          throw new Error(`Match ${matchId} not found in Redis`);
-        }
-      } catch (error) {
-        logError(`Worker ${workerId}: Failed to re-hydrate match from Redis`, error as Error);
-        throw new Error(`Match ${matchId} not found`);
-      }
-    }
-
     if (match.status !== 'IN_PROGRESS') {
-      if (match.status === 'COMPLETED') {
-        logInfo(`Worker ${workerId}: Ignored late answer for completed match`, { matchId, userId, status: match.status });
-        return;
-      }
-      logError(`Worker ${workerId}: Match not in progress`, new Error(`Status: ${match.status}`));
       throw new Error('Match not in progress');
     }
 
@@ -812,20 +666,6 @@ class WorkerMatchService {
     }
 
     const currentQuestion = match.questions[match.currentQuestionIndex];
-
-    // Log question details for debugging
-    logInfo(`Worker ${workerId}: Question validation`, {
-      matchId,
-      currentQuestionIndex: match.currentQuestionIndex,
-      currentQuestionId: currentQuestion?.id,
-      submittedQuestionId: questionId,
-      totalQuestions: match.questions.length,
-      currentQuestionExists: !!currentQuestion
-    });
-
-    // Strict server-side guard: only accept answers for the current question.
-    // Late/stale timeout packets from the previous question will carry the old
-    // questionId and must be ignored to prevent "skipping" the new question.
     if (!currentQuestion) {
       throw new Error('No current question available');
     }
@@ -841,93 +681,62 @@ class WorkerMatchService {
       return;
     }
 
-    // Check for duplicate submission
-    if (player.hasSubmittedCurrent) { 
-      logInfo(`Worker ${workerId}: Duplicate answer rejected`, { matchId, userId, questionId });
+    if (player.hasSubmittedCurrent) {
       return;
     }
 
-    // Validate inputs
     if (!Array.isArray(selectedOptions)) {
       throw new Error('Invalid selected options payload');
-    }
-
-    // TIMING DEBUG: Log server vs client time calculations
-    const timeElapsedSinceQuestionStart = (Date.now() - match.questionStartTime) / 1000;
-    const serverTimeSpent = Math.round(timeElapsedSinceQuestionStart * 100) / 100;
-    logInfo(` TIMING DEBUG`, {
-      matchId,
-      userId,
-      serverTimeSpent,
-      clientTimeSpent: timeSpent,
-      difference: Math.round(Math.abs(timeElapsedSinceQuestionStart - timeSpent) * 100) / 100,
-      questionTimeLimit: match.timeLimit,
-      questionStartTime: match.questionStartTime,
-      currentTime: Date.now(),
-      isLate: timeElapsedSinceQuestionStart > match.timeLimit + 5
-    });
-
-    // SAFETY GUARD: Ignore impossible ultra-fast empty submissions.
-    // These typically come from a stale timeout firing right after a new
-    // question starts, producing 0-second "phantom" answers with no options.
-    if (Array.isArray(selectedOptions) && selectedOptions.length === 0 && timeSpent === 0 && serverTimeSpent < 0.25) {
-      logInfo(`Worker ${workerId}: Ignoring phantom 0-second empty submission`, {
-        matchId,
-        userId,
-        questionId,
-        serverTimeSpent,
-        clientTimeSpent: timeSpent
-      });
-      return;
     }
 
     if (typeof timeSpent !== 'number' || timeSpent < 0 || timeSpent > match.timeLimit + 5) {
       throw new Error('Invalid time spent');
     }
 
-    // FIX C: Wrap in try/catch to prevent worker crashes
-    let isCorrect = false;
-    let points = 0;
-    let correctOptionIds: number[] = [];
-    
-    try {
-      // Treat empty submissions as unanswered questions (0 points)
-      const sanitizedSelectedOptions = selectedOptions.filter((id: any) => typeof id === 'number');
+    const sanitizedSelectedOptions = selectedOptions.filter(
+      (id: any) => typeof id === 'number'
+    );
+    const correctOptionIds = currentQuestion.options
+      .filter((opt: any) => opt.isCorrect)
+      .map((opt: any) => opt.id);
 
-      // Check if answer is correct
-      correctOptionIds = currentQuestion.options
-        .filter((opt: any) => opt.isCorrect)
-        .map((opt: any) => opt.id);
+    const isCorrect =
+      sanitizedSelectedOptions.length === correctOptionIds.length &&
+      sanitizedSelectedOptions.every((id: number) => correctOptionIds.includes(id));
 
-      isCorrect = 
-        sanitizedSelectedOptions.length === correctOptionIds.length &&
-        sanitizedSelectedOptions.every(id => correctOptionIds.includes(id));
+    const validTimeSpent = Math.min(Math.max(timeSpent, 0), match.timeLimit);
+    const basePoints = 100;
+    const timeBonus = Math.max(0, Math.floor((match.timeLimit - validTimeSpent) * 2));
+    const points = isCorrect ? basePoints + timeBonus : 0;
 
-      // Calculate points (with validation)
-      const basePoints = 100;
-      const validTimeSpent = Math.min(Math.max(timeSpent, 0), match.timeLimit);
-      const timeBonus = Math.max(0, Math.floor((match.timeLimit - validTimeSpent) * 2));
-      points = isCorrect ? basePoints + timeBonus : 0;
+    player.score += points;
+    player.answers.push({
+      questionId: currentQuestion.id,
+      selectedOptions: sanitizedSelectedOptions,
+      isCorrect,
+      timeSpent: validTimeSpent,
+      points
+    });
+    player.hasSubmittedCurrent = true;
 
-      // Update player
-      player.score += points;
-      player.answers.push({
-        questionId,
+    const matchDb = await this.ensureDbMatch(match);
+    if (matchDb) {
+      await this.insertDbAnswer({
+        matchDbId: matchDb.id,
+        userId,
+        questionId: currentQuestion.id,
+        questionIndex: match.currentQuestionIndex,
         selectedOptions: sanitizedSelectedOptions,
+        correctOptions: correctOptionIds,
         isCorrect,
         timeSpent: validTimeSpent,
         points
       });
-      player.hasSubmittedCurrent = true;
-    } catch (error) {
-      logError(`Worker ${workerId}: Error processing answer`, error as Error);
-      // Don't throw - allow the submission to be recorded even if scoring fails
-      player.hasSubmittedCurrent = true;
+      await this.upsertDbPlayer(matchDb.id, match, userId);
     }
 
     await this.saveMatchState(matchId, match);
 
-    // Send result to player
     this.emitToSocket(player.socketId, 'answer_result', {
       isCorrect,
       points,
@@ -935,128 +744,61 @@ class WorkerMatchService {
       totalScore: player.score
     });
 
-    // Notify other players
     this.emitToMatch(matchId, 'opponent_submitted', {
       userId,
       username: player.username
     }, [player.socketId]);
 
-    // Check if all submitted
-    const allSubmitted = Array.from(match.players.values()).every(p => p.hasSubmittedCurrent);
+    this.emitToMatch(matchId, 'score_update', {
+      matchId,
+      players: this.getPlayerList(match),
+      updatedUserId: userId
+    });
 
-    if (allSubmitted) {
-      // Clear timeout if all players submitted early
-      const timerId = `${matchId}_q${match.currentQuestionIndex}`;
-      const existingTimer = this.questionTimers.get(timerId);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-        this.questionTimers.delete(timerId);
-      }
-
-      // SAVE STATE IMMEDIATELY before advancing
-      await this.saveMatchState(matchId, match);
-
-      if (match.currentQuestionIndex >= match.questions.length - 1) {
-        // Match completed
-        await this.endMatch(matchId);
-      } else {
-        // Next question - IMMEDIATELY, don't wait
-        await this.nextQuestion(matchId);
-      }
-    } else {
-      // Notify waiting
+    const allSubmitted = Array.from(match.players.values()).every(
+      p => p.hasSubmittedCurrent
+    );
+    if (!allSubmitted) {
       const waitingFor = Array.from(match.players.values())
         .filter(p => !p.hasSubmittedCurrent)
         .map(p => p.username);
 
       this.emitToSocket(player.socketId, 'waiting_for_opponent', {
-        message: `Waiting for ${waitingFor.join(', ')}...`,
-        waitingFor
+        matchId,
+        message: 'Waiting for opponent to answer…',
+        waitingFor,
       });
-
-      // Set 30-second timeout if not already set
-      const timerId = `${matchId}_q${match.currentQuestionIndex}`;
-      if (!this.questionTimers.has(timerId)) {
-        const timer = setTimeout(async () => {
-          logInfo(`Worker ${workerId}: 30-second timeout reached for question`, { matchId, questionIndex: match.currentQuestionIndex });
-          this.questionTimers.delete(timerId);
-          
-          // Auto-advance to next question
-          const currentMatch = this.matches.get(matchId);
-          if (currentMatch && currentMatch.status === 'IN_PROGRESS') {
-            // Mark unanswered players as having submitted (skip their answer)
-            Array.from(currentMatch.players.values()).forEach(p => {
-              if (!p.hasSubmittedCurrent) {
-                p.hasSubmittedCurrent = true;
-              }
-            });
-
-            await this.saveMatchState(matchId, currentMatch);
-
-            // Notify players of timeout
-            this.emitToMatch(matchId, 'question_timeout', {
-              message: 'Time is up! Moving to next question...',
-              questionIndex: currentMatch.currentQuestionIndex
-            });
-
-            if (currentMatch.currentQuestionIndex >= currentMatch.questions.length - 1) {
-              // Match completed
-              await this.endMatch(matchId);
-            } else {
-              // Next question - ONLY called from timeout, not from submitAnswer
-              await this.nextQuestion(matchId);
-            }
-          }
-        }, 30000); // 30 seconds
-
-        this.questionTimers.set(timerId, timer);
-      }
+      return;
     }
 
-    logInfo(`Worker ${workerId}: Answer submitted`, {
-      matchId,
-      userId,
-      isCorrect,
-      points,
-      allSubmitted
-    });
+    if (match.currentQuestionIndex >= match.questions.length - 1) {
+      await this.endMatch(matchId);
+      return;
+    }
+
+    await this.nextQuestion(matchId);
   }
 
   private async nextQuestion(matchId: string) {
     const match = this.matches.get(matchId);
     if (!match) return;
 
-    match.currentQuestionIndex++;
-
+    match.currentQuestionIndex += 1;
     if (match.currentQuestionIndex >= match.questions.length) {
       await this.endMatch(matchId);
       return;
     }
 
-    // Reset submission flags BEFORE saving
     Array.from(match.players.values()).forEach(p => {
       p.hasSubmittedCurrent = false;
     });
 
     match.questionStartTime = Date.now();
-    
-    // SAVE STATE TO REDIS FIRST before emitting
     await this.saveMatchState(matchId, match);
 
     const currentQuestion = match.questions[match.currentQuestionIndex];
-    
-    // EMIT IMMEDIATELY after saving
     this.emitToMatch(matchId, 'next_question', {
-      question: this.sanitizeQuestion(currentQuestion),
-      questionIndex: match.currentQuestionIndex,
-      totalQuestions: match.questions.length
-    });
-    
-    // ✅ NO TIMER HERE - Timer will be set when first player submits answer
-    // This prevents multiple timers from running and causing questions to auto-advance
-
-    logInfo(`Worker ${workerId}: Next question emitted - waiting for player answers`, {
-      matchId,
+      question: this.sanitizeQuestion(currentQuestion, match.timeLimit),
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
     });
@@ -1067,11 +809,14 @@ class WorkerMatchService {
     if (!match) return;
 
     match.status = 'COMPLETED';
+    await this.saveMatchState(matchId, match);
 
-    // Calculate results
     const results = Array.from(match.players.values()).map(player => {
       const correctAnswers = player.answers.filter(a => a.isCorrect).length;
-      const totalTimeSpent = player.answers.reduce((sum, a) => sum + a.timeSpent, 0);
+      const totalTimeSpent = player.answers.reduce(
+        (sum, a) => sum + a.timeSpent,
+        0
+      );
 
       return {
         userId: player.userId,
@@ -1082,7 +827,10 @@ class WorkerMatchService {
         answers: player.answers,
         correctAnswers,
         totalAnswers: player.answers.length,
-        accuracy: player.answers.length > 0 ? Math.round((correctAnswers / player.answers.length) * 100) : 0,
+        accuracy:
+          player.answers.length > 0
+            ? Math.round((correctAnswers / player.answers.length) * 100)
+            : 0,
         timeSpent: totalTimeSpent
       };
     });
@@ -1090,98 +838,62 @@ class WorkerMatchService {
     results.sort((a, b) => b.score - a.score);
     const winnerId = results.length > 0 ? results[0].userId : null;
 
-    // SAVE STATE TO REDIS FIRST
-    await this.saveMatchState(matchId, match);
-
-    logInfo(`Worker ${workerId}: Match completed - results calculated`, {
-      matchId,
-      results: results.map(r => ({ userId: r.userId, score: r.score, correctAnswers: r.correctAnswers }))
-    });
-
-    // Save to database
     try {
-      let dbMatch = await Match.findOne({ where: { matchId } });
-
-      if (!dbMatch) {
-        dbMatch = await Match.create({
-          matchId,
-          quizId: match.quizId,
-          type: 'FRIEND_MATCH' as any,
-          status: 'COMPLETED',
-          maxPlayers: 2,
-          startedAt: match.createdAt,
-          endedAt: new Date(),
-          winnerId
-        });
-      } else {
-        await dbMatch.update({
+      const matchDb = await this.ensureDbMatch(match);
+      if (matchDb) {
+        await matchDb.update({
           status: 'COMPLETED',
           endedAt: new Date(),
           winnerId
-        });
-      }
+        } as any);
 
-      // Save players
-      for (const result of results) {
-        let playerRecord = await MatchPlayerModel.findOne({
-          where: {
-            matchId: dbMatch.id,
-            userId: result.userId
+        for (const result of results) {
+          const existing = await MatchPlayerModel.findOne({
+            where: { matchId: matchDb.id, userId: result.userId }
+          });
+          if (!existing) {
+            await MatchPlayerModel.create({
+              matchId: matchDb.id,
+              userId: result.userId,
+              status: 'FINISHED',
+              score: result.score,
+              correctAnswers: result.correctAnswers,
+              timeSpent: result.timeSpent,
+              joinedAt: new Date(),
+              finishedAt: new Date()
+            } as any);
+          } else {
+            await existing.update({
+              status: 'FINISHED',
+              score: result.score,
+              correctAnswers: result.correctAnswers,
+              timeSpent: result.timeSpent,
+              finishedAt: new Date()
+            } as any);
           }
-        });
-
-        if (!playerRecord) {
-          await MatchPlayerModel.create({
-            matchId: dbMatch.id,
-            userId: result.userId,
-            status: 'FINISHED',
-            score: result.score,
-            correctAnswers: result.correctAnswers,
-            timeSpent: result.timeSpent,
-            joinedAt: new Date(Date.now() - result.timeSpent * 1000),
-            finishedAt: new Date()
-          });
-        } else {
-          await playerRecord.update({
-            status: 'FINISHED',
-            score: result.score,
-            correctAnswers: result.correctAnswers,
-            timeSpent: result.timeSpent,
-            finishedAt: new Date()
-          });
         }
       }
-
-      logInfo(`Worker ${workerId}: Match saved to database`, { matchId });
     } catch (error) {
       logError(`Worker ${workerId}: Failed to save match to database`, error as Error);
     }
 
-    // Broadcast completion
     this.emitToMatch(matchId, 'match_completed', {
       results,
       winner: results[0] || null,
       matchId,
       completedAt: new Date().toISOString(),
-      isFriendMatch: true
+      isFriendMatch: (match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')) === 'FRIEND'
     });
 
-    // Cleanup
     setTimeout(async () => {
-      match.players.forEach(player => {
-        this.userToMatch.delete(player.userId);
+      match.players.forEach(p => {
+        this.userToMatch.delete(p.userId);
       });
 
       this.matches.delete(matchId);
       await this.redis.del(`match:${matchId}`);
 
-      // Notify master
-      this.notifyMaster({
-        type: 'match_completed',
-        matchId
-      });
-
-      logInfo(`Worker ${workerId}: Match cleanup complete`, { matchId, remainingMatches: this.matches.size });
+      this.notifyMaster({ type: 'match_completed', matchId });
     }, 2000);
   }
 
@@ -1204,12 +916,14 @@ class WorkerMatchService {
           username: p.username,
           firstName: p.firstName,
           lastName: p.lastName,
+          socketId: p.socketId,
           score: p.score,
           currentQuestionIndex: p.currentQuestionIndex,
           isReady: p.isReady,
           hasSubmittedCurrent: p.hasSubmittedCurrent,
           answers: p.answers
-        }))
+        })),
+        mode: match.mode
       };
 
       await this.redis.setex(`match:${matchId}`, 3600, JSON.stringify(matchState));
@@ -1218,16 +932,15 @@ class WorkerMatchService {
     }
   }
 
-  private sanitizeQuestion(question: any) {
+  private sanitizeQuestion(question: any, timeLimit: number) {
     return {
       id: question.id,
       questionText: question.questionText,
       options: question.options.map((opt: any) => ({
         id: opt.id,
         optionText: opt.optionText
-        // Don't send isCorrect
       })),
-      timeLimit: question.timeLimit
+      timeLimit
     };
   }
 
@@ -1237,7 +950,8 @@ class WorkerMatchService {
       username: p.username,
       firstName: p.firstName,
       lastName: p.lastName,
-      isReady: p.isReady
+      isReady: p.isReady,
+      score: p.score
     }));
   }
 
@@ -1258,6 +972,79 @@ class WorkerMatchService {
       event,
       data
     });
+  }
+
+  private async ensureDbMatch(match: MatchRoom): Promise<Match | null> {
+    try {
+      const existing = await Match.findOne({ where: { matchId: match.id } });
+      if (existing) return existing;
+      return await Match.create({
+        matchId: match.id,
+        quizId: match.quizId,
+        type: 'FRIEND_MATCH' as any,
+        status: match.status as any,
+        maxPlayers: match.maxPlayers,
+        startedAt: match.createdAt,
+        mode: match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')
+      } as any);
+    } catch (error) {
+      logError(`Worker ${workerId}: Failed to ensure Match row`, error as Error);
+      return null;
+    }
+  }
+
+  private async upsertDbPlayer(matchDbId: number, match: MatchRoom, userId: number) {
+    const player = match.players.get(userId);
+    if (!player) return;
+    const correctAnswers = player.answers.filter(a => a.isCorrect).length;
+    const totalTimeSpent = player.answers.reduce((sum, a) => sum + a.timeSpent, 0);
+    const existing = await MatchPlayerModel.findOne({ where: { matchId: matchDbId, userId } });
+    if (!existing) {
+      await MatchPlayerModel.create({
+        matchId: matchDbId,
+        userId,
+        status: 'PLAYING',
+        score: player.score,
+        correctAnswers,
+        timeSpent: totalTimeSpent,
+        joinedAt: new Date()
+      } as any);
+      return;
+    }
+    await existing.update({
+      score: player.score,
+      correctAnswers,
+      timeSpent: totalTimeSpent
+    } as any);
+  }
+
+  private async insertDbAnswer(params: {
+    matchDbId: number;
+    userId: number;
+    questionId: number;
+    questionIndex: number;
+    selectedOptions: number[];
+    correctOptions: number[];
+    isCorrect: boolean;
+    timeSpent: number;
+    points: number;
+  }) {
+    try {
+      await MatchAnswer.create({
+        matchId: params.matchDbId,
+        userId: params.userId,
+        questionId: params.questionId,
+        questionIndex: params.questionIndex,
+        selectedOptions: params.selectedOptions,
+        correctOptions: params.correctOptions,
+        isCorrect: params.isCorrect,
+        timeSpent: params.timeSpent,
+        points: params.points,
+        submittedAt: new Date()
+      } as any);
+    } catch (error) {
+      logError(`Worker ${workerId}: Failed to insert MatchAnswer`, error as Error);
+    }
   }
 
   public getStats() {

@@ -39,6 +39,10 @@ export class Match extends Model {
   @Column(DataType.ENUM(...Object.values(MatchType)))
   type!: MatchType;
 
+  @Default('FRIEND')
+  @Column(DataType.STRING(20))
+  mode!: 'FRIEND' | 'AUTO';
+
   @Default(MatchStatus.WAITING)
   @Column(DataType.ENUM(...Object.values(MatchStatus)))
   status!: MatchStatus;

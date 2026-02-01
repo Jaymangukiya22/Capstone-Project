@@ -5,6 +5,7 @@ export interface StudentQuiz {
   id: string
   name: string
   description: string
+  categoryId: number
   category: string
   subcategory: string
   difficulty: 'easy' | 'intermediate' | 'hard'
@@ -103,6 +104,7 @@ class StudentQuizService {
       id: apiQuiz.id.toString(),
       name: apiQuiz.title,
       description: apiQuiz.description || '',
+      categoryId: apiQuiz.categoryId,
       category: categoryName || apiQuiz.category?.name || 'General',
       subcategory: subcategoryName || 'Default',
       difficulty: difficultyMap[apiQuiz.difficulty] || 'intermediate',
@@ -233,6 +235,7 @@ export const studentQuizService = new StudentQuizService()
 // Export quiz modes with AI support
 export const mockQuizModes = [
   { value: 'solo', label: 'Solo vs AI', description: 'Play against an AI opponent', icon: '🤖' },
+  { value: 'auto-match', label: 'Auto Matchmaking', description: 'Find an opponent automatically', icon: '🎯' },
   // { value: '1v1', label: '1v1', description: 'Challenge another player directly', icon: '⚔️' },
   // { value: 'multiplayer', label: 'Multiplayer', description: 'Join a room with up to 10 players', icon: '👥' },
   { value: 'play-with-friend', label: 'Play with Friend', description: 'Create or join a private game', icon: '👫' }

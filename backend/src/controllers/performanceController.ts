@@ -7,6 +7,9 @@ import { User } from '../models/User';
 import { Category } from '../models/Category';
 import { Match } from '../models/Match';
 import { MatchPlayer } from '../models/MatchPlayer';
+import { MatchAnswer } from '../models/MatchAnswer';
+import { QuestionBankItem } from '../models/QuestionBankItem';
+import { QuestionBankOption } from '../models/QuestionBankOption';
 import { MatchType } from '../types/enums';
 import { Op } from 'sequelize';
 
@@ -594,6 +597,7 @@ export const getCombinedQuizPerformance = async (req: AuthenticatedRequest, res:
           id: `match-${match.id}-player-${player.id}`,
           type: 'PLAY_WITH_FRIEND',
           matchId: match.matchId,
+          matchMode: match.mode,
           user: {
             id: player.user.id,
             username: player.user.username,
@@ -812,6 +816,155 @@ export const getFriendMatchHistory = async (req: AuthenticatedRequest, res: Resp
       success: false,
       error: 'Failed to fetch friend match history',
       message: 'An error occurred while fetching match history'
+    });
+  }
+};
+
+export const getMatchQuestionAnalytics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const matchId = req.params.matchId;
+    if (!matchId) {
+      res.status(400).json({
+        success: false,
+        error: 'matchId is required',
+      });
+      return;
+    }
+
+    const match = await Match.findOne({
+      where: { matchId },
+      include: [
+        {
+          model: MatchPlayer,
+          as: 'players',
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'username', 'email', 'firstName', 'lastName'],
+            },
+          ],
+          attributes: ['userId', 'score', 'correctAnswers', 'timeSpent'],
+        },
+      ],
+      attributes: ['id', 'matchId', 'quizId', 'status', 'mode', 'type', 'startedAt', 'endedAt', 'createdAt'],
+    });
+
+    if (!match) {
+      res.status(404).json({
+        success: false,
+        error: 'Match not found',
+      });
+      return;
+    }
+
+    const answers = await MatchAnswer.findAll({
+      where: { matchId: match.id },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'username', 'email', 'firstName', 'lastName'],
+        },
+      ],
+      order: [
+        ['questionIndex', 'ASC'],
+        ['userId', 'ASC'],
+      ],
+    });
+
+    const questionIds = Array.from(new Set(answers.map(a => a.questionId)));
+    const questions = await QuestionBankItem.findAll({
+      where: { id: { [Op.in]: questionIds } },
+      attributes: ['id', 'questionText', 'explanation'],
+    });
+    const questionById = new Map(questions.map(q => [q.id, q]));
+
+    const options = await QuestionBankOption.findAll({
+      where: { questionId: { [Op.in]: questionIds } },
+      attributes: ['id', 'questionId', 'optionText', 'isCorrect'],
+    });
+
+    const optionsByQuestionId = new Map<number, Array<{ id: number; optionText: string; isCorrect: boolean }>>();
+    for (const opt of options) {
+      const list = optionsByQuestionId.get(opt.questionId) || [];
+      list.push({
+        id: opt.id,
+        optionText: opt.optionText,
+        isCorrect: opt.isCorrect,
+      });
+      optionsByQuestionId.set(opt.questionId, list);
+    }
+
+    const questionIndexToItems = new Map<number, any>();
+    for (const ans of answers) {
+      const q = questionById.get(ans.questionId);
+      const entry = questionIndexToItems.get(ans.questionIndex) || {
+        questionIndex: ans.questionIndex,
+        questionId: ans.questionId,
+        questionText: q?.questionText || '',
+        explanation: q?.explanation || null,
+        options: optionsByQuestionId.get(ans.questionId) || [],
+        answers: [],
+      };
+
+      entry.answers.push({
+        user: {
+          id: (ans.user as any).id,
+          username: (ans.user as any).username,
+          email: (ans.user as any).email,
+          fullName: `${(ans.user as any).firstName || ''} ${(ans.user as any).lastName || ''}`.trim() || (ans.user as any).username,
+        },
+        selectedOptions: ans.selectedOptions,
+        correctOptions: ans.correctOptions,
+        isCorrect: ans.isCorrect,
+        timeSpent: ans.timeSpent,
+        points: ans.points,
+        submittedAt: ans.submittedAt || ans.createdAt,
+      });
+
+      questionIndexToItems.set(ans.questionIndex, entry);
+    }
+
+    const questionAnalytics = Array.from(questionIndexToItems.values()).sort(
+      (a, b) => a.questionIndex - b.questionIndex,
+    );
+
+    res.json({
+      success: true,
+      data: {
+        match: {
+          id: match.id,
+          matchId: match.matchId,
+          quizId: match.quizId,
+          status: match.status,
+          mode: (match as any).mode,
+          type: (match as any).type,
+          startedAt: match.startedAt,
+          endedAt: match.endedAt,
+          createdAt: match.createdAt,
+        },
+        players: (match.players || []).map(p => ({
+          userId: p.userId,
+          score: p.score,
+          correctAnswers: p.correctAnswers,
+          timeSpent: p.timeSpent,
+          user: {
+            id: (p.user as any).id,
+            username: (p.user as any).username,
+            email: (p.user as any).email,
+            fullName: `${(p.user as any).firstName || ''} ${(p.user as any).lastName || ''}`.trim() || (p.user as any).username,
+          },
+        })),
+        questions: questionAnalytics,
+      },
+    });
+  } catch (error) {
+    logError('Error fetching match question analytics', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch match question analytics',
+      message: 'An error occurred while fetching match question analytics',
     });
   }
 };

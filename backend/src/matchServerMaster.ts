@@ -9,6 +9,8 @@ import dotenv from 'dotenv';
 import { logInfo, logError } from './utils/logger';
 import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
 import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
+import sequelize from './config/database';
+import { User, Quiz } from './models';
 
 dotenv.config();  
 
@@ -32,6 +34,14 @@ const MASTER_PORT = parseInt(process.env.MASTER_PORT || '3001', 10);
 
 async function startMaster() {
   logInfo('Starting Master Process', { pid: process.pid });
+
+  try {
+    await sequelize.authenticate();
+    logInfo('Match server connected to database');
+  } catch (error) {
+    logError('Match server failed to connect to database', error as Error);
+    process.exit(1);
+  }
 
   // Initialize Redis
   const { pub, sub } = getRedisPubSub();
@@ -58,6 +68,169 @@ async function startMaster() {
 
   // Initialize Worker Pool
   const workerPool = new EnhancedWorkerPool(io, redisClient);
+
+  type AutoMatchmakingPreference = {
+    categoryId: number;
+    quizId?: number;
+  };
+
+  type AutoMatchmakingEntry = {
+    socketId: string;
+    userId: number;
+    username: string;
+    eloRating: number;
+    preference: AutoMatchmakingPreference;
+    startedAtMs: number;
+    currentRange: number;
+    widenTimer?: NodeJS.Timeout;
+    timeoutTimer?: NodeJS.Timeout;
+  };
+
+  const autoMatchQueueByUserId: Map<number, AutoMatchmakingEntry> = new Map();
+
+  const AUTO_MATCH_TIMEOUT_MS = 5 * 60 * 1000;
+  const AUTO_MATCH_START_RANGE = 50;
+  const AUTO_MATCH_RANGE_STEP = 50;
+  const AUTO_MATCH_MAX_RANGE = 300;
+  const AUTO_MATCH_WIDEN_INTERVAL_MS = 15 * 1000;
+
+  const cleanupAutoQueueEntry = (userId: number) => {
+    const entry = autoMatchQueueByUserId.get(userId);
+    if (!entry) return;
+    if (entry.widenTimer) clearInterval(entry.widenTimer);
+    if (entry.timeoutTimer) clearTimeout(entry.timeoutTimer);
+    autoMatchQueueByUserId.delete(userId);
+  };
+
+  const emitMatchmakingErrorToBoth = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry, message: string) => {
+    io.to(a.socketId).emit('matchmaking_error', { message });
+    io.to(b.socketId).emit('matchmaking_error', { message });
+  };
+
+  const isCompatible = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
+    if (a.userId === b.userId) return false;
+    if (a.preference.categoryId !== b.preference.categoryId) return false;
+
+    const aQuizId = a.preference.quizId;
+    const bQuizId = b.preference.quizId;
+    if (aQuizId && bQuizId) return aQuizId === bQuizId;
+    return true;
+  };
+
+  const canMatchByElo = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
+    const diff = Math.abs(a.eloRating - b.eloRating);
+    const allowed = Math.max(a.currentRange, b.currentRange);
+    return diff <= allowed;
+  };
+
+  const chooseQuizId = async (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
+    const preferredQuizId = a.preference.quizId || b.preference.quizId;
+    if (preferredQuizId) return preferredQuizId;
+
+    const quizzes = await Quiz.findAll({
+      where: {
+        isActive: true,
+        categoryId: a.preference.categoryId,
+      },
+      attributes: ['id'],
+    });
+
+    if (!quizzes.length) return null;
+    const randomIndex = Math.floor(Math.random() * quizzes.length);
+    return (quizzes[randomIndex] as any).id as number;
+  };
+
+  const createAutoMatchRedisPayload = (
+    matchId: string,
+    quizId: number,
+    a: AutoMatchmakingEntry,
+    b: AutoMatchmakingEntry,
+  ) => {
+    return {
+      matchId,
+      quizId,
+      status: 'WAITING',
+      createdAt: new Date().toISOString(),
+      mode: 'AUTO',
+      players: [
+        { userId: a.userId, username: a.username },
+        { userId: b.userId, username: b.username },
+      ],
+    };
+  };
+
+  const joinSocketsToMatchRoom = (matchId: string, socketIds: string[]) => {
+    for (const socketId of socketIds) {
+      const s = io.sockets.sockets.get(socketId);
+      if (s) s.join(matchId);
+    }
+  };
+
+  const forwardJoinToWorker = (
+    workerId: number,
+    matchId: string,
+    entry: AutoMatchmakingEntry,
+  ) => {
+    return workerPool.sendToWorker(workerId, {
+      type: 'join_match',
+      matchId,
+      userId: entry.userId,
+      username: entry.username,
+      socketId: entry.socketId,
+    });
+  };
+
+  const finalizeAutoMatch = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry, matchId: string, quizId: number) => {
+    io.to(a.socketId).emit('auto_match_found', { matchId, quizId });
+    io.to(b.socketId).emit('auto_match_found', { matchId, quizId });
+    cleanupAutoQueueEntry(a.userId);
+    cleanupAutoQueueEntry(b.userId);
+  };
+
+  const tryFindMatchFor = async (entry: AutoMatchmakingEntry) => {
+    for (const other of autoMatchQueueByUserId.values()) {
+      if (!isCompatible(entry, other) || !canMatchByElo(entry, other)) continue;
+      const quizId = await chooseQuizId(entry, other);
+      if (!quizId) {
+        emitMatchmakingErrorToBoth(entry, other, 'No quizzes available for the selected category');
+        cleanupAutoQueueEntry(entry.userId);
+        cleanupAutoQueueEntry(other.userId);
+        return;
+      }
+      const matchId = `auto_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const matchPayload: any = createAutoMatchRedisPayload(matchId, quizId, entry, other);
+      await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(matchPayload));
+      const workerId = await workerPool.assignMatch(matchId);
+      if (!workerId) {
+        emitMatchmakingErrorToBoth(entry, other, 'No available workers');
+        await redisClient.del(`match:${matchId}`);
+        cleanupAutoQueueEntry(entry.userId);
+        cleanupAutoQueueEntry(other.userId);
+        return;
+      }
+      matchPayload.workerId = workerId;
+      await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(matchPayload));
+      joinSocketsToMatchRoom(matchId, [entry.socketId, other.socketId]);
+      const sentA = forwardJoinToWorker(workerId, matchId, entry);
+      const sentB = forwardJoinToWorker(workerId, matchId, other);
+      if (!sentA || !sentB) {
+        emitMatchmakingErrorToBoth(entry, other, 'Match worker not available');
+        cleanupAutoQueueEntry(entry.userId);
+        cleanupAutoQueueEntry(other.userId);
+        return;
+      }
+      finalizeAutoMatch(entry, other, matchId, quizId);
+      return;
+    }
+  };
+
+  const getPlayersSearchingForCategory = (categoryId: number) => {
+    let count = 0;
+    for (const entry of autoMatchQueueByUserId.values()) {
+      if (entry.preference.categoryId === categoryId) count += 1;
+    }
+    return count;
+  };
 
   // ===== HTTP ENDPOINTS =====
 
@@ -168,7 +341,7 @@ ${detailedStats.workers.map(w =>
         createdAt: new Date().toISOString()
       }));
 
-      await redisClient.setex(`joinCode:${joinCode}`, 3600, matchId);
+      await redisClient.setex(`joincode:${joinCode}`, 3600, matchId);
 
       logInfo('Friend match created', { matchId, joinCode, quizId, userId });
 
@@ -190,7 +363,7 @@ ${detailedStats.workers.map(w =>
   app.get('/matches/code/:joinCode', async (req, res) => {
     try {
       const { joinCode } = req.params;
-      const matchId = await redisClient.get(`joinCode:${joinCode.toUpperCase()}`);
+      const matchId = await redisClient.get(`joincode:${joinCode.toUpperCase()}`);
 
       if (!matchId) {
         return res.status(404).json({
@@ -255,6 +428,79 @@ ${detailedStats.workers.map(w =>
       }
     });
 
+    socket.on('start_auto_matchmaking', async (data: { categoryId: number; quizId?: number }) => {
+      try {
+        if (!socket.data.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const categoryId = Number(data.categoryId);
+        const quizId = data.quizId ? Number(data.quizId) : undefined;
+
+        if (!categoryId || Number.isNaN(categoryId)) {
+          socket.emit('matchmaking_error', { message: 'categoryId is required' });
+          return;
+        }
+
+        cleanupAutoQueueEntry(socket.data.userId);
+
+        const user = await User.findByPk(socket.data.userId, {
+          attributes: ['id', 'eloRating'],
+        });
+
+        const eloRating = user ? (user as any).eloRating : 1200;
+
+        const entry: AutoMatchmakingEntry = {
+          socketId: socket.id,
+          userId: socket.data.userId,
+          username: socket.data.username,
+          eloRating,
+          preference: { categoryId, quizId },
+          startedAtMs: Date.now(),
+          currentRange: AUTO_MATCH_START_RANGE,
+        };
+
+        entry.widenTimer = setInterval(() => {
+          const current = autoMatchQueueByUserId.get(entry.userId);
+          if (!current) return;
+          current.currentRange = Math.min(AUTO_MATCH_MAX_RANGE, current.currentRange + AUTO_MATCH_RANGE_STEP);
+          io.to(current.socketId).emit('matchmaking_update', {
+            range: current.currentRange,
+            elapsedMs: Date.now() - current.startedAtMs,
+            playersSearching: getPlayersSearchingForCategory(current.preference.categoryId),
+          });
+          tryFindMatchFor(current).catch(() => {});
+        }, AUTO_MATCH_WIDEN_INTERVAL_MS);
+
+        entry.timeoutTimer = setTimeout(() => {
+          const current = autoMatchQueueByUserId.get(entry.userId);
+          if (!current) return;
+          io.to(current.socketId).emit('auto_match_timeout', {
+            message: 'No match found within 5 minutes',
+          });
+          cleanupAutoQueueEntry(entry.userId);
+        }, AUTO_MATCH_TIMEOUT_MS);
+
+        autoMatchQueueByUserId.set(entry.userId, entry);
+        socket.emit('matchmaking_started', {
+          range: entry.currentRange,
+          playersSearching: getPlayersSearchingForCategory(entry.preference.categoryId),
+        });
+
+        await tryFindMatchFor(entry);
+      } catch (error) {
+        logError('start_auto_matchmaking error', error as Error);
+        socket.emit('matchmaking_error', { message: 'Failed to start matchmaking' });
+      }
+    });
+
+    socket.on('cancel_auto_matchmaking', () => {
+      if (!socket.data.userId) return;
+      cleanupAutoQueueEntry(socket.data.userId);
+      socket.emit('matchmaking_cancelled', { success: true });
+    });
+
     // Create friend match (DO NOT assign worker yet - wait for first player to join)
     socket.on('create_friend_match', async (data) => {
       try {
@@ -277,7 +523,7 @@ ${detailedStats.workers.map(w =>
           // NOTE: workerId will be set when first player joins
         }));
 
-        await redisClient.setex(`joinCode:${joinCode}`, 3600, matchId);
+        await redisClient.setex(`joincode:${joinCode}`, 3600, matchId);
 
         socket.join(matchId);
         socket.emit('friend_match_created', { matchId, joinCode });
@@ -573,6 +819,12 @@ ${detailedStats.workers.map(w =>
         }
         return;
       });
+    });
+
+    socket.on('disconnect', () => {
+      if (socket.data.userId) {
+        cleanupAutoQueueEntry(socket.data.userId);
+      }
     });
   });
 

@@ -124,6 +124,12 @@ export interface SocketEventPayloads {
     timeToken: number;
   };
 
+  score_update: {
+    matchId: string;
+    updatedUserId: number;
+    players: PlayerInfo[];
+  };
+
   // Match Completion
   match_completed: {
     matchId: string;

@@ -9,7 +9,9 @@ import { QuizAttempt } from '../models/QuizAttempt';
 import { QuizAttemptAnswer } from '../models/QuizAttemptAnswer';
 import { Match } from '../models/Match';
 import { MatchPlayer } from '../models/MatchPlayer';
+import { MatchAnswer } from '../models/MatchAnswer';
 import { logInfo, logError } from '../utils/logger';
+
 // Environment variables should be loaded automatically
 // Database configuration
 const sequelize = new Sequelize({
@@ -30,7 +32,8 @@ const sequelize = new Sequelize({
     QuizAttempt,
     QuizAttemptAnswer,
     Match,
-    MatchPlayer
+    MatchPlayer,
+    MatchAnswer
   ],
   pool: {
     max: 10,
@@ -38,7 +41,6 @@ const sequelize = new Sequelize({
     acquire: 30000,
     idle: 10000,
   },
-
 });
 
 // Test database connection with retry logic

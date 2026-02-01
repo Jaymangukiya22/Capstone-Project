@@ -312,6 +312,7 @@ export function StudentQuizContent() {
                   id: selectedQuiz.id.toString(),
                   name: selectedQuiz.title,
                   description: selectedQuiz.description || '',
+                  categoryId: selectedQuiz.categoryId,
                   category: selectedQuiz.categoryName || 'Uncategorized',
                   subcategory: '',
                   difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
@@ -512,6 +513,7 @@ export function StudentQuizContent() {
             id: selectedQuiz.id.toString(),
             name: selectedQuiz.title,
             description: selectedQuiz.description || '',
+            categoryId: selectedQuiz.categoryId,
             category: selectedQuiz.categoryName || 'Uncategorized',
             subcategory: '',
             difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
@@ -547,6 +549,7 @@ export function StudentQuizContent() {
                 id: selectedQuiz.id.toString(),
                 name: selectedQuiz.title,
                 description: selectedQuiz.description || '',
+                categoryId: selectedQuiz.categoryId,
                 category: selectedQuiz.categoryName || 'Uncategorized',
                 subcategory: '',
                 difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 

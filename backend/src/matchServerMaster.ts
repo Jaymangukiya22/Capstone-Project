@@ -252,6 +252,16 @@ async function startMaster() {
   app.get('/metrics', async (req, res) => {
     const stats = workerPool.getStats();
     const detailedStats = workerPool.getDetailedStats();
+
+    type WorkerStatEntry = {
+      workerId: number;
+      pid: number;
+      status: string;
+      matchCount: number;
+      utilization: string;
+    };
+
+    const workers = detailedStats.workers as WorkerStatEntry[];
     
     // Base metrics
     const metrics = `
@@ -294,17 +304,17 @@ matchserver_uptime_seconds ${Math.floor(process.uptime())}
     
     // Per-worker metrics
     let perWorkerMetrics = '';
-    if (detailedStats.workers && detailedStats.workers.length > 0) {
+    if (workers && workers.length > 0) {
       perWorkerMetrics = `
 # HELP matchserver_worker_matches Matches assigned to each worker
 # TYPE matchserver_worker_matches gauge
-${detailedStats.workers.map(w => 
+${workers.map((w) => 
   `matchserver_worker_matches{worker_id="${w.workerId}",pid="${w.pid}",status="${w.status}"} ${w.matchCount}`
 ).join('\n')}
 
 # HELP matchserver_worker_utilization Worker utilization percentage
 # TYPE matchserver_worker_utilization gauge
-${detailedStats.workers.map(w => 
+${workers.map((w) => 
   `matchserver_worker_utilization{worker_id="${w.workerId}",pid="${w.pid}"} ${parseFloat(w.utilization)}`
 ).join('\n')}
 `;

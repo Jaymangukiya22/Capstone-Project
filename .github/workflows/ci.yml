@@ -88,15 +88,31 @@ jobs:
       run: |
         npx tsc --noEmit || echo "Frontend type checking completed with warnings"
 
+    - name: SonarCloud config present (optional)
+      id: sonar_guard
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+      run: |
+        if [ -n "$SONAR_TOKEN" ] && [ -n "$SONAR_PROJECT_KEY" ] && [ -n "$SONAR_ORGANIZATION" ]; then
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: SonarCloud Scan (optional)
-      if: ${{ secrets.SONAR_TOKEN != '' }}
+      if: steps.sonar_guard.outputs.enabled == 'true'
+      continue-on-error: true
       uses: SonarSource/sonarcloud-github-action@v3
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       with:
         args: >
-          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-          -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+          -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+          -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
 
   # Backend tests
   test-backend:
@@ -476,10 +492,33 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Deploy config present (optional)
+      id: deploy_guard
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+        GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        ENV_STAGING_CONFIG: ${{ secrets.ENV_STAGING_CONFIG }}
+        ENV_PRODUCTION_CONFIG: ${{ secrets.ENV_PRODUCTION_CONFIG }}
+      run: |
+        if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_SSH_KEY" ] && \
+           [ -n "$DEPLOY_PATH" ] && [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_PAT" ] && \
+           [ -n "$ENV_STAGING_CONFIG" ] && [ -n "$ENV_PRODUCTION_CONFIG" ]; then
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Deploy via SSH
-      if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_PATH != '' && secrets.GHCR_USERNAME != '' && secrets.GHCR_PAT != '' && secrets.ENV_STAGING_CONFIG != '' && secrets.ENV_PRODUCTION_CONFIG != '' }}
+      if: steps.deploy_guard.outputs.enabled == 'true'
       uses: appleboy/ssh-action@v1.2.0
       env:
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+        GHCR_PAT: ${{ secrets.GHCR_PAT }}
         ENV_PRODUCTION_CONFIG: ${{ secrets.ENV_PRODUCTION_CONFIG }}
         ENV_STAGING_CONFIG: ${{ secrets.ENV_STAGING_CONFIG }}
       with:
@@ -488,8 +527,8 @@ jobs:
         key: ${{ secrets.DEPLOY_SSH_KEY }}
         script: |
           set -e
-          mkdir -p "${{ secrets.DEPLOY_PATH }}"
-          cd "${{ secrets.DEPLOY_PATH }}"
+          mkdir -p "$DEPLOY_PATH"
+          cd "$DEPLOY_PATH"
           if [ ! -d quizup ]; then
             git clone https://github.com/${{ github.repository }} quizup
           fi
@@ -511,7 +550,7 @@ jobs:
 
           chmod 600 configs/envs/.env.${APP_ENV}.config
 
-          docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_PAT }}
+          docker login ghcr.io -u "$GHCR_USERNAME" -p "$GHCR_PAT"
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 

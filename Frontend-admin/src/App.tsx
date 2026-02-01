@@ -18,6 +18,7 @@ import { AuthTestPage } from "@/pages/auth-test"
 import React from 'react';
 import { NavigationGuardTest } from "@/components/test/NavigationGuardTest"
 import { StudentQuizContent } from "@/components/student/StudentQuizContent"
+import { AutoMatchmaking } from "@/pages/AutoMatchmaking"
 
 // Import authentication components
 import { AuthProvider } from "@/contexts/AuthContext"
@@ -142,6 +143,12 @@ function AppContent() {
         return (
           <StudentRoute>
             <StudentQuizContent />
+          </StudentRoute>
+        );
+      case '/auto-matchmaking':
+        return (
+          <StudentRoute>
+            <AutoMatchmaking />
           </StudentRoute>
         );
       case '/my-results':

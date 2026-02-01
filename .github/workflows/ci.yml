@@ -160,6 +160,22 @@ jobs:
       working-directory: ./backend
       run: npm ci
 
+    - name: Ensure CI env file
+      shell: bash
+      env:
+        ENV_CI_CONFIG: ${{ secrets.ENV_CI_CONFIG }}
+      run: |
+        mkdir -p configs/envs
+        if [ -f configs/envs/.env.ci.config ]; then
+          exit 0
+        fi
+        if [ -n "$ENV_CI_CONFIG" ]; then
+          printf '%s' "$ENV_CI_CONFIG" > configs/envs/.env.ci.config
+          exit 0
+        fi
+        echo "Missing configs/envs/.env.ci.config (commit it or set ENV_CI_CONFIG secret)"
+        exit 1
+
     - name: Load CI environment variables
       shell: bash
       run: |

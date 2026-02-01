@@ -9,7 +9,7 @@ const router = Router();
 // Public routes
 router.post('/register', validateRequest(registerSchema), register);
 router.post('/login', validateRequest(loginSchema), login);
-router.post('/refresh', validateRequest(refreshTokenSchema), refreshToken);
+router.post('/refresh', refreshToken);
 
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);

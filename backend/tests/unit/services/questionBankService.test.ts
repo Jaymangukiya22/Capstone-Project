@@ -292,7 +292,10 @@ describe('QuestionBankService', () => {
       await questionBankService.deleteQuestion(question.id);
 
       const deletedQuestion = await QuestionBankItem.findByPk(question.id);
-      expect(deletedQuestion).toBeNull();
+      expect(deletedQuestion).not.toBeNull();
+      if (deletedQuestion) {
+        expect(deletedQuestion.isActive).toBe(false);
+      }
 
       const deletedOptions = await QuestionBankOption.findAll({
         where: { questionId: question.id }
@@ -341,10 +344,10 @@ describe('QuestionBankService', () => {
       // Delete the existing question
       await questionBankService.deleteQuestion(question.id);
       
-      // Try to delete non-existent questions (should not throw error)
+      // Try to delete non-existent questions (should throw error)
       await expect(
         questionBankService.deleteQuestion(999)
-      ).rejects.toThrow();
+      ).rejects.toThrow('Question not found');
     });
   });
 

@@ -248,7 +248,10 @@ describe('QuizService', () => {
       await quizService.deleteQuiz(quiz.id);
 
       const deletedQuiz = await Quiz.findByPk(quiz.id);
-      expect(deletedQuiz).toBeNull();
+      expect(deletedQuiz).not.toBeNull();
+      if (deletedQuiz) {
+        expect(deletedQuiz.isActive).toBe(false);
+      }
     });
 
     it('should throw error for non-existent quiz', async () => {

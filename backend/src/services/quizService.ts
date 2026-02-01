@@ -101,7 +101,7 @@ export class QuizService {
         data.questionIds.map((questionId, index) => ({
           quizId: data.quizId,
           questionId,
-          order: index + 1
+          orderIndex: index + 1
         }))
       );
 
@@ -218,7 +218,7 @@ export class QuizService {
 
       if (!quiz) {
         logInfo('Quiz not found', { quizId: id });
-        return null;
+        throw new Error('Quiz not found');
       }
 
       // Get questions assigned to this quiz
@@ -236,14 +236,14 @@ export class QuizService {
             ]
           }
         ],
-        order: [['order', 'ASC']]
+        order: [['orderIndex', 'ASC']]
       });
 
       // Transform questions to include in the response
       const questions = quizQuestions.map(qq => ({
         id: qq.question.id,
         questionId: qq.questionId,
-        order: (qq as any).orderIndex || (qq as any).order,
+        order: qq.orderIndex,
         questionText: qq.question.questionText,
         difficulty: qq.question.difficulty,
         categoryId: qq.question.categoryId,
@@ -276,7 +276,7 @@ export class QuizService {
       });
 
       if (!quiz) {
-        throw new Error('Quiz not found');
+        throw new Error('Quiz not found or not active');
       }
 
       // Get questions assigned to this quiz
@@ -294,7 +294,7 @@ export class QuizService {
             ]
           }
         ],
-        order: [['order', 'ASC']]
+        order: [['orderIndex', 'ASC']]
       });
 
       // Transform questions to the expected format
@@ -378,10 +378,14 @@ export class QuizService {
 
   async deleteQuiz(id: number): Promise<boolean> {
     try {
-      await Quiz.update(
+      const [updatedCount] = await Quiz.update(
         { isActive: false },
         { where: { id } }
       );
+
+      if (!updatedCount) {
+        throw new Error('Quiz not found');
+      }
 
       logInfo('Quiz deleted (soft delete)', { quizId: id });
       return true;
@@ -393,28 +397,44 @@ export class QuizService {
 
   async getQuizStats(id: number) {
     try {
-      const quiz = await Quiz.findByPk(id, {
-        include: [
-          { model: Category, as: 'category' }
-        ]
+      const quiz = await Quiz.findOne({
+        where: { id, isActive: true },
+        include: [{ model: Category, as: 'category' }]
       });
 
       if (!quiz) {
         throw new Error('Quiz not found');
       }
 
-      // TODO: Add actual statistics calculation
-      const stats = {
-        totalAttempts: 0,
-        averageScore: 0,
-        completionRate: 0,
-        popularityRank: 0
+      const quizQuestions = await QuizQuestion.findAll({
+        where: { quizId: id },
+        include: [{ model: QuestionBankItem, as: 'question' }],
+      });
+
+      const difficultyBreakdown: Record<string, number> = {
+        EASY: 0,
+        MEDIUM: 0,
+        HARD: 0,
       };
+
+      for (const qq of quizQuestions as any[]) {
+        const difficulty = qq.question?.difficulty;
+        if (difficulty && difficultyBreakdown[difficulty] !== undefined) {
+          difficultyBreakdown[difficulty] += 1;
+        }
+      }
 
       logInfo('Retrieved quiz stats', { quizId: id });
       return {
-        quiz,
-        stats
+        quiz: quiz.toJSON(),
+        totalQuestions: quizQuestions.length,
+        difficultyBreakdown,
+        stats: {
+          totalAttempts: 0,
+          averageScore: 0,
+          completionRate: 0,
+          popularityRank: 0
+        },
       };
     } catch (error) {
       logError('Failed to get quiz stats', error as Error, { quizId: id });

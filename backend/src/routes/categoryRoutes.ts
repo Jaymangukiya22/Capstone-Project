@@ -11,6 +11,9 @@ router.use(authenticateToken);
 // GET /api/categories/search - Search categories
 router.get('/search', categoryController.searchCategories.bind(categoryController));
 
+// GET /api/categories/hierarchy - Get category hierarchy
+router.get('/hierarchy', categoryController.getCategoryHierarchy.bind(categoryController));
+
 // GET /api/categories - Get all categories (with optional hierarchy query param)
 router.get('/', categoryController.getAllCategories.bind(categoryController));
 

@@ -56,7 +56,6 @@ COPY --from=development --chown=nodejs:nodejs /app/docs ./docs
 COPY --from=development --chown=nodejs:nodejs /app/start-server.js ./
 COPY --from=development --chown=nodejs:nodejs /app/package.json ./
 COPY --from=development --chown=nodejs:nodejs /app/tsconfig.json ./
-COPY --chown=nodejs:nodejs .env ./
 
 USER nodejs
 EXPOSE 3000 3001

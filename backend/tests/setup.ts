@@ -10,13 +10,37 @@ import { QuizAttempt } from '../src/models/QuizAttempt';
 import { QuizAttemptAnswer } from '../src/models/QuizAttemptAnswer';
 import { Match } from '../src/models/Match';
 import { MatchPlayer } from '../src/models/MatchPlayer';
-import dotenv from 'dotenv';
+import { Client } from 'pg';
 
-dotenv.config();
+const ensure_test_database_exists = async () => {
+  const db_name = process.env.DB_NAME || 'quizup_test';
+  const admin_database = 'postgres';
+
+  const client = new Client({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    user: process.env.DB_USER || 'quizup_user',
+    password: process.env.DB_PASSWORD || 'quizup_password',
+    database: admin_database,
+  });
+
+  await client.connect();
+  try {
+    const existing = await client.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      [db_name]
+    );
+    if (existing.rowCount === 0) {
+      await client.query(`CREATE DATABASE "${db_name}"`);
+    }
+  } finally {
+    await client.end();
+  }
+};
 // Test database configuration
 export const testSequelize = new Sequelize({
   dialect: 'postgres',
-  host: process.env.DB_HOST || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME || 'quizup_test',
   username: process.env.DB_USER || 'quizup_user',
@@ -39,6 +63,8 @@ export const testSequelize = new Sequelize({
 // Global test setup
 beforeAll(async () => {
   try {
+    await ensure_test_database_exists();
+
     // Test database connection
     await testSequelize.authenticate();
     console.log('✅ Test database connection established');
@@ -46,6 +72,8 @@ beforeAll(async () => {
     // Sync database (create tables)
     await testSequelize.sync({ force: true });
     console.log('✅ Test database synced');
+
+    (global as any).__TEST_SEQUELIZE__ = testSequelize;
   } catch (error) {
     console.error('❌ Test database setup failed:', error);
     throw error;
@@ -87,6 +115,8 @@ afterAll(async () => {
   try {
     await testSequelize.close();
     console.log('✅ Test database connection closed');
+
+    delete (global as any).__TEST_SEQUELIZE__;
   } catch (error) {
     console.error('❌ Test database teardown failed:', error);
   }
@@ -155,33 +185,72 @@ export async function createTestQuiz(categoryId: number, overrides: any = {}): P
 }
 
 export async function createTestQuestion(quizId: number, overrides: any = {}): Promise<QuizQuestion> {
-  const defaults = {
-    questionText: 'Test question?',
-    difficulty: 'MEDIUM',
+  const quiz = await Quiz.findByPk(quizId);
+  if (!quiz) throw new Error('Quiz not found for test question creation');
+
+  const createdById = overrides.createdById ?? (quiz as any).createdById ?? 1;
+  const difficulty = overrides.difficulty ?? 'MEDIUM';
+  const questionText = overrides.questionText ?? 'Test question?';
+
+  const question = await QuestionBankItem.create({
+    questionText,
+    difficulty,
+    categoryId: (quiz as any).categoryId,
+    createdById,
+    isActive: true,
+  } as any);
+
+  await QuestionBankOption.bulkCreate([
+    { questionId: question.id, optionText: 'Option A', isCorrect: true },
+    { questionId: question.id, optionText: 'Option B', isCorrect: false },
+    { questionId: question.id, optionText: 'Option C', isCorrect: false },
+    { questionId: question.id, optionText: 'Option D', isCorrect: false },
+  ] as any);
+
+  const existingCount = await QuizQuestion.count({ where: { quizId } });
+  const orderIndex = overrides.orderIndex ?? existingCount + 1;
+
+  return await QuizQuestion.create({
     quizId,
-    createdById: 1
-  };
-  
-  const question = await QuizQuestion.create({
-    ...defaults,
-    ...(overrides || {})
-  });
-  
-  return question;
+    questionId: question.id,
+    orderIndex,
+    points: overrides.points ?? 100,
+    timeLimit: overrides.timeLimit,
+  } as any);
 }
 
 export async function createTestQuestionBankQuestion(overrides: any = {}): Promise<QuestionBankItem> {
+  const has_category_id = Object.prototype.hasOwnProperty.call(
+    overrides,
+    'categoryId'
+  );
+  let categoryId = overrides.categoryId;
+  if (!has_category_id) {
+    const existingCategory = await Category.findOne();
+    if (existingCategory) {
+      categoryId = existingCategory.id;
+    } else {
+      const created = await Category.create({
+        name: 'Test Category (Auto)',
+        isActive: true,
+      } as any);
+      categoryId = created.id;
+    }
+  }
+
   const defaults = {
     questionText: 'Test bank question?',
     difficulty: 'MEDIUM',
-    categoryId: null, // Global question
-    createdById: 1
+    categoryId,
+    createdById: 1,
+    isActive: true,
   };
-  
+
   const question = await QuestionBankItem.create({
     ...defaults,
-    ...(overrides || {})
-  });
-  
+    ...(overrides || {}),
+    categoryId,
+  } as any);
+
   return question;
 }

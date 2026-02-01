@@ -4,7 +4,14 @@ node_modules/
 
 # Environment files
 *.env
-.env*
+.env.staging
+.env.production
+
+# Deployment env files (injected by CI/CD)
+configs/envs/.env.staging.config
+configs/envs/.env.production.config
+
+*.env*
 !.env.example
 .env.tunnel
 # Logs

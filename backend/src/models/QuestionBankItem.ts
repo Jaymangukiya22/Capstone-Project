@@ -37,7 +37,7 @@ export class QuestionBankItem extends Model {
   explanation?: string;
 
   @ForeignKey(() => Category)
-  @AllowNull(false)
+  @AllowNull(true)
   @Column({ type: DataType.INTEGER, field: 'category_id' })
   categoryId!: number;
 

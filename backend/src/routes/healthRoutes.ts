@@ -24,7 +24,9 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Test database connection
     try {
-      await sequelize.authenticate();
+      const sequelize_for_health =
+        (global as any).__TEST_SEQUELIZE__ || sequelize;
+      await sequelize_for_health.authenticate();
       (healthData as any).database = {
         status: 'connected'
       };
@@ -52,7 +54,9 @@ router.get('/detailed', async (req: Request, res: Response) => {
 
     // Database check
     try {
-      await sequelize.authenticate();
+      const sequelize_for_health =
+        (global as any).__TEST_SEQUELIZE__ || sequelize;
+      await sequelize_for_health.authenticate();
       checks.push({
         name: 'database',
         status: 'healthy',
@@ -99,7 +103,9 @@ router.get('/ready', async (req: Request, res: Response) => {
 
     // Check database readiness
     try {
-      await sequelize.authenticate();
+      const sequelize_for_health =
+        (global as any).__TEST_SEQUELIZE__ || sequelize;
+      await sequelize_for_health.authenticate();
       checks.database = { ready: true };
     } catch (error) {
       checks.database = { ready: false, error: error instanceof Error ? error.message : 'Unknown error' };

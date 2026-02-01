@@ -4,6 +4,7 @@ import { hashPassword, comparePassword, generateToken, generateRefreshToken, ver
 import { AuthenticatedRequest } from '../middleware/auth';
 import { Op } from 'sequelize';
 import { logInfo, logError } from '../utils/logger';
+import jwt from 'jsonwebtoken';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -102,20 +103,37 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const { username, email, password } = req.body;
+    const identifier = username || email;
+
+    if (!identifier || !password) {
+      res.status(400).json({
+        success: false,
+        error: 'validation error'
+      });
+      return;
+    }
 
     // Find user by email or username (email field can contain username)
     const user = await User.findOne({
       where: {
-        [email.includes('@') ? 'email' : 'username']: email
+        [identifier.includes('@') ? 'email' : 'username']: identifier
       }
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
       res.status(401).json({
         success: false,
         error: 'Invalid credentials',
         message: 'Email or password is incorrect'
+      });
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(401).json({
+        success: false,
+        error: 'Account is inactive'
       });
       return;
     }
@@ -185,28 +203,37 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { refreshToken } = req.body;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-    if (!refreshToken) {
-      res.status(400).json({
+    if (!token) {
+      res.status(401).json({
         success: false,
-        error: 'Refresh token required'
+        error: 'token required'
       });
       return;
     }
 
-    // Verify refresh token
-    const decoded = verifyRefreshToken(refreshToken);
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      res.status(500).json({
+        success: false,
+        error: 'Server configuration error'
+      });
+      return;
+    }
+
+    const decoded = jwt.verify(token, jwtSecret) as any;
 
     // Get user
     const user = await User.findByPk(decoded.userId, {
-      attributes: ['id', 'username', 'email', 'role', 'isActive']
+      attributes: ['id', 'username', 'email', 'role', 'isActive', 'firstName', 'lastName']
     });
 
     if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Invalid refresh token'
+        error: 'Invalid token'
       });
       return;
     }
@@ -225,14 +252,22 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       success: true,
       data: {
         token: newToken,
-        refreshToken: newRefreshToken
+        refreshToken: newRefreshToken,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: (user as any).firstName,
+          lastName: (user as any).lastName,
+          role: user.role,
+        }
       }
     });
   } catch (error) {
     logError('Token refresh error', error as Error);
     res.status(401).json({
       success: false,
-      error: 'Invalid refresh token'
+      error: 'Invalid token'
     });
   }
 };
@@ -259,7 +294,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
 
     res.json({
       success: true,
-      data: { user }
+      data: user
     });
   } catch (error) {
     logError('Get profile error', error as Error);

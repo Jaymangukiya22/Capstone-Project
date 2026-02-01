@@ -30,12 +30,22 @@ export interface BulkImportData {
 export class QuestionBankService {
   async createQuestion(data: CreateQuestionBankItemData) {
     try {
+      if (!data.options || data.options.length < 2) {
+        throw new Error('Question must have at least 2 options');
+      }
+
+      const has_correct = data.options.some(opt => opt.isCorrect);
+      if (!has_correct) {
+        throw new Error('At least one option must be marked as correct');
+      }
+
       // Create question
       const question = await QuestionBankItem.create({
         questionText: data.questionText,
         categoryId: data.categoryId,
         difficulty: data.difficulty,
-        createdById: data.createdById
+        createdById: data.createdById,
+        isActive: true,
       });
 
       // Create options
@@ -60,7 +70,10 @@ export class QuestionBankService {
       });
 
       logInfo('Question bank item created', { questionId: question.id });
-      return question;
+      if (!completeQuestion) {
+        throw new Error('Question not found');
+      }
+      return completeQuestion;
     } catch (error) {
       logError('Error creating question bank item', error as Error);
       throw error;
@@ -170,6 +183,10 @@ export class QuestionBankService {
         ]
       });
 
+      if (!question || !question.isActive) {
+        throw new Error('Question not found');
+      }
+
       return question;
     } catch (error) {
       logError('Error fetching question by ID', error as Error);
@@ -179,6 +196,13 @@ export class QuestionBankService {
 
   async updateQuestion(id: number, data: Partial<CreateQuestionBankItemData>) {
     try {
+      const existing = await QuestionBankItem.findByPk(id, {
+        attributes: ['id', 'isActive']
+      });
+      if (!existing || !existing.isActive) {
+        throw new Error('Question not found');
+      }
+
       const updateData: any = {
         questionText: data.questionText,
         categoryId: data.categoryId,
@@ -218,6 +242,10 @@ export class QuestionBankService {
         ]
       });
 
+      if (!question) {
+        throw new Error('Question not found');
+      }
+
       logInfo('Question bank item updated', { questionId: id });
       return question;
     } catch (error) {
@@ -228,10 +256,21 @@ export class QuestionBankService {
 
   async deleteQuestion(id: number) {
     try {
+      const existing = await QuestionBankItem.findByPk(id, {
+        attributes: ['id', 'isActive']
+      });
+      if (!existing || !existing.isActive) {
+        throw new Error('Question not found');
+      }
+
       await QuestionBankItem.update(
         { isActive: false },
         { where: { id } }
       );
+
+      await QuestionBankOption.destroy({
+        where: { questionId: id }
+      });
 
       logInfo('Question bank item deleted (soft delete)', { questionId: id });
       return true;
@@ -334,9 +373,8 @@ export class QuestionBankService {
       const where: any = {
         isActive: true,
         questionText: {
-          contains: query,
-          mode: 'insensitive'
-        }
+          [Op.iLike]: `%${query}%`,
+        },
       };
 
       if (categoryId) {

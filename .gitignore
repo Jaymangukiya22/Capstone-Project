@@ -10,6 +10,8 @@ node_modules/
 # Deployment env files (injected by CI/CD)
 configs/envs/.env.staging.config
 configs/envs/.env.production.config
+!configs/envs/.env.ci.config
+!configs/envs/.env.e2e.config
 
 *.env*
 !.env.example
@@ -86,4 +88,4 @@ Thumbs.db
 *logs/
 backend/dist/
 Frontend-admin/docs/
-backend/docs/
+!backend/docs/

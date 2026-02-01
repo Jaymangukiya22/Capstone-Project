@@ -2,7 +2,7 @@ name: QuizUP CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, arch/system-design ]
+    branches: [ main, develop, arch/system-design, feature/auto-matchmaking ]
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:

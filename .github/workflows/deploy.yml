@@ -2,7 +2,7 @@ name: Deploy QuizUP Application
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature/auto-matchmaking ]
   workflow_dispatch:
     inputs:
       environment:

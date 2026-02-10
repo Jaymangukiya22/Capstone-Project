@@ -1,10 +1,10 @@
-import { sessionManager } from '../utils/sessionManager';
-import type { QuestionAnswers } from '../utils/sessionManager';
+import { sessionManager } from "../utils/sessionManager";
+import type { QuestionAnswers } from "../utils/sessionManager";
 
 export interface QuizQuestion {
   id: number;
   questionText: string;
-  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  difficulty: "EASY" | "MEDIUM" | "HARD";
   options: Array<{
     id: number;
     optionText: string;
@@ -31,9 +31,9 @@ class QuizGameService {
       // Fetch quiz data from API (implement your actual API call here)
       const response = await fetch(`/api/quizzes/${quizId}/play`);
       const data = await response.json();
-      
+
       if (!data.success) {
-        throw new Error(data.message || 'Failed to load quiz');
+        throw new Error(data.message || "Failed to load quiz");
       }
 
       const quiz: QuizGameData = data.data.quiz;
@@ -41,13 +41,13 @@ class QuizGameService {
 
       // Extract and encrypt correct answers
       const questionAnswers: QuestionAnswers = {};
-      
-      quiz.questions.forEach(question => {
+
+      quiz.questions.forEach((question) => {
         const correctOptions = question.options
-          .filter(opt => opt.isCorrect)
-          .map(opt => opt.id);
-        
-        const optionsData = question.options.map(opt => ({
+          .filter((opt) => opt.isCorrect)
+          .map((opt) => opt.id);
+
+        const optionsData = question.options.map((opt) => ({
           id: opt.id,
           text: opt.optionText,
           // Don't include isCorrect in client-side options
@@ -56,7 +56,7 @@ class QuizGameService {
         questionAnswers[question.id] = {
           correctAnswer: JSON.stringify(correctOptions),
           options: JSON.stringify(optionsData),
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
       });
 
@@ -66,19 +66,19 @@ class QuizGameService {
       // Return quiz without correct answer information
       const sanitizedQuiz: QuizGameData = {
         ...quiz,
-        questions: quiz.questions.map(q => ({
+        questions: quiz.questions.map((q) => ({
           ...q,
-          options: q.options.map(opt => ({
+          options: q.options.map((opt) => ({
             id: opt.id,
             optionText: opt.optionText,
-            isCorrect: false // Never expose correct answers to client
-          }))
-        }))
+            isCorrect: false, // Never expose correct answers to client
+          })),
+        })),
       };
 
       return sanitizedQuiz;
     } catch (error) {
-      console.error('Failed to load quiz:', error);
+      console.error("Failed to load quiz:", error);
       throw error;
     }
   }
@@ -86,23 +86,30 @@ class QuizGameService {
   /**
    * Check if answer is correct (using encrypted data)
    */
-  checkAnswer(quizId: number, questionId: number, selectedOptions: number[]): { isCorrect: boolean; correctAnswers: number[] } {
+  checkAnswer(
+    quizId: number,
+    questionId: number,
+    selectedOptions: number[],
+  ): { isCorrect: boolean; correctAnswers: number[] } {
     const questionAnswers = sessionManager.getQuestionAnswers(quizId);
     if (!questionAnswers || !questionAnswers[questionId]) {
-      console.warn('No answer data found for question:', questionId);
+      console.warn("No answer data found for question:", questionId);
       return { isCorrect: false, correctAnswers: [] };
     }
 
     try {
-      const correctAnswers = JSON.parse(questionAnswers[questionId].correctAnswer);
-      
+      const correctAnswers = JSON.parse(
+        questionAnswers[questionId].correctAnswer,
+      );
+
       // Check if selected answers match correct answers
-      const isCorrect = selectedOptions.length === correctAnswers.length &&
-        selectedOptions.every(option => correctAnswers.includes(option));
+      const isCorrect =
+        selectedOptions.length === correctAnswers.length &&
+        selectedOptions.every((option) => correctAnswers.includes(option));
 
       return { isCorrect, correctAnswers };
     } catch (error) {
-      console.error('Error checking answer:', error);
+      console.error("Error checking answer:", error);
       return { isCorrect: false, correctAnswers: [] };
     }
   }
@@ -110,7 +117,10 @@ class QuizGameService {
   /**
    * Get question options (without correct answer info)
    */
-  getQuestionOptions(quizId: number, questionId: number): Array<{id: number, text: string}> {
+  getQuestionOptions(
+    quizId: number,
+    questionId: number,
+  ): Array<{ id: number; text: string }> {
     const questionAnswers = sessionManager.getQuestionAnswers(quizId);
     if (!questionAnswers || !questionAnswers[questionId]) {
       return [];
@@ -119,7 +129,7 @@ class QuizGameService {
     try {
       return JSON.parse(questionAnswers[questionId].options);
     } catch (error) {
-      console.error('Error getting question options:', error);
+      console.error("Error getting question options:", error);
       return [];
     }
   }
@@ -127,12 +137,19 @@ class QuizGameService {
   /**
    * Calculate score with time bonus
    */
-  calculateScore(isCorrect: boolean, timeSpent: number, questionTimeLimit: number): number {
+  calculateScore(
+    isCorrect: boolean,
+    timeSpent: number,
+    questionTimeLimit: number,
+  ): number {
     if (!isCorrect) return 0;
 
     const baseScore = 100;
-    const timeBonus = Math.max(0, Math.round((questionTimeLimit - timeSpent) / questionTimeLimit * 50));
-    
+    const timeBonus = Math.max(
+      0,
+      Math.round(((questionTimeLimit - timeSpent) / questionTimeLimit) * 50),
+    );
+
     return baseScore + timeBonus;
   }
 

@@ -706,56 +706,36 @@ const FriendMatchInterface: React.FC = () => {
       });
     });
 
-    // Player list updated (legacy handler - now mirrors the primary handler above)
-    // NOTE: We no longer auto-start or emit player_ready here. The server
-    // drives the flow via LOAD_GAME_SCENE and CLIENT_READY.
-    gameWebSocket.on('player_list_updated', (data: any) => {
-      const newPlayers = data.players || [];
-
-      // Update players without re-render key to avoid loops
-      setPlayers([...newPlayers]);
-
-      // If we have 2 players, stop waiting and loading spinners
-      if (newPlayers.length === 2) {
-        setIsWaitingForPlayers(false);
-        setIsLoading(false);
-        console.log(' 2 players connected - waiting for LOAD_GAME_SCENE from server');
-      }
-    });
-
-    // Next question
+    // Next question - SAFARI FIX: Ensure proper state update order
     gameWebSocket.on('next_question', (data: any) => {
       console.log(' NEXT QUESTION EVENT:', data);
       
-      // CRITICAL: Reset submission flag for new question
-      hasSubmittedCurrentQuestion.current = false;
-      
-      // Reset waiting state
-      setIsWaitingForOpponent(false);
-      setWaitingForOpponentName('opponent');
-      
-      // Update question data
-      setCurrentQuestionData(data.question);
-      setCurrentQuestion(data.questionIndex + 1);
-      setQuestionTimeRemaining(data.question.timeLimit || 30);
-      setQuestionStartTime(Date.now());
-      
-      if (data.totalQuestions) {
-        setTotalQuestions(data.totalQuestions);
-      }
-      
-      // CRITICAL: Unlock UI after all state updates
-      setIsSubmitting(false);
-      
-      console.log(` Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
+      // SAFARI FIX: Use requestAnimationFrame to ensure UI updates properly
+      requestAnimationFrame(() => {
+        // CRITICAL: Reset submission flag for new question
+        hasSubmittedCurrentQuestion.current = false;
+        
+        // Reset waiting state
+        setIsWaitingForOpponent(false);
+        setWaitingForOpponentName('opponent');
+        
+        // SAFARI FIX: Reset submitting state first
+        setIsSubmitting(false);
+        
+        // Update question data - SAFARI FIX: Ensure all updates happen in single batch
+        setCurrentQuestionData(data.question);
+        setCurrentQuestion(data.questionIndex + 1);
+        setQuestionTimeRemaining(data.question.timeLimit || 30);
+        setQuestionStartTime(Date.now());
+        
+        if (data.totalQuestions) {
+          setTotalQuestions(data.totalQuestions);
+        }
+        
+        console.log(` Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
+      });
     });
 
-    // Question timeout - auto-advance when 30 seconds pass
-    gameWebSocket.on('question_timeout', (data: any) => {
-      console.log(' QUESTION TIMEOUT:', data);
-    });
-
-    // Individual player progression (for independent advancement)
     gameWebSocket.on('player_next_question', (data: any) => {
       console.log(' INDIVIDUAL NEXT QUESTION:', data);
       

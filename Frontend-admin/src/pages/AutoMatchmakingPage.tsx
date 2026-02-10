@@ -114,6 +114,12 @@ const getQuizName = (quiz: Quiz | undefined) => {
   return quiz.title || 'Selected Quiz'
 }
 
+const getRandomQuizId = (quizzes: Quiz[]): number | null => {
+  if (!Array.isArray(quizzes) || quizzes.length === 0) return null
+  const index = Math.floor(Math.random() * quizzes.length)
+  return quizzes[index]?.id ?? null
+}
+
 export function AutoMatchmakingPage() {
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [loadingQuizzes, setLoadingQuizzes] = useState(false)
@@ -217,11 +223,16 @@ export function AutoMatchmakingPage() {
   const loadQuizzesForCategory = async (categoryId: number) => {
     try {
       setLoadingQuizzes(true)
-      const result = await quizService.getAllQuizzes({
-        categoryId,
-        limit: 1000,
-      })
-      setQuizzes(Array.isArray(result.quizzes) ? result.quizzes : [])
+
+      const descendantIds = getDescendantCategories(allCategoriesFlat, categoryId)
+        .map(category => category.id)
+      const categoryIds = new Set<number>([categoryId, ...descendantIds])
+
+      const result = await quizService.getAllQuizzes({ limit: 1000 })
+      const allQuizzes = Array.isArray(result.quizzes) ? result.quizzes : []
+      const filtered = allQuizzes.filter(quiz => categoryIds.has(quiz.categoryId))
+
+      setQuizzes(filtered)
     } catch (error) {
       setQuizzes([])
       toast({
@@ -354,12 +365,20 @@ export function AutoMatchmakingPage() {
     registerSocketHandlers()
 
     gameWebSocket.on('authenticated', () => {
-      const payload: { categoryId: number; quizId?: number } = {
+      const payload: { categoryId: number; quizId: number } = {
         categoryId: subcategoryId,
+        quizId: -1,
       }
 
       if (quizSelection !== 'RANDOM' && quizSelection !== null) {
         payload.quizId = quizSelection
+      } else {
+        const randomQuizId = getRandomQuizId(quizzes)
+        if (randomQuizId === null) {
+          handleFailure('Matchmaking error', 'No quizzes available for the selected category')
+          return
+        }
+        payload.quizId = randomQuizId
       }
 
       gameWebSocket.send('start_auto_matchmaking', payload)

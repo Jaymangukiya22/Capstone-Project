@@ -14,6 +14,10 @@ import {
 } from '@/components/ui/dialog';
 import { apiClient } from '@/services/api';
 
+const toArray = <T,>(value: unknown): T[] => {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
 interface QuizPerformanceData {
   quiz: {
     id: number;
@@ -147,7 +151,7 @@ export default function QuizPerformance() {
   const fetchCategories = async () => {
     try {
       const response = await apiClient.get('/categories');
-      setCategories(response.data.data || []);
+      setCategories(toArray<any>(response.data?.data));
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -163,7 +167,7 @@ export default function QuizPerformance() {
       }
       
       const response = await apiClient.get('/performance/quiz-performance', { params });
-      setPerformanceData(response.data.data || []);
+      setPerformanceData(toArray<QuizPerformanceData>(response.data?.data));
       setSummary(response.data.summary || {
         totalQuizzes: 0,
         totalAttempts: 0,
@@ -228,8 +232,8 @@ export default function QuizPerformance() {
   const optionTextById = useMemo(() => {
     const map = new Map<number, string>();
     if (!analyticsData) return map;
-    for (const q of analyticsData.questions) {
-      for (const opt of q.options) {
+    for (const q of toArray<MatchAnalyticsQuestion>(analyticsData.questions)) {
+      for (const opt of toArray<MatchAnalyticsOption>(q.options)) {
         map.set(opt.id, opt.optionText);
       }
     }
@@ -251,7 +255,24 @@ export default function QuizPerformance() {
 
     try {
       const response = await apiClient.get(`/performance/match-analytics/${matchId}`);
-      setAnalyticsData(response.data.data || null);
+      const data = response.data?.data
+      if (!data) {
+        setAnalyticsData(null)
+      } else {
+        setAnalyticsData({
+          ...data,
+          players: toArray<any>(data.players),
+          questions: toArray<any>(data.questions).map((q: any) => ({
+            ...q,
+            options: toArray<any>(q.options),
+            answers: toArray<any>(q.answers).map((a: any) => ({
+              ...a,
+              selectedOptions: toArray<number>(a.selectedOptions),
+              correctOptions: toArray<number>(a.correctOptions),
+            })),
+          })),
+        })
+      }
     } catch (error) {
       console.error('Error fetching match analytics:', error);
       setAnalyticsData(null);
@@ -630,15 +651,15 @@ export default function QuizPerformance() {
                     Mode: {analyticsData.match.mode} | Status: {analyticsData.match.status}
                   </div>
                   <div className="text-gray-500">
-                    Players: {analyticsData.players.map(p => p.user.fullName).join(' vs ')}
+                    Players: {toArray<any>(analyticsData.players).map((p: any) => p.user?.fullName || p.user?.username || 'Player').join(' vs ')}
                   </div>
                 </div>
                 <Badge variant="outline">
-                  {analyticsData.questions.length} questions
+                  {toArray<any>(analyticsData.questions).length} questions
                 </Badge>
               </div>
 
-              {analyticsData.questions.map((q) => (
+              {toArray<any>(analyticsData.questions).map((q: any) => (
                 <div key={`${q.questionId}-${q.questionIndex}`} className="rounded-lg border p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -653,7 +674,7 @@ export default function QuizPerformance() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {q.answers.map((a) => (
+                    {toArray<any>(q.answers).map((a: any) => (
                       <div key={a.user.id} className="rounded-md border p-3 bg-gray-50">
                         <div className="flex items-center justify-between">
                           <div className="text-sm font-medium">{a.user.fullName}</div>

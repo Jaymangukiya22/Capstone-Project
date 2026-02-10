@@ -315,16 +315,18 @@ export class MatchClient {
       logInfo(`Connecting to WebSocket server: ${finalURL}`, { userId, username });
 
       this.socket = io(finalURL, {
-        // ✅ CRITICAL FIX: Force WebSockets only to avoid multi-worker routing issues
-        // HTTP polling causes requests to route to different workers, breaking session continuity
-        // This matches the bot behavior and ensures sticky session behavior
-        transports: ['websocket'],
-        upgrade: false,  // Don't try to upgrade from polling
+        // SAFARI FIX: Allow both WebSocket and polling for better browser compatibility
+        // Safari sometimes has issues with WebSocket-only connections
+        transports: ['websocket', 'polling'],
+        upgrade: true,  // Allow transport upgrade for better compatibility
         timeout: 10000,
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: this.options.reconnectDelay || 1000,
-        reconnectionDelayMax: 5000
+        reconnectionDelayMax: 5000,
+        // Safari-specific: Ensure proper connection handling
+        forceNew: false,
+        multiplex: true
       });
 
       // Store userId for later use

@@ -23,7 +23,7 @@ import matchRoutes from "./routes/matchRoutes";
 import friendMatchRoutes from "./routes/friendMatchRoutes";
 import performanceRoutes from "./routes/performanceRoutes";
 import { errorHandler } from "./middleware/errorHandler";
-import { requestLogger } from "./middleware/requestLogger";
+import { enhancedRequestLogger } from "./middleware/requestLogger";
 import { logInfo, logError } from "./utils/logger";
 import { metricsEndpoint, initMetrics } from "./utils/metrics";
 
@@ -95,7 +95,7 @@ console.log('   CORS handled by Nginx');
 
 app.use(compression());
 app.use(metricsMiddleware);
-app.use(requestLogger);
+app.use(enhancedRequestLogger);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 

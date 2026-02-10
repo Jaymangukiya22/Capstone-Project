@@ -85,24 +85,74 @@ export class ExcelUploadService {
   }
 
   /**
-   * Normalize correct answer format - converts A,B,C,D to 1,2,3,4
+   * Normalize correct answer format - converts various formats to 1,2,3,4
    */
   private normalizeCorrectAnswer(answer: string): string {
     if (!answer) return '1';
-    
-    return answer
-      .split(',')
-      .map(a => {
-        const trimmed = a.trim().toLowerCase();
-        // Convert letter format to number format
-        if (trimmed === 'a') return '1';
-        if (trimmed === 'b') return '2';
-        if (trimmed === 'c') return '3';
-        if (trimmed === 'd') return '4';
-        // If already a number, keep it
-        return trimmed;
-      })
-      .join(',');
+
+    const tokens = String(answer)
+      .trim()
+      .split(/[,\s]+/)
+      .map(token => token.trim())
+      .filter(Boolean)
+
+    if (tokens.length === 1) {
+      const single = tokens[0]
+      const chars = single.replace(/[^a-z0-9]/gi, '')
+      if (/^[abcd]+$/i.test(chars) || /^[1234]+$/.test(chars)) {
+        return chars
+          .split('')
+          .map(char => this.normalizeCorrectAnswerToken(char))
+          .filter(Boolean)
+          .join(',')
+      }
+    }
+
+    return tokens
+      .map(token => this.normalizeCorrectAnswerToken(token))
+      .filter(Boolean)
+      .join(',')
+  }
+
+  private normalizeCorrectAnswerToken(token: string): string {
+    const normalized = token.trim().toLowerCase().replace(/\s+/g, '')
+    const cleaned = normalized.replace(/[^a-z0-9_]/g, '')
+
+    const optionMatch = cleaned.match(/^option_?([abcd])$/)
+    if (optionMatch?.[1]) return this.normalizeLetter(optionMatch[1])
+
+    const optionNumberMatch = cleaned.match(/^option_?([1-4])$/)
+    if (optionNumberMatch?.[1]) return optionNumberMatch[1]
+
+    if (/^[abcd]$/.test(cleaned)) return this.normalizeLetter(cleaned)
+    if (/^[1-4]$/.test(cleaned)) return cleaned
+
+    return ''
+  }
+
+  private normalizeLetter(letter: string): string {
+    if (letter === 'a') return '1'
+    if (letter === 'b') return '2'
+    if (letter === 'c') return '3'
+    if (letter === 'd') return '4'
+    return ''
+  }
+
+  private hasAnyHeader(headers: string[], candidates: string[]): boolean {
+    const normalized = headers.map(h => h.toLowerCase().trim().replace(/[^a-z0-9]/g, ''))
+    return candidates.some(candidate => normalized.includes(candidate))
+  }
+
+  private getOptionCellValue(
+    row: any[],
+    headerMap: { [key: string]: number },
+    keys: string[],
+  ): string {
+    for (const key of keys) {
+      const value = this.getCellValue(row, headerMap, key)
+      if (value) return value
+    }
+    return ''
   }
 
   /**
@@ -110,24 +160,31 @@ export class ExcelUploadService {
    */
   private validateHeaders(headers: string[]): void {
     const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
-    
+
     // Check for required question column
-    if (!normalizedHeaders.includes('question')) {
+    if (!this.hasAnyHeader(headers, ['question', 'questiontext', 'question_text'])) {
       throw new Error(`Missing required column: question`);
     }
-    
-    // Check for option columns - support both formats
-    const hasNewFormat = normalizedHeaders.includes('option1') && normalizedHeaders.includes('option2');
-    const hasOldFormat = normalizedHeaders.includes('option_a') && normalizedHeaders.includes('option_b');
-    
-    if (!hasNewFormat && !hasOldFormat) {
-      throw new Error(`Missing required option columns. Expected either: option1, option2 OR option_a, option_b`);
+
+    const hasOption1 = this.hasAnyHeader(headers, ['option1', 'option_1', 'optiona', 'option_a', 'a', '1'])
+    const hasOption2 = this.hasAnyHeader(headers, ['option2', 'option_2', 'optionb', 'option_b', 'b', '2'])
+
+    if (!hasOption1 || !hasOption2) {
+      throw new Error(
+        'Missing required option columns. Provide at least Option 1 and Option 2 using one of these formats: option_1/option1/option_a/A/1 and option_2/option2/option_b/B/2',
+      )
     }
-    
-    // Check for correct answer column - support both formats
-    const hasCorrectAnswers = normalizedHeaders.includes('correctanswers') || 
-                             normalizedHeaders.includes('correct_answer');
-    
+
+    // Check for correct answer column - support multiple formats
+    const hasCorrectAnswers = this.hasAnyHeader(headers, [
+      'correctanswer',
+      'correct_answer',
+      'correctanswers',
+      'correct_answers',
+      'correct',
+      'answer',
+    ])
+
     if (!hasCorrectAnswers) {
       throw new Error(`Missing required column: correctAnswers or correct_answer`);
     }
@@ -147,13 +204,36 @@ export class ExcelUploadService {
       if (!row || row.every(cell => !cell)) continue;
       
       try {
+        const option1 = this.getOptionCellValue(row, headerMap, [
+          'option1', 'option_1', 'option_a', 'optiona', 'a', '1',
+        ])
+        const option2 = this.getOptionCellValue(row, headerMap, [
+          'option2', 'option_2', 'option_b', 'optionb', 'b', '2',
+        ])
+        const option3 = this.getOptionCellValue(row, headerMap, [
+          'option3', 'option_3', 'option_c', 'optionc', 'c', '3',
+        ])
+        const option4 = this.getOptionCellValue(row, headerMap, [
+          'option4', 'option_4', 'option_d', 'optiond', 'd', '4',
+        ])
+
+        const rawCorrectAnswer = this.getOptionCellValue(row, headerMap, [
+          'correctAnswers',
+          'correct_answer',
+          'correctanswer',
+          'correct',
+          'answer',
+        ]) || '1'
+
         const question: ExcelQuestionRow = {
-          question: this.getCellValue(row, headerMap, 'question'),
-          option1: this.getCellValue(row, headerMap, 'option1') || this.getCellValue(row, headerMap, 'option_a'),
-          option2: this.getCellValue(row, headerMap, 'option2') || this.getCellValue(row, headerMap, 'option_b'),
-          option3: this.getCellValue(row, headerMap, 'option3') || this.getCellValue(row, headerMap, 'option_c'),
-          option4: this.getCellValue(row, headerMap, 'option4') || this.getCellValue(row, headerMap, 'option_d'),
-          correctAnswers: this.normalizeCorrectAnswer(this.getCellValue(row, headerMap, 'correctAnswers') || this.getCellValue(row, headerMap, 'correct_answer') || '1'),
+          question: this.getCellValue(row, headerMap, 'question')
+            || this.getCellValue(row, headerMap, 'questionText')
+            || this.getCellValue(row, headerMap, 'question_text'),
+          option1,
+          option2,
+          option3: option3 || undefined,
+          option4: option4 || undefined,
+          correctAnswers: this.normalizeCorrectAnswer(rawCorrectAnswer),
           difficulty: this.getCellValue(row, headerMap, 'difficulty') || 'MEDIUM',
           category: this.getCellValue(row, headerMap, 'category')
         };

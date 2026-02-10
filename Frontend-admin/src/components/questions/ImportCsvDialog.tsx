@@ -37,6 +37,69 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const normalizeKey = (value: string): string =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '')
+
+  const getCellValue = (row: Record<string, any>, keys: string[]): string => {
+    if (!row) return ""
+    const normalizedRow: Record<string, any> = {}
+    for (const [key, val] of Object.entries(row)) {
+      normalizedRow[normalizeKey(key)] = val
+    }
+    for (const key of keys) {
+      const val = normalizedRow[normalizeKey(key)]
+      if (val !== undefined && val !== null && String(val).trim() !== "") {
+        return String(val).trim()
+      }
+    }
+    return ""
+  }
+
+  const normalizeCorrectAnswerToken = (token: string): string => {
+    const normalized = token.trim().toLowerCase().replace(/\s+/g, "")
+    const cleaned = normalized.replace(/[^a-z0-9_]/g, "")
+    const optionLetterMatch = cleaned.match(/^option_?([abcd])$/)
+    if (optionLetterMatch?.[1]) return `option_${optionLetterMatch[1]}`
+    const optionNumberMatch = cleaned.match(/^option_?([1-4])$/)
+    if (optionNumberMatch?.[1]) {
+      return `option_${String.fromCharCode(96 + parseInt(optionNumberMatch[1], 10))}`
+    }
+    if (/^[abcd]$/.test(cleaned)) return `option_${cleaned}`
+    if (/^[1-4]$/.test(cleaned)) {
+      return `option_${String.fromCharCode(96 + parseInt(cleaned, 10))}`
+    }
+    return ""
+  }
+
+  const normalizeCorrectAnswer = (answer: string): string => {
+    if (!answer) return ""
+    const tokens = String(answer)
+      .trim()
+      .split(/[,\s]+/)
+      .map(t => t.trim())
+      .filter(Boolean)
+
+    if (tokens.length === 1) {
+      const single = tokens[0]
+      const chars = single.replace(/[^a-z0-9]/gi, "")
+      if (/^[abcd]+$/i.test(chars) || /^[1234]+$/.test(chars)) {
+        return chars
+          .split("")
+          .map(ch => normalizeCorrectAnswerToken(ch))
+          .filter(Boolean)
+          .join(",")
+      }
+    }
+
+    return tokens
+      .map(t => normalizeCorrectAnswerToken(t))
+      .filter(Boolean)
+      .join(",")
+  }
+
   const downloadTemplate = (format: 'csv' | 'xlsx') => {
     const templateData = [
       {
@@ -82,13 +145,27 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
     }
 
     if (!row.option_a?.trim()) errors.push("Option A is required")
-    if (!row.option_b?.trim()) errors.push("Option B is required") 
+    if (!row.option_b?.trim()) errors.push("Option B is required")
     if (!row.option_c?.trim()) errors.push("Option C is required")
     if (!row.option_d?.trim()) errors.push("Option D is required")
 
-    const validAnswers = ['option_a', 'option_b', 'option_c', 'option_d']
-    if (!validAnswers.includes(row.correct_answer?.toLowerCase()?.trim())) {
-      errors.push("Correct answer must be exactly: option_a, option_b, option_c, or option_d")
+    const normalizedCorrect = normalizeCorrectAnswer(row.correct_answer)
+    const normalizedTokens = normalizedCorrect
+      .split(",")
+      .map(t => t.trim())
+      .filter(Boolean)
+
+    if (normalizedTokens.length !== 1) {
+      errors.push(
+        "Correct answer must specify exactly one answer (A/B/C/D, 1/2/3/4, option_a/option_1, etc.)",
+      )
+    } else {
+      const validAnswers = ["option_a", "option_b", "option_c", "option_d"]
+      if (!validAnswers.includes(normalizedTokens[0])) {
+        errors.push(
+          "Correct answer must be one of: option_a, option_b, option_c, option_d (or A/B/C/D or 1/2/3/4)",
+        )
+      }
     }
 
     return { isValid: errors.length === 0, errors }
@@ -119,25 +196,74 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
         throw new Error("Unsupported file format. Please use CSV or XLSX files.")
       }
 
-      // Validate headers
-      const requiredHeaders = ['question', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
-      const headers = Object.keys(data[0] || {}).map(h => h.toLowerCase())
-      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h))
-      
-      if (missingHeaders.length > 0) {
-        throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`)
+      // Validate headers (support multiple formats)
+      const headers = Object.keys(data[0] || {}).map(h => normalizeKey(h))
+      const hasQuestion = headers.includes("question")
+        || headers.includes("questiontext")
+        || headers.includes("question_text")
+
+      const hasOptionA = headers.includes("optiona")
+        || headers.includes("option_a")
+        || headers.includes("option1")
+        || headers.includes("option_1")
+        || headers.includes("a")
+        || headers.includes("1")
+
+      const hasOptionB = headers.includes("optionb")
+        || headers.includes("option_b")
+        || headers.includes("option2")
+        || headers.includes("option_2")
+        || headers.includes("b")
+        || headers.includes("2")
+
+      const hasOptionC = headers.includes("optionc")
+        || headers.includes("option_c")
+        || headers.includes("option3")
+        || headers.includes("option_3")
+        || headers.includes("c")
+        || headers.includes("3")
+
+      const hasOptionD = headers.includes("optiond")
+        || headers.includes("option_d")
+        || headers.includes("option4")
+        || headers.includes("option_4")
+        || headers.includes("d")
+        || headers.includes("4")
+
+      const hasCorrect = headers.includes("correctanswer")
+        || headers.includes("correct_answer")
+        || headers.includes("correctanswers")
+        || headers.includes("correct_answers")
+        || headers.includes("correct")
+        || headers.includes("answer")
+
+      if (!hasQuestion || !hasOptionA || !hasOptionB || !hasOptionC || !hasOptionD || !hasCorrect) {
+        throw new Error(
+          "Missing required columns. Provide: question, 4 options (A-D / 1-4 / option_a..d / option_1..4), and correct_answer (or correct/answer)",
+        )
       }
 
       // Normalize and validate rows
       const normalizedRows: ParsedRow[] = data.map((row: any, index: number) => {
         const normalizedRow: ImportRow = {
-          question: row.question || row.Question || '',
-          option_a: row.option_a || row.Option_A || '',
-          option_b: row.option_b || row.Option_B || '',
-          option_c: row.option_c || row.Option_C || '',
-          option_d: row.option_d || row.Option_D || '',
-          correct_answer: (row.correct_answer || row.Correct_Answer || '').toLowerCase()
+          question: getCellValue(row, ["question", "Question", "questionText", "QuestionText", "question_text"]),
+          option_a: getCellValue(row, ["option_a", "Option_A", "optionA", "OptionA", "option1", "option_1", "A", "1"]),
+          option_b: getCellValue(row, ["option_b", "Option_B", "optionB", "OptionB", "option2", "option_2", "B", "2"]),
+          option_c: getCellValue(row, ["option_c", "Option_C", "optionC", "OptionC", "option3", "option_3", "C", "3"]),
+          option_d: getCellValue(row, ["option_d", "Option_D", "optionD", "OptionD", "option4", "option_4", "D", "4"]),
+          correct_answer: getCellValue(row, [
+            "correct_answer",
+            "Correct_Answer",
+            "correctAnswer",
+            "CorrectAnswer",
+            "correct",
+            "Correct",
+            "answer",
+            "Answer",
+          ]),
         }
+
+        normalizedRow.correct_answer = normalizeCorrectAnswer(normalizedRow.correct_answer)
 
         const validation = validateRow(normalizedRow, index)
         
@@ -186,7 +312,8 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
         { id: `${Date.now()}_${Math.random()}_d`, text: row.option_d }
       ]
 
-      const correctIndex = ['option_a', 'option_b', 'option_c', 'option_d'].indexOf(row.correct_answer)
+      const correctKey = String(row.correct_answer || "").split(",")[0]
+      const correctIndex = ['option_a', 'option_b', 'option_c', 'option_d'].indexOf(correctKey)
       
       return {
         id: `${Date.now()}_${Math.random()}`,
@@ -273,8 +400,8 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
                   <p className="font-medium">Required columns:</p>
                   <ul className="list-disc list-inside space-y-1 ml-4">
                     <li><code>question</code> - The question text</li>
-                    <li><code>option_a</code>, <code>option_b</code>, <code>option_c</code>, <code>option_d</code> - Answer options</li>
-                    <li><code>correct_answer</code> - Must be exactly: option_a, option_b, option_c, or option_d</li>
+                    <li><code>option_a</code>..<code>option_d</code> (or <code>option_1</code>..<code>option_4</code>, or <code>A</code>..<code>D</code>, or <code>1</code>..<code>4</code>) - Answer options</li>
+                    <li><code>correct_answer</code> (or <code>correct</code>/<code>answer</code>) - Accepts: option_a..d, option_1..4, A-D, 1-4, abcd/ABCD, 1234</li>
                   </ul>
                 </div>
               </div>

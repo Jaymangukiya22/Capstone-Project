@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
@@ -19,6 +19,7 @@ import { Upload, Download, AlertCircle, CheckCircle } from "lucide-react"
 import * as XLSX from "xlsx"
 import { useCategories } from "../../hooks/useCategories"
 import type { Category } from "../../types/api"
+import { questionBankService } from "../../services/questionBankService"
 
 interface ImportCsvDialogProps {
   open: boolean
@@ -39,7 +40,13 @@ export function ImportCsvDialog({
   const [targetCategoryId, setTargetCategoryId] = useState<number | null>(selectedCategoryId || null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const { categories: apiCategories } = useCategories()
+  const { categories: apiCategories, fetchCategories } = useCategories({
+    autoFetch: false,
+  })
+
+  useEffect(() => {
+    fetchCategories({ limit: 1000 })
+  }, [fetchCategories])
 
   const getCategoryDisplayName = (
     category: Category,
@@ -98,26 +105,13 @@ export function ImportCsvDialog({
     try {
       setIsLoading(true)
       setError(null)
-      
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('categoryId', targetCategoryId.toString())
-      
-      const response = await fetch('http://localhost:3000/api/question-bank/upload-excel', {
-        method: 'POST',
-        body: formData
-      })
-      
-      const result = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(result.message || 'Upload failed')
-      }
-      
+
+      const result = await questionBankService.uploadExcel(file, targetCategoryId)
       setUploadResult(result)
       onImportComplete()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      const message = err instanceof Error ? err.message : 'Upload failed'
+      setError(message)
     } finally {
       setIsLoading(false)
     }

@@ -18,6 +18,7 @@ import {
 import { Upload, Download, AlertCircle, CheckCircle } from "lucide-react"
 import * as XLSX from "xlsx"
 import { useCategories } from "../../hooks/useCategories"
+import type { Category } from "../../types/api"
 
 interface ImportCsvDialogProps {
   open: boolean
@@ -39,6 +40,33 @@ export function ImportCsvDialog({
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const { categories: apiCategories } = useCategories()
+
+  const getCategoryDisplayName = (
+    category: Category,
+    categories: Category[],
+  ): string => {
+    const categoriesById = new Map<number, Category>()
+    for (const item of categories) {
+      categoriesById.set(item.id, item)
+    }
+
+    const names: string[] = []
+    const visited = new Set<number>()
+    let current: Category | undefined = category
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id)
+      names.unshift(current.name)
+      if (current.parentId == null) break
+      current = categoriesById.get(current.parentId)
+    }
+
+    return names.join(' > ')
+  }
+
+  const categoriesWithDisplayNames = (Array.isArray(apiCategories)
+    ? apiCategories
+    : []) as Category[]
 
   const downloadTemplate = () => {
     const templateData = [
@@ -112,12 +140,14 @@ export function ImportCsvDialog({
               <SelectTrigger>
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
-              <SelectContent>
-                {apiCategories?.filter(category => category.id && category.id.toString().trim() !== '').map((category: any) => (
-                  <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name}
-                  </SelectItem>
-                ))}
+              <SelectContent className="max-h-72 overflow-y-auto">
+                {categoriesWithDisplayNames
+                  .filter(category => category.id && category.id.toString().trim() !== '')
+                  .map(category => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {getCategoryDisplayName(category, categoriesWithDisplayNames)}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

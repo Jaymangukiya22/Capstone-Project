@@ -36,6 +36,25 @@ export function AddEditQuestionModal({
   selectedNodeType,
   onSave
 }: AddEditQuestionModalProps) {
+  const flattenCategories = (
+    list: ApiCategory[],
+    prefix: string = '',
+  ): Array<{ id: number; name: string; displayName: string }> => {
+    if (!Array.isArray(list)) return []
+
+    const flattened: Array<{ id: number; name: string; displayName: string }> = []
+    for (const category of list) {
+      const displayName = prefix ? `${prefix} > ${category.name}` : category.name
+      flattened.push({ id: category.id, name: category.name, displayName })
+      if (Array.isArray(category.children) && category.children.length > 0) {
+        flattened.push(...flattenCategories(category.children, displayName))
+      }
+    }
+
+    return flattened
+  }
+
+  const flattenedCategories = flattenCategories(categories)
   const [formData, setFormData] = useState({
     questionText: '',
     options: [
@@ -279,9 +298,9 @@ export function AddEditQuestionModal({
               <SelectTrigger>
                 <SelectValue placeholder="Select category (optional for global questions)" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-72 overflow-y-auto">
                 <SelectItem value="global">Global Question (No Category)</SelectItem>
-                {(categories || [])
+                {(flattenedCategories || [])
                   .filter(category => {
                     const isValid = category && 
                       category.id && 
@@ -304,7 +323,7 @@ export function AddEditQuestionModal({
                     }
                     return (
                       <SelectItem key={category.id} value={value}>
-                        {category.name}
+                        {category.displayName}
                       </SelectItem>
                     )
                   })

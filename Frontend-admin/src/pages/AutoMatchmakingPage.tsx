@@ -64,8 +64,6 @@ type FlatCategory = {
   displayName: string
 }
 
-type QuizSelection = 'RANDOM' | number | null
-
 const getLocalUser = () => {
   const storedUser = localStorage.getItem('user')
   if (!storedUser) {
@@ -120,6 +118,23 @@ const getRandomQuizId = (quizzes: Quiz[]): number | null => {
   return quizzes[index]?.id ?? null
 }
 
+const getRandomSubcategoryId = (
+  parent: Category,
+  allCategoriesFlat: Category[],
+): number | null => {
+  if (Array.isArray(parent.children) && parent.children.length > 0) {
+    const flattened = flattenCategories(parent.children)
+    if (flattened.length === 0) return null
+    const index = Math.floor(Math.random() * flattened.length)
+    return flattened[index]?.id ?? null
+  }
+
+  const descendants = getDescendantCategories(allCategoriesFlat, parent.id)
+  if (descendants.length === 0) return null
+  const index = Math.floor(Math.random() * descendants.length)
+  return descendants[index]?.id ?? null
+}
+
 export function AutoMatchmakingPage() {
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [loadingQuizzes, setLoadingQuizzes] = useState(false)
@@ -130,7 +145,6 @@ export function AutoMatchmakingPage() {
   )
   const [subcategoryId, setSubcategoryId] = useState<number | null>(null)
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
-  const [quizSelection, setQuizSelection] = useState<QuizSelection>('RANDOM')
 
   const [matchmaking, setMatchmaking] = useState<MatchmakingState>({
     isSearching: false,
@@ -142,6 +156,7 @@ export function AutoMatchmakingPage() {
 
   const elapsedTimerRef = useRef<number | null>(null)
   const isNavigatingRef = useRef(false)
+  const selectedQuizRef = useRef<Quiz | null>(null)
 
   const parentCategories = useMemo(() => {
     if (!Array.isArray(categories) || categories.length === 0) return []
@@ -160,22 +175,10 @@ export function AutoMatchmakingPage() {
     return flattenCategoryNodes(categories)
   }, [categories])
 
-  const subcategories = useMemo(() => {
-    if (!selectedParent) return []
-
-    if (Array.isArray(selectedParent.children) && selectedParent.children.length > 0) {
-      return flattenCategories(selectedParent.children)
-    }
-
-    const descendants = getDescendantCategories(allCategoriesFlat, selectedParent.id)
-    if (descendants.length === 0) return []
-    return flattenCategories(descendants)
-  }, [allCategoriesFlat, selectedParent])
-
-  const selectedQuiz = useMemo(() => {
-    if (quizSelection === 'RANDOM' || quizSelection === null) return undefined
-    return quizzes.find(quiz => quiz.id === quizSelection)
-  }, [quizSelection, quizzes])
+  const selectedSubcategory = useMemo(() => {
+    if (!subcategoryId) return null
+    return allCategoriesFlat.find(category => category.id === subcategoryId) ?? null
+  }, [allCategoriesFlat, subcategoryId])
 
   const clearElapsedTimer = () => {
     if (elapsedTimerRef.current) {
@@ -246,6 +249,18 @@ export function AutoMatchmakingPage() {
     }
   }
 
+  const pickRandomSubcategory = (parent: Category) => {
+    const randomId = getRandomSubcategoryId(parent, allCategoriesFlat)
+    setSubcategoryId(randomId)
+    if (randomId !== null) {
+      loadQuizzesForCategory(randomId).catch(error => {
+        console.error('Error loading quizzes for random subcategory:', error)
+      })
+    } else {
+      setQuizzes([])
+    }
+  }
+
   const startElapsedTimer = () => {
     clearElapsedTimer()
     elapsedTimerRef.current = window.setInterval(() => {
@@ -296,15 +311,13 @@ export function AutoMatchmakingPage() {
     if (typeof matchId !== 'string' || matchId.length === 0) return
     isNavigatingRef.current = true
 
+    const selectedQuiz = selectedQuizRef.current
     const friendMatchInfo = {
       matchId,
       joinCode: '',
       websocketUrl: WEBSOCKET_URL,
-      quizName: getQuizName(selectedQuiz),
-      quizId:
-        quizSelection !== 'RANDOM' && quizSelection !== null
-          ? String(quizSelection)
-          : '',
+      quizName: selectedQuiz?.title || 'Random Quiz',
+      quizId: selectedQuiz?.id ? String(selectedQuiz.id) : '',
       mode: 'create',
     }
 
@@ -351,10 +364,19 @@ export function AutoMatchmakingPage() {
   }
 
   const startMatchmaking = async () => {
+    if (!parentCategoryId) {
+      toast({
+        title: 'Select a category',
+        description: 'Choose a category to start matchmaking.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     if (!subcategoryId) {
       toast({
-        title: 'Select a subcategory',
-        description: 'Choose a subcategory to start matchmaking.',
+        title: 'No subcategories available',
+        description: 'Please choose a different category.',
         variant: 'destructive',
       })
       return
@@ -370,16 +392,14 @@ export function AutoMatchmakingPage() {
         quizId: -1,
       }
 
-      if (quizSelection !== 'RANDOM' && quizSelection !== null) {
-        payload.quizId = quizSelection
-      } else {
-        const randomQuizId = getRandomQuizId(quizzes)
-        if (randomQuizId === null) {
-          handleFailure('Matchmaking error', 'No quizzes available for the selected category')
-          return
-        }
-        payload.quizId = randomQuizId
+      const randomQuizId = getRandomQuizId(quizzes)
+      if (randomQuizId === null) {
+        handleFailure('Matchmaking error', 'No quizzes available for the selected category')
+        return
       }
+      payload.quizId = randomQuizId
+
+      selectedQuizRef.current = quizzes.find(quiz => quiz.id === randomQuizId) ?? null
 
       gameWebSocket.send('start_auto_matchmaking', payload)
     })
@@ -398,27 +418,30 @@ export function AutoMatchmakingPage() {
   }
 
   useEffect(() => {
-    loadCategories().catch(() => {})
+    loadCategories()
     return cleanupSocket
   }, [])
 
   useEffect(() => {
-    setSubcategoryId(null)
-    setQuizzes([])
-    setQuizSelection('RANDOM')
-    resetMatchmakingState()
-  }, [parentCategoryId])
-
-  useEffect(() => {
-    if (!subcategoryId) {
+    if (!selectedParent) {
+      setSubcategoryId(null)
       setQuizzes([])
-      setQuizSelection('RANDOM')
       return
     }
 
-    setQuizSelection('RANDOM')
-    loadQuizzesForCategory(subcategoryId).catch(() => {})
-  }, [subcategoryId])
+    pickRandomSubcategory(selectedParent)
+  }, [selectedParent])
+
+  useEffect(() => {
+    setSubcategoryId(null)
+    setQuizzes([])
+    selectedQuizRef.current = null
+    resetMatchmakingState()
+  }, [parentCategoryId])
+
+  const handleParentCategoryChange = (value: string) => {
+    setParentCategoryId(Number(value))
+  }
 
   const elapsedSeconds = Math.floor(matchmaking.elapsedMs / 1000)
 
@@ -430,77 +453,47 @@ export function AutoMatchmakingPage() {
       </div>
 
       <div className="rounded-lg border p-4 space-y-4">
-        <div className="space-y-2">
-          <div className="text-sm font-medium">1) Select a category</div>
-          <Select
-            value={parentCategoryId ? String(parentCategoryId) : ''}
-            onValueChange={value => setParentCategoryId(Number(value))}
-            disabled={loadingCategories || matchmaking.isSearching}
-          >
-            <SelectTrigger>
-              <SelectValue
-                placeholder={loadingCategories ? 'Loading categories…' : 'Choose category'}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {parentCategories.map(category => (
-                <SelectItem key={category.id} value={String(category.id)}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Category</label>
+            <Select
+              value={parentCategoryId ? String(parentCategoryId) : ''}
+              onValueChange={handleParentCategoryChange}
+              disabled={loadingCategories || matchmaking.isSearching}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={loadingCategories ? 'Loading categories…' : 'Choose category'}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {parentCategories.map(category => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="text-sm font-medium">2) Select a subcategory</div>
-          <Select
-            value={subcategoryId ? String(subcategoryId) : ''}
-            onValueChange={value => setSubcategoryId(Number(value))}
-            disabled={!parentCategoryId || matchmaking.isSearching}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Choose subcategory" />
-            </SelectTrigger>
-            <SelectContent>
-              {subcategories.map(sub => (
-                <SelectItem key={sub.id} value={String(sub.id)}>
-                  {sub.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">3) Select a quiz</div>
-          <Select
-            value={quizSelection === null ? '' : String(quizSelection)}
-            onValueChange={value => {
-              if (value === 'RANDOM') {
-                setQuizSelection('RANDOM')
-                return
-              }
-              setQuizSelection(Number(value))
-            }}
-            disabled={!subcategoryId || loadingQuizzes || matchmaking.isSearching}
-          >
-            <SelectTrigger>
-              <SelectValue
-                placeholder={loadingQuizzes ? 'Loading quizzes…' : 'Random or choose a quiz'}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="RANDOM">Random Quiz</SelectItem>
-              {quizzes.map(quiz => (
-                <SelectItem key={quiz.id} value={String(quiz.id)}>
-                  {quiz.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="text-xs text-muted-foreground">
-            If you pick <span className="font-medium">Random Quiz</span>, the system will match you on the selected subcategory and choose any quiz.
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Random selection</label>
+            <div className="rounded-md border p-3 text-sm">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Subcategory</span>
+                <span className="font-medium text-foreground">
+                  {loadingQuizzes ? 'Selecting...' : (selectedSubcategory?.name || '—')}
+                </span>
+              </div>
+              <div className="mt-2 flex justify-between gap-2">
+                <span className="text-muted-foreground">Quiz</span>
+                <span className="font-medium text-foreground">
+                  {loadingQuizzes ? 'Loading...' : (quizzes.length > 0 ? 'Random Quiz' : '—')}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 

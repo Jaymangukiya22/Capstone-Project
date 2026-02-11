@@ -10,7 +10,7 @@ import { logInfo, logError } from './utils/logger';
 import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
 import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
 import sequelize from './config/database';
-import { User, Quiz } from './models';
+import { User, Quiz, QuizQuestion } from './models';
 
 dotenv.config();  
 
@@ -127,17 +127,27 @@ async function startMaster() {
     const preferredQuizId = a.preference.quizId || b.preference.quizId;
     if (preferredQuizId) return preferredQuizId;
 
-    const quizzes = await Quiz.findAll({
-      where: {
-        isActive: true,
-        categoryId: a.preference.categoryId,
-      },
-      attributes: ['id'],
+    const quizQuestionRows = await QuizQuestion.findAll({
+      attributes: ['quizId'],
+      include: [
+        {
+          model: Quiz,
+          as: 'quiz',
+          required: true,
+          where: {
+            isActive: true,
+            categoryId: a.preference.categoryId,
+          },
+          attributes: [],
+        },
+      ],
+      group: ['QuizQuestion.quizId'],
+      limit: 1000,
     });
 
-    if (!quizzes.length) return null;
-    const randomIndex = Math.floor(Math.random() * quizzes.length);
-    return (quizzes[randomIndex] as any).id as number;
+    if (!quizQuestionRows.length) return null;
+    const randomIndex = Math.floor(Math.random() * quizQuestionRows.length);
+    return (quizQuestionRows[randomIndex] as any).quizId as number;
   };
 
   const createAutoMatchRedisPayload = (

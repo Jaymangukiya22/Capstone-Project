@@ -26,6 +26,8 @@ type MatchmakingState = {
   playersSearching: number | null
 }
 
+type SelectionMode = 'random' | 'manual'
+
 const flattenCategoryNodes = (categories: Category[]): Category[] => {
   const result: Category[] = []
   const queue: Category[] = Array.isArray(categories) ? [...categories] : []
@@ -145,6 +147,8 @@ export function AutoMatchmakingPage() {
   )
   const [subcategoryId, setSubcategoryId] = useState<number | null>(null)
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
+  const [selectedQuizId, setSelectedQuizId] = useState<number | null>(null)
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('random')
 
   const [matchmaking, setMatchmaking] = useState<MatchmakingState>({
     isSearching: false,
@@ -179,6 +183,22 @@ export function AutoMatchmakingPage() {
     if (!subcategoryId) return null
     return allCategoriesFlat.find(category => category.id === subcategoryId) ?? null
   }, [allCategoriesFlat, subcategoryId])
+
+  const manualCategoryOptions = useMemo(() => {
+    if (!parentCategoryId) return []
+    const parent = allCategoriesFlat.find(category => category.id === parentCategoryId)
+    if (!parent) return []
+
+    const descendants = getDescendantCategories(allCategoriesFlat, parentCategoryId)
+    const combined = [parent, ...descendants]
+
+    const seen = new Set<number>()
+    return combined.filter(category => {
+      if (seen.has(category.id)) return false
+      seen.add(category.id)
+      return true
+    })
+  }, [allCategoriesFlat, parentCategoryId])
 
   const clearElapsedTimer = () => {
     if (elapsedTimerRef.current) {
@@ -257,7 +277,27 @@ export function AutoMatchmakingPage() {
         console.error('Error loading quizzes for random subcategory:', error)
       })
     } else {
-      setQuizzes([])
+      loadQuizzesForCategory(parent.id).catch(error => {
+        console.error('Error loading quizzes for parent category:', error)
+      })
+    }
+  }
+
+  const handleSelectionModeChange = (mode: SelectionMode) => {
+    setSelectionMode(mode)
+    setSelectedQuizId(null)
+    selectedQuizRef.current = null
+
+    if (mode === 'random') {
+      if (selectedParent) pickRandomSubcategory(selectedParent)
+      return
+    }
+
+    setSubcategoryId(parentCategoryId)
+    if (parentCategoryId) {
+      loadQuizzesForCategory(parentCategoryId).catch(error => {
+        console.error('Error loading quizzes for parent category:', error)
+      })
     }
   }
 
@@ -373,34 +413,33 @@ export function AutoMatchmakingPage() {
       return
     }
 
-    if (!subcategoryId) {
-      toast({
-        title: 'No subcategories available',
-        description: 'Please choose a different category.',
-        variant: 'destructive',
-      })
-      return
-    }
+    const effectiveCategoryId = subcategoryId ?? parentCategoryId
 
     resetMatchmakingState()
     cleanupSocket()
     registerSocketHandlers()
 
     gameWebSocket.on('authenticated', () => {
-      const payload: { categoryId: number; quizId: number } = {
-        categoryId: subcategoryId,
-        quizId: -1,
+      const payload: { categoryId: number; quizId?: number } = {
+        categoryId: effectiveCategoryId,
       }
 
-      const randomQuizId = getRandomQuizId(quizzes)
-      if (randomQuizId === null) {
+      const quizIdToUse = selectionMode === 'manual'
+        ? selectedQuizId
+        : getRandomQuizId(quizzes)
+
+      if (quizIdToUse === null) {
         handleFailure('Matchmaking error', 'No quizzes available for the selected category')
         return
       }
-      payload.quizId = randomQuizId
 
-      selectedQuizRef.current = quizzes.find(quiz => quiz.id === randomQuizId) ?? null
+      if (typeof quizIdToUse !== 'number') {
+        handleFailure('Matchmaking error', 'Please select a quiz')
+        return
+      }
 
+      payload.quizId = quizIdToUse
+      selectedQuizRef.current = quizzes.find(quiz => quiz.id === quizIdToUse) ?? null
       gameWebSocket.send('start_auto_matchmaking', payload)
     })
 
@@ -429,12 +468,21 @@ export function AutoMatchmakingPage() {
       return
     }
 
-    pickRandomSubcategory(selectedParent)
+    if (selectionMode === 'random') {
+      pickRandomSubcategory(selectedParent)
+    } else {
+      setSubcategoryId(selectedParent.id)
+      loadQuizzesForCategory(selectedParent.id).catch(error => {
+        console.error('Error loading quizzes for parent category:', error)
+      })
+    }
   }, [selectedParent])
 
   useEffect(() => {
     setSubcategoryId(null)
     setQuizzes([])
+    setSelectedQuizId(null)
+    setSelectionMode('random')
     selectedQuizRef.current = null
     resetMatchmakingState()
   }, [parentCategoryId])
@@ -479,23 +527,98 @@ export function AutoMatchmakingPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Random selection</label>
-            <div className="rounded-md border p-3 text-sm">
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Subcategory</span>
-                <span className="font-medium text-foreground">
-                  {loadingQuizzes ? 'Selecting...' : (selectedSubcategory?.name || '—')}
-                </span>
-              </div>
-              <div className="mt-2 flex justify-between gap-2">
-                <span className="text-muted-foreground">Quiz</span>
-                <span className="font-medium text-foreground">
-                  {loadingQuizzes ? 'Loading...' : (quizzes.length > 0 ? 'Random Quiz' : '—')}
-                </span>
+            <label className="text-sm font-medium">Selection mode</label>
+            <Select
+              value={selectionMode}
+              onValueChange={(value) => handleSelectionModeChange(value as SelectionMode)}
+              disabled={!selectedParent || loadingQuizzes || matchmaking.isSearching}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="random">Random subcategory + random quiz</SelectItem>
+                <SelectItem value="manual">Select subcategory + quiz</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {selectionMode === 'random' && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Random selection</label>
+              <div className="rounded-md border p-3 text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Subcategory</span>
+                  <span className="font-medium text-foreground">
+                    {loadingQuizzes
+                      ? 'Selecting...'
+                      : (selectedSubcategory?.name || '— (none)')}
+                  </span>
+                </div>
+                <div className="mt-2 flex justify-between gap-2">
+                  <span className="text-muted-foreground">Quiz</span>
+                  <span className="font-medium text-foreground">
+                    {loadingQuizzes ? 'Loading...' : (quizzes.length > 0 ? 'Random Quiz' : '—')}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {selectionMode === 'manual' && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subcategory</label>
+              <Select
+                value={subcategoryId ? String(subcategoryId) : ''}
+                onValueChange={(value) => {
+                  const parsed = Number(value)
+                  setSubcategoryId(parsed)
+                  setSelectedQuizId(null)
+                  selectedQuizRef.current = null
+                  loadQuizzesForCategory(parsed).catch(error => {
+                    console.error('Error loading quizzes for manual category:', error)
+                  })
+                }}
+                disabled={!selectedParent || loadingQuizzes || matchmaking.isSearching}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose subcategory" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 overflow-y-auto">
+                  {manualCategoryOptions.map(category => (
+                    <SelectItem key={category.id} value={String(category.id)}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Quiz</label>
+              <Select
+                value={selectedQuizId ? String(selectedQuizId) : ''}
+                onValueChange={(value) => setSelectedQuizId(Number(value))}
+                disabled={!subcategoryId || loadingQuizzes || matchmaking.isSearching}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingQuizzes ? 'Loading quizzes…' : 'Choose quiz'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 overflow-y-auto">
+                  {quizzes.map(quiz => (
+                    <SelectItem key={quiz.id} value={String(quiz.id)}>
+                      {quiz.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
         {matchmaking.isSearching && (
           <div className="rounded-lg border p-3 bg-gray-50 dark:bg-gray-800">
@@ -517,7 +640,7 @@ export function AutoMatchmakingPage() {
         <div className="flex gap-2">
           <Button
             onClick={startMatchmaking}
-            disabled={!subcategoryId || matchmaking.isSearching}
+            disabled={!parentCategoryId || matchmaking.isSearching}
             className="flex-1"
           >
             {matchmaking.isSearching ? (

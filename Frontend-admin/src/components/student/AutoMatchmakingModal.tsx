@@ -15,6 +15,7 @@ import { Loader2, Users, XCircle } from 'lucide-react'
 import { gameWebSocket } from '@/services/matchService'
 import { WEBSOCKET_URL } from '@/services/api'
 import { categoryService } from '@/services/categoryService'
+import { quizService } from '@/services/quizService'
 import type { StudentQuiz } from '@/services/studentQuizService'
 import type { Category } from '@/types/api'
 
@@ -30,6 +31,14 @@ type MatchmakingState = {
   elapsedMs: number
   range: number | null
   playersSearching: number | null
+}
+
+type SelectionMode = 'random' | 'manual'
+
+const getRandomQuizId = (quizIds: number[]): number | null => {
+  if (!Array.isArray(quizIds) || quizIds.length === 0) return null
+  const index = Math.floor(Math.random() * quizIds.length)
+  return quizIds[index] ?? null
 }
 
 const getLocalUser = () => {
@@ -55,8 +64,11 @@ export function AutoMatchmakingModal({
   selectedQuiz,
 }: AutoMatchmakingModalProps) {
   const [useExactQuiz, setUseExactQuiz] = useState(true)
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('random')
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  const [quizIdsForCategory, setQuizIdsForCategory] = useState<number[]>([])
+  const [selectedQuizId, setSelectedQuizId] = useState<number | null>(null)
   const [matchmaking, setMatchmaking] = useState<MatchmakingState>({
     isSearching: false,
     startedAtMs: null,
@@ -86,6 +98,20 @@ export function AutoMatchmakingModal({
     return parsed
   }, [selectedQuiz])
 
+  const loadQuizIdsForCategory = async (categoryIdToLoad: number) => {
+    try {
+      const result = await quizService.getAllQuizzes({ limit: 1000 })
+      const allQuizzes = Array.isArray(result.quizzes) ? result.quizzes : []
+      const quizIds = allQuizzes
+        .filter(quiz => quiz.categoryId === categoryIdToLoad)
+        .map(quiz => quiz.id)
+        .filter((id): id is number => typeof id === 'number')
+      setQuizIdsForCategory(quizIds)
+    } catch {
+      setQuizIdsForCategory([])
+    }
+  }
+
   const clearElapsedTimer = () => {
     if (elapsedTimerRef.current) {
       window.clearInterval(elapsedTimerRef.current)
@@ -111,6 +137,9 @@ export function AutoMatchmakingModal({
       isNavigatingRef.current = false
     } else {
       resetState()
+      setSelectionMode('random')
+      setSelectedQuizId(null)
+      setQuizIdsForCategory([])
 
       categoryService
         .getAllCategories({ limit: 1000, hierarchy: true, depth: 10 })
@@ -132,8 +161,15 @@ export function AutoMatchmakingModal({
     if (!open) return
     if (categoryId) {
       setSelectedCategoryId(categoryId)
+      loadQuizIdsForCategory(categoryId).catch(() => {})
     }
   }, [open, categoryId])
+
+  useEffect(() => {
+    if (!open) return
+    if (!selectedCategoryId) return
+    loadQuizIdsForCategory(selectedCategoryId).catch(() => {})
+  }, [open, selectedCategoryId])
 
   const handleAutoMatchFound = (matchId: string) => {
     if (isNavigatingRef.current) return
@@ -174,7 +210,23 @@ export function AutoMatchmakingModal({
 
     gameWebSocket.on('authenticated', () => {
       const payload: any = { categoryId: effectiveCategoryId }
-      if (useExactQuiz && quizId) payload.quizId = quizId
+
+      if (selectionMode === 'manual') {
+        const quizToUse = selectedQuizId ?? getRandomQuizId(quizIdsForCategory)
+        if (quizToUse === null) {
+          toast({
+            title: 'Matchmaking error',
+            description: 'No quizzes available for the selected category.',
+            variant: 'destructive',
+          })
+          gameWebSocket.disconnect()
+          return
+        }
+        payload.quizId = quizToUse
+      } else if (useExactQuiz && quizId) {
+        payload.quizId = quizId
+      }
+
       gameWebSocket.send('start_auto_matchmaking', payload)
     })
 
@@ -325,12 +377,87 @@ export function AutoMatchmakingModal({
         )}
 
         <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Selection mode</div>
+            <Select
+              value={selectionMode}
+              onValueChange={(value) => {
+                const mode = value as SelectionMode
+                setSelectionMode(mode)
+                setSelectedQuizId(null)
+                if (mode === 'manual' && effectiveCategoryId) {
+                  loadQuizIdsForCategory(effectiveCategoryId).catch(() => {})
+                }
+              }}
+              disabled={matchmaking.isSearching}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="random">Random quiz (default)</SelectItem>
+                <SelectItem value="manual">Pick category + quiz</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectionMode === 'manual' && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Category</div>
+              <Select
+                value={effectiveCategoryId ? String(effectiveCategoryId) : ''}
+                onValueChange={value => {
+                  const parsed = Number(value)
+                  setSelectedCategoryId(parsed)
+                  setSelectedQuizId(null)
+                }}
+                disabled={matchmaking.isSearching}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose category" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 overflow-y-auto">
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={String(cat.id)}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {selectionMode === 'manual' && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Quiz (optional)</div>
+              <Select
+                value={selectedQuizId ? String(selectedQuizId) : ''}
+                onValueChange={value => setSelectedQuizId(Number(value))}
+                disabled={matchmaking.isSearching || !effectiveCategoryId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Random quiz" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 overflow-y-auto">
+                  {quizIdsForCategory.map(id => (
+                    <SelectItem key={id} value={String(id)}>
+                      Quiz #{id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="text-xs text-muted-foreground">
+                If you leave this empty, we will pick a random quiz from the category.
+              </div>
+            </div>
+          )}
+
           <div className="flex items-start gap-3 rounded-lg border p-3">
             <Checkbox
               id="useExactQuiz"
               checked={useExactQuiz}
               onCheckedChange={checked => setUseExactQuiz(Boolean(checked))}
-              disabled={matchmaking.isSearching}
+              disabled={matchmaking.isSearching || selectionMode === 'manual'}
             />
             <label htmlFor="useExactQuiz" className="text-sm leading-tight">
               Match using this quiz only

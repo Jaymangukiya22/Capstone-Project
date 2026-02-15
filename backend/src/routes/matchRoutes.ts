@@ -6,7 +6,9 @@ import {
   joinMatch,
   getMatch,
   getAvailableMatches,
-  getMatchHistory
+  getMatchHistory,
+  checkPendingMatch,
+  clearPendingMatch
 } from '../controllers/matchController';
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -44,5 +46,9 @@ router.get('/:matchId', getMatch);
 
 // Match History
 router.get('/history/user', getMatchHistory);
+
+// Pending Match Check (for cross-tab reconnection)
+router.get('/pending/:userId', checkPendingMatch);
+router.delete('/pending/:userId', clearPendingMatch);
 
 export default router;

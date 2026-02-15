@@ -35,6 +35,16 @@ export interface ApiResponse<T> {
   error?: string
 }
 
+export interface PendingMatchData {
+  hasPendingMatch: boolean
+  matchId?: string
+  timeRemaining?: number
+  joinCode?: string
+  quizId?: number
+  currentQuestionIndex?: number
+  totalQuestions?: number
+}
+
 class FriendMatchService {
   private baseUrl = '/friend-matches'
 
@@ -49,6 +59,41 @@ class FriendMatchService {
       description: message,
       variant: 'destructive',
     })
+  }
+
+  /**
+   * Check if user has a pending match waiting for reconnection
+   */
+  async checkPendingMatch(userId: number): Promise<PendingMatchData | null> {
+    try {
+      const response = await apiClient.get<ApiResponse<PendingMatchData>>(
+        `/matches/pending/${userId}`
+      )
+      
+      if (response.data.success) {
+        return response.data.data
+      }
+      return null
+    } catch (error) {
+      console.error('Error checking pending match:', error)
+      return null
+    }
+  }
+
+  /**
+   * Clear pending match when user declines to rejoin
+   */
+  async clearPendingMatch(userId: number): Promise<boolean> {
+    try {
+      const response = await apiClient.delete<ApiResponse<void>>(
+        `/matches/pending/${userId}`
+      )
+      
+      return response.data.success
+    } catch (error) {
+      console.error('Error clearing pending match:', error)
+      return false
+    }
   }
 
   /**

@@ -82,7 +82,8 @@ services:
       JWT_SECRET: 7a0b42e9df5856f7cfe0094361f65630
       CORS_ORIGIN: https://quizdash.dpdns.org,https://api.quizdash.dpdns.org
       DB_POOL_MAX: 50
-      LOG_LEVEL: warn
+      LOG_LEVEL: info
+      LOG_TO_CONSOLE: 'true'
       ENABLE_DEBUG_ROUTES: 'false'
       RATE_LIMIT_MAX_REQUESTS: 2000
     networks:
@@ -131,7 +132,8 @@ services:
       MIN_WORKERS: 4
       MAX_WORKERS: 8
       MAX_MATCHES: 3
-      LOG_LEVEL: warn
+      LOG_LEVEL: debug
+      LOG_TO_CONSOLE: 'true'
       CORS_ORIGIN: https://quizdash.dpdns.org,wss://match.quizdash.dpdns.org
     networks:
       - quizup_network

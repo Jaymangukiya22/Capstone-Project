@@ -49,6 +49,8 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: 3000
       NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_TO_CONSOLE: ${LOG_TO_CONSOLE:-true}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     networks:
@@ -76,6 +78,8 @@ services:
       REDIS_URL: redis://redis:6379
       MATCH_SERVICE_PORT: 3001
       NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      LOG_TO_CONSOLE: ${LOG_TO_CONSOLE:-true}
     ports:
       - "${MATCH_SERVICE_PORT:-3001}:3001"
     networks:

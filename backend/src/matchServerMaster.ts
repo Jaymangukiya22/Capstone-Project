@@ -6,7 +6,8 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
-import { logInfo, logError } from './utils/logger';
+import { logInfo, logError, logDebug } from './utils/logger';
+
 import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
 import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
 import sequelize from './config/database';
@@ -955,6 +956,89 @@ ${workers.map((w) =>
         );
       }
       return;
+    });
+
+    // Persist reconnection state when client is closing/unloading.
+    // This is handled at the master level (not the worker) so the backend
+    // pending-match endpoint can reliably find Redis keys.
+    socket.on('client_closing', async (data: { matchId?: string } = {}) => {
+      try {
+        const userId = socket.data.userId;
+        if (!userId) {
+          logDebug('client_closing ignored - missing userId on socket', {
+            socketId: socket.id,
+          });
+          return;
+        }
+
+        const matchId = data.matchId || await workerPool.getUserMatch(userId);
+        if (!matchId) {
+          logDebug('client_closing ignored - missing matchId', {
+            userId,
+            socketId: socket.id,
+            payloadMatchId: data.matchId,
+          });
+          return;
+        }
+
+        const matchData = await redisClient.get(`match:${matchId}`);
+        if (!matchData) {
+          logDebug('client_closing ignored - match not found in Redis', {
+            userId,
+            matchId,
+          });
+          return;
+        }
+
+        const match = JSON.parse(matchData);
+        const deadline = Date.now() + 30000;
+        const joinCode = typeof match?.joinCode === 'string' ? match.joinCode : '';
+
+        logInfo('Client closing - persisting pending match state (master)', {
+          userId,
+          matchId,
+        });
+
+        io.to(matchId).emit('player_disconnected', {
+          userId,
+          username: socket.data.username,
+          message: `${socket.data.username} disconnected. Waiting up to 30 seconds for reconnection...`,
+          reconnectionWindowSeconds: 30,
+          deadline,
+        });
+
+        const disconnectState = {
+          userId,
+          matchId,
+          joinCode,
+          username: socket.data.username,
+          disconnectedAt: Date.now(),
+          deadline,
+          status: 'DISCONNECTED',
+          matchStatus: match?.status,
+          currentQuestionIndex: (match?.currentQuestionIndex ?? 0) + 1,
+          totalQuestions: match?.questions?.length ?? 0,
+        };
+
+        await redisClient.setex(
+          `user:${userId}:pending_match`,
+          30,
+          JSON.stringify(disconnectState)
+        );
+        await redisClient.setex(
+          `match:${matchId}:disconnected:${userId}`,
+          30,
+          'true'
+        );
+
+        logInfo('client_closing persisted pending match state to Redis (master)', {
+          userId,
+          matchId,
+          pendingKey: `user:${userId}:pending_match`,
+        });
+      } catch (error) {
+        logError('client_closing handler error (master)', error as Error);
+      }
     });
 
     // Forward all other events to appropriate worker

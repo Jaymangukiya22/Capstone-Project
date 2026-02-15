@@ -89,3 +89,8 @@ Thumbs.db
 backend/dist/
 Frontend-admin/docs/
 !backend/docs/
+
+# Diagrams
+docs/diagrams/
+deploy-ec2*
+MODULE_DESCRIPTION.md

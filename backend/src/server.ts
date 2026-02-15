@@ -11,7 +11,7 @@ import swaggerUi from "swagger-ui-express";
 import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "yaml";
-import { initializeRedis } from "./config/redis";
+import { getRedisClient, initializeRedis } from "./config/redis";
 import categoryRoutes from "./routes/categoryRoutes";
 import quizRoutes from "./routes/quizRoutes";
 import questionRoutes from "./routes/questionRoutes";
@@ -30,6 +30,37 @@ import { metricsEndpoint, initMetrics } from "./utils/metrics";
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IP_ADD = process.env.NETWORK_IP || "0.0.0.0";
+
+interface StoreInterface {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttl?: number): Promise<void>;
+  del(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+}
+
+function createRedisStore(): StoreInterface {
+  const redis = getRedisClient();
+
+  return {
+    async get(key: string): Promise<string | null> {
+      return redis.get(key);
+    },
+    async set(key: string, value: string, ttl?: number): Promise<void> {
+      if (ttl && ttl > 0) {
+        await redis.set(key, value, 'EX', ttl);
+        return;
+      }
+      await redis.set(key, value);
+    },
+    async del(key: string): Promise<void> {
+      await redis.del(key);
+    },
+    async exists(key: string): Promise<boolean> {
+      const result = await redis.exists(key);
+      return result === 1;
+    },
+  };
+}
 // Prometheus metrics middleware
 const metricsMiddleware = promBundle({
   includeMethod: true,
@@ -224,6 +255,8 @@ async function startServer() {
     console.log(" Initializing Redis...");
     await initializeRedis();
     console.log("✅ Redis initialization successful!");
+
+    app.set('store', createRedisStore());
     
     // Connect to database
     console.log("📡 Attempting to connect to database...");

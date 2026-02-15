@@ -238,3 +238,126 @@ export const getMatchHistory = async (req: AuthenticatedRequest, res: Response) 
     });
   }
 };
+
+/* ===============================
+   PENDING MATCH CHECK (Cross-tab Reconnection)
+================================ */
+export const checkPendingMatch = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'User ID is required.'
+      });
+      return;
+    }
+
+    // Check Redis for pending match
+    const store = req.app.get('store');
+    if (!store) {
+      res.status(500).json({
+        success: false,
+        error: 'STORE_NOT_AVAILABLE',
+        message: 'Redis store not available.'
+      });
+      return;
+    }
+
+    const pendingMatchKey = `user:${userId}:pending_match`;
+    const pendingMatchData = await store.get(pendingMatchKey);
+
+    if (!pendingMatchData) {
+      res.json({
+        success: true,
+        data: { hasPendingMatch: false },
+        message: 'No pending match found.'
+      });
+      return;
+    }
+
+    const disconnectState = JSON.parse(pendingMatchData);
+    const timeRemaining = Math.max(0, Math.floor((disconnectState.deadline - Date.now()) / 1000));
+
+    if (timeRemaining <= 0) {
+      // TTL expired, match is no longer pending
+      await store.del(pendingMatchKey);
+      res.json({
+        success: true,
+        data: { hasPendingMatch: false },
+        message: 'Pending match expired.'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        hasPendingMatch: true,
+        matchId: disconnectState.matchId,
+        joinCode: disconnectState.joinCode || '',
+        timeRemaining,
+        disconnectedAt: disconnectState.disconnectedAt,
+        currentQuestionIndex: disconnectState.currentQuestionIndex || 1,
+        totalQuestions: disconnectState.totalQuestions || 0
+      },
+      message: 'Pending match found.'
+    });
+  } catch (error) {
+    logError('Error checking pending match', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'PENDING_MATCH_CHECK_FAILED',
+      message: 'Could not check pending match.'
+    });
+  }
+};
+
+/* ===============================
+   CLEAR PENDING MATCH
+================================ */
+export const clearPendingMatch = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'User ID is required.'
+      });
+      return;
+    }
+
+    const store = req.app.get('store');
+    if (!store) {
+      res.status(500).json({
+        success: false,
+        error: 'STORE_NOT_AVAILABLE',
+        message: 'Redis store not available.'
+      });
+      return;
+    }
+
+    // Delete the pending match key
+    const pendingMatchKey = `user:${userId}:pending_match`;
+    await store.del(pendingMatchKey);
+
+    logInfo('Pending match cleared', { userId, pendingMatchKey });
+
+    res.json({
+      success: true,
+      data: { cleared: true },
+      message: 'Pending match cleared.'
+    });
+  } catch (error) {
+    logError('Error clearing pending match', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'CLEAR_PENDING_MATCH_FAILED',
+      message: 'Could not clear pending match.'
+    });
+  }
+};

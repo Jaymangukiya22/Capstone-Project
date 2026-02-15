@@ -11,7 +11,7 @@ import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, 
 import { MatchType } from './types/enums';
 import { createClient } from 'redis';
 import jwt from 'jsonwebtoken';
-import { logInfo, logError } from './utils/logger';
+import { logInfo, logError, logDebug } from './utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { matchService } from './services/matchService';
 
@@ -84,8 +84,26 @@ async function initializeStore(): Promise<void> {
     
     // Test connection
     await redis.ping();
-    
-    store = redis as any;
+
+    store = {
+      async get(key: string): Promise<string | null> {
+        return redis.get(key);
+      },
+      async set(key: string, value: string, ttl?: number): Promise<void> {
+        if (ttl && ttl > 0) {
+          await redis.set(key, value, { EX: ttl });
+          return;
+        }
+        await redis.set(key, value);
+      },
+      async del(key: string): Promise<void> {
+        await redis.del(key);
+      },
+      async exists(key: string): Promise<boolean> {
+        const result = await redis.exists(key);
+        return result === 1;
+      },
+    };
     isRedisConnected = true;
     logInfo('Connected to Redis for match service');
   } catch (error) {
@@ -1653,7 +1671,7 @@ class EnhancedMatchService {
       });
 
       // Handle disconnection
-      socket.on('disconnect', () => {
+      socket.on('disconnect', async () => {
         logInfo('Player disconnect event', { 
           socketId: socket.id,
           userId: socket.data.userId
@@ -1699,6 +1717,29 @@ class EnhancedMatchService {
                   room: matchId
                 });
                 
+                // Store grace period info in Redis for cross-tab reconnection
+                const disconnectState = {
+                  userId: socket.data.userId,
+                  matchId,
+                  joinCode: match.joinCode || '',
+                  username: socket.data.username,
+                  disconnectedAt: Date.now(),
+                  deadline,
+                  status: 'DISCONNECTED',
+                  currentQuestionIndex: match.currentQuestionIndex + 1,
+                  totalQuestions: match.questions?.length || 0
+                };
+                
+                // Store with 30-second TTL - will auto-delete if not reconnected
+                await store.set(`user:${socket.data.userId}:pending_match`, JSON.stringify(disconnectState), 30);
+                await store.set(`match:${matchId}:disconnected:${socket.data.userId}`, 'true', 30);
+                
+                logInfo('📦 Disconnect state saved to Redis with 30s TTL', {
+                  userId: socket.data.userId,
+                  matchId,
+                  key: `user:${socket.data.userId}:pending_match`
+                });
+                
                 // Set a 30-second grace period for reconnection
                 const gracePeriodTimer = setTimeout(() => {
                   const stillDisconnected = !player.socketId || player.socketId === '';
@@ -1731,6 +1772,108 @@ class EnhancedMatchService {
               }
             }
           }
+        }
+      });
+
+      // Client explicitly signals it is closing/unloading.
+      // This avoids waiting for Socket.IO ping timeout before we persist
+      // cross-tab reconnection state.
+      socket.on('client_closing', async (data: { matchId?: string } = {}) => {
+        try {
+          const userId = socket.data.userId;
+          if (!userId) {
+            logDebug('client_closing ignored - missing userId on socket', {
+              socketId: socket.id,
+            });
+            return;
+          }
+
+          const matchId = data.matchId || this.userToMatch.get(userId);
+          if (!matchId) {
+            logDebug('client_closing ignored - missing matchId', {
+              userId,
+              socketId: socket.id,
+              payloadMatchId: data.matchId,
+              mappedMatchId: this.userToMatch.get(userId),
+            });
+            return;
+          }
+
+          const match = this.matches.get(matchId);
+          if (!match) {
+            logDebug('client_closing ignored - match not found in memory', {
+              userId,
+              matchId,
+              socketId: socket.id,
+            });
+            return;
+          }
+
+          const player = match.players.get(userId);
+          if (!player) {
+            logDebug('client_closing ignored - player not found in match', {
+              userId,
+              matchId,
+              socketId: socket.id,
+              playersCount: match.players.size,
+            });
+            return;
+          }
+
+          if (match.status === 'COMPLETED') {
+            logDebug('client_closing ignored - match completed', {
+              userId,
+              matchId,
+              status: match.status,
+            });
+            return;
+          }
+
+          logInfo('Client closing - persisting pending match state', {
+            userId,
+            matchId,
+          });
+
+          player.socketId = '';
+
+          const deadline = Date.now() + 30000;
+
+          this.io.to(matchId).emit('player_disconnected', {
+            userId,
+            username: socket.data.username,
+            message: `${socket.data.username} disconnected. Waiting up to 30 seconds for reconnection...`,
+            reconnectionWindowSeconds: 30,
+            deadline,
+          });
+
+          const disconnectState = {
+            userId,
+            matchId,
+            joinCode: match.joinCode || '',
+            username: socket.data.username,
+            disconnectedAt: Date.now(),
+            deadline,
+            status: 'DISCONNECTED',
+            matchStatus: match.status,
+            currentQuestionIndex: match.currentQuestionIndex + 1,
+            totalQuestions: match.questions?.length || 0
+          };
+
+          await store.set(
+            `user:${userId}:pending_match`,
+            JSON.stringify(disconnectState),
+            30
+          );
+          await store.set(`match:${matchId}:disconnected:${userId}`, 'true', 30);
+
+          logInfo('client_closing persisted pending match state to store', {
+            userId,
+            matchId,
+            pendingKey: `user:${userId}:pending_match`,
+            disconnectedKey: `match:${matchId}:disconnected:${userId}`,
+          });
+        } catch (error) {
+          logError('client_closing handler error', error as Error);
         }
       });
     });
@@ -2074,6 +2217,104 @@ class EnhancedMatchService {
 }
 
 // API Routes for friend matches
+
+// Check for pending match - used for cross-tab reconnection
+app.get('/matches/pending/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check Redis for pending match
+    const pendingMatchKey = `user:${userId}:pending_match`;
+    const pendingMatchData = await store.get(pendingMatchKey);
+    
+    if (pendingMatchData) {
+      const disconnectState = JSON.parse(pendingMatchData);
+      const now = Date.now();
+      const timeRemaining = disconnectState.deadline - now;
+      
+      if (timeRemaining > 0) {
+        // Check if match still exists and is in progress
+        const matchData = await store.get(`match:${disconnectState.matchId}`);
+        
+        if (matchData) {
+          const match = JSON.parse(matchData);
+          
+          if (match.status === 'IN_PROGRESS') {
+            logInfo('Pending match found for user', {
+              userId,
+              matchId: disconnectState.matchId,
+              timeRemaining: Math.ceil(timeRemaining / 1000)
+            });
+            
+            res.json({
+              success: true,
+              data: {
+                hasPendingMatch: true,
+                matchId: disconnectState.matchId,
+                timeRemaining: Math.ceil(timeRemaining / 1000),
+                joinCode: match.joinCode,
+                quizId: match.quizId,
+                currentQuestionIndex: match.currentQuestionIndex,
+                totalQuestions: match.questions?.length || 0
+              }
+            });
+            return;
+          }
+        }
+      }
+      
+      // Match no longer valid or expired - clean up
+      await store.del(pendingMatchKey);
+      await store.del(`match:${disconnectState.matchId}:disconnected:${userId}`);
+    }
+    
+    // No pending match
+    res.json({
+      success: true,
+      data: {
+        hasPendingMatch: false
+      }
+    });
+  } catch (error) {
+    logError('Failed to check pending match', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check pending match'
+    });
+  }
+});
+
+// Clear pending match (when user declines to rejoin)
+app.delete('/matches/pending/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const pendingMatchKey = `user:${userId}:pending_match`;
+    const pendingMatchData = await store.get(pendingMatchKey);
+    
+    if (pendingMatchData) {
+      const disconnectState = JSON.parse(pendingMatchData);
+      
+      // Clean up Redis keys
+      await store.del(pendingMatchKey);
+      await store.del(`match:${disconnectState.matchId}:disconnected:${userId}`);
+      
+      logInfo('Pending match cleared by user', { userId, matchId: disconnectState.matchId });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Pending match cleared'
+    });
+  } catch (error) {
+    logError('Failed to clear pending match', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear pending match'
+    });
+  }
+});
+
 app.post('/matches/friend', async (req, res) => {
   try {
     const { quizId, userId, username } = req.body;

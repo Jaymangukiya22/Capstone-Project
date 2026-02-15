@@ -263,11 +263,49 @@ const FriendMatchInterface: React.FC = () => {
     window.addEventListener('online', handleBrowserOnline)
     window.addEventListener('offline', handleBrowserOffline)
 
+    const handleTabClosing = () => {
+      try {
+        let effectiveMatchId = matchId
+        if (!effectiveMatchId) {
+          try {
+            const stored = sessionStorage.getItem('friendMatch')
+            if (stored) {
+              const parsed = JSON.parse(stored)
+              if (typeof parsed?.matchId === 'string' && parsed.matchId.length > 0) {
+                effectiveMatchId = parsed.matchId
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!effectiveMatchId) return
+        gameWebSocket.send('client_closing', { matchId: effectiveMatchId })
+      } catch {
+        // ignore
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleTabClosing()
+      }
+    }
+
+    window.addEventListener('beforeunload', handleTabClosing)
+    window.addEventListener('pagehide', handleTabClosing)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       gameWebSocket.off('connect', onConnect)
       gameWebSocket.off('disconnect', onDisconnect)
       window.removeEventListener('online', handleBrowserOnline)
       window.removeEventListener('offline', handleBrowserOffline)
+
+      window.removeEventListener('beforeunload', handleTabClosing)
+      window.removeEventListener('pagehide', handleTabClosing)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [reconnectSecondsLeft, autoReconnectEnabled, isConnected, matchId])
 

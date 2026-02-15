@@ -19,6 +19,7 @@ import { AuthTestPage } from "@/pages/auth-test"
 import React from 'react';
 import { NavigationGuardTest } from "@/components/test/NavigationGuardTest"
 import { StudentQuizContent } from "@/components/student/StudentQuizContent"
+import { usePendingMatchCheck } from "@/components/student/PendingMatchModal"
 
 // Import authentication components
 import { AuthProvider } from "@/contexts/AuthContext"
@@ -84,6 +85,9 @@ function PublicPage({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
+  // Check for pending matches on app load
+  const { PendingMatchModal } = usePendingMatchCheck();
+  
   // Simple routing based on current path
   const currentPath = window.location.pathname;
   
@@ -206,6 +210,9 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Pending Match Modal - shown when user has disconnected match */}
+      {PendingMatchModal}
+      
       {isFullScreenPage ? (
         // Full-screen pages without sidebar/topbar (quiz pages and login)
         renderPage()

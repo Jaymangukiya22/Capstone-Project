@@ -36,7 +36,8 @@
     "docker:verify": "node pre-build.js",
     "verify": "node pre-build.js",
     "docs:typedoc": "typedoc --options typedoc.json",
-    "docs:generate": "npm run docs:typedoc"
+    "docs:generate": "npm run docs:typedoc",
+    "diagrams:export": "node scripts/render-mermaid-diagrams.js"
   },
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.64.1",
@@ -76,6 +77,7 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.4.2",
     "@docusaurus/core": "^3.8.1",
     "@docusaurus/preset-classic": "^3.8.1",
     "@docusaurus/theme-classic": "^3.8.1",

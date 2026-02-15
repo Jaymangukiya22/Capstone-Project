@@ -137,8 +137,8 @@ const configs = {
     MATCHSERVER_MEMORY_LIMIT: '2G',
     
     // Performance (high scale)
-    MIN_WORKERS: '4',
-    MAX_WORKERS: '8',
+    MIN_WORKERS: '20',
+    MAX_WORKERS: '40',
     DB_POOL_MAX: '50',
     REDIS_POOL_MAX: '30',
     RATE_LIMIT_MAX_REQUESTS: '2000',

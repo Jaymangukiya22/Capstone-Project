@@ -10,8 +10,8 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
     if (!req.user) {
       res.status(401).json({
         success: false,
-        error: 'Unauthorized',
-        message: 'Authentication required'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
       });
       return;
     }
@@ -21,8 +21,8 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
     if (!allowedRoles.includes(userRole)) {
       res.status(403).json({
         success: false,
-        error: 'Forbidden',
-        message: 'You do not have permission to access this resource'
+        error: 'FORBIDDEN',
+        message: 'You do not have permission to perform this action.'
       });
       return;
     }

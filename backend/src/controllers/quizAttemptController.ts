@@ -15,12 +15,21 @@ export const startQuizAttempt = async (req: AuthenticatedRequest, res: Response)
       if (!firstUser) {
         res.status(400).json({
           success: false,
-          error: 'No users found',
-          message: 'Please ensure the database is properly seeded with users'
+          error: 'USER_NOT_AVAILABLE',
+          message: 'No user account is available to start a quiz. Please log in.'
         });
         return;
       }
       userId = firstUser.id;
+    }
+
+    if (!quizId) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Please select a quiz to start.'
+      });
+      return;
     }
 
     const attempt = await quizAttemptService.startQuizAttempt({
@@ -37,8 +46,8 @@ export const startQuizAttempt = async (req: AuthenticatedRequest, res: Response)
     logError('Error starting quiz attempt', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to start quiz attempt',
-      message: error instanceof Error ? error.message : 'An error occurred while starting the quiz'
+      error: 'QUIZ_ATTEMPT_START_FAILED',
+      message: 'Could not start the quiz right now. Please try again.'
     });
   }
 };
@@ -51,8 +60,17 @@ export const submitAnswer = async (req: AuthenticatedRequest, res: Response): Pr
     if (isNaN(attemptId)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid attempt ID',
-        message: 'Attempt ID must be a number'
+        error: 'VALIDATION_ERROR',
+        message: 'Attempt ID must be a number.'
+      });
+      return;
+    }
+
+    if (!questionId || !Array.isArray(selectedOptions)) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Please select an answer before submitting.'
       });
       return;
     }
@@ -73,8 +91,8 @@ export const submitAnswer = async (req: AuthenticatedRequest, res: Response): Pr
     logError('Error submitting answer', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to submit answer',
-      message: error instanceof Error ? error.message : 'An error occurred while submitting the answer'
+      error: 'ANSWER_SUBMIT_FAILED',
+      message: 'Could not submit your answer right now. Please try again.'
     });
   }
 };
@@ -91,8 +109,8 @@ export const completeQuizAttempt = async (req: AuthenticatedRequest, res: Respon
       if (!firstUser) {
         res.status(400).json({
           success: false,
-          error: 'No users found',
-          message: 'Please ensure the database is properly seeded with users'
+          error: 'USER_NOT_AVAILABLE',
+          message: 'No user account is available to complete the quiz. Please log in.'
         });
         return;
       }
@@ -102,8 +120,8 @@ export const completeQuizAttempt = async (req: AuthenticatedRequest, res: Respon
     if (isNaN(attemptId)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid attempt ID',
-        message: 'Attempt ID must be a number'
+        error: 'VALIDATION_ERROR',
+        message: 'Attempt ID must be a number.'
       });
       return;
     }
@@ -122,8 +140,8 @@ export const completeQuizAttempt = async (req: AuthenticatedRequest, res: Respon
     logError('Error completing quiz attempt', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to complete quiz',
-      message: error instanceof Error ? error.message : 'An error occurred while completing the quiz'
+      error: 'QUIZ_ATTEMPT_COMPLETE_FAILED',
+      message: 'Could not complete the quiz right now. Please try again.'
     });
   }
 };
@@ -136,8 +154,8 @@ export const getAttemptById = async (req: AuthenticatedRequest, res: Response): 
     if (isNaN(id)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid attempt ID',
-        message: 'Attempt ID must be a number'
+        error: 'VALIDATION_ERROR',
+        message: 'Attempt ID must be a number.'
       });
       return;
     }
@@ -146,8 +164,8 @@ export const getAttemptById = async (req: AuthenticatedRequest, res: Response): 
     if (!attempt) {
       res.status(404).json({
         success: false,
-        error: 'Attempt not found',
-        message: 'Quiz attempt not found or access denied'
+        error: 'ATTEMPT_NOT_FOUND',
+        message: 'Quiz attempt not found or access denied.'
       });
       return;
     }
@@ -161,8 +179,8 @@ export const getAttemptById = async (req: AuthenticatedRequest, res: Response): 
     logError('Error fetching quiz attempt', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch quiz attempt',
-      message: 'An error occurred while fetching the quiz attempt'
+      error: 'QUIZ_ATTEMPT_FETCH_FAILED',
+      message: 'Could not load this quiz attempt right now. Please try again.'
     });
   }
 };
@@ -174,8 +192,8 @@ export const getUserAttempts = async (req: AuthenticatedRequest, res: Response):
     if (!userId) {
       res.status(401).json({
         success: false,
-        error: 'Unauthorized',
-        message: 'User not authenticated'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to view your attempts.'
       });
       return;
     }
@@ -194,8 +212,8 @@ export const getUserAttempts = async (req: AuthenticatedRequest, res: Response):
     logError('Error fetching user attempts', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch attempts',
-      message: 'An error occurred while fetching user attempts'
+      error: 'USER_ATTEMPTS_FETCH_FAILED',
+      message: 'Could not load your attempts right now. Please try again.'
     });
   }
 };
@@ -216,8 +234,8 @@ export const getLeaderboard = async (req: AuthenticatedRequest, res: Response): 
     logError('Error fetching leaderboard', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leaderboard',
-      message: 'An error occurred while fetching the leaderboard'
+      error: 'LEADERBOARD_FETCH_FAILED',
+      message: 'Could not load the leaderboard right now. Please try again.'
     });
   }
 };
@@ -236,8 +254,8 @@ export const getUserStats = async (req: AuthenticatedRequest, res: Response): Pr
     logError('Error fetching user stats', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch user stats',
-      message: 'An error occurred while fetching user statistics'
+      error: 'USER_STATS_FETCH_FAILED',
+      message: 'Could not load your statistics right now. Please try again.'
     });
   }
 };

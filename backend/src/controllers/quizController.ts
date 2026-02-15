@@ -32,14 +32,15 @@ export const createQuiz = async (req: AuthenticatedRequest, res: Response): Prom
     if (error instanceof Error && error.message.includes('Category with ID')) {
       res.status(404).json({
         success: false,
-        error: error.message
+        error: 'CATEGORY_NOT_FOUND',
+        message: 'Selected category was not found. Please choose a different category.'
       });
       return;
     }
     logError('Error creating quiz', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create quiz',
+      error: 'QUIZ_CREATE_FAILED',
       message: 'An error occurred while creating the quiz'
     });
   }
@@ -87,7 +88,8 @@ export const searchQuizzes = async (req: AuthenticatedRequest, res: Response): P
     if (req.path === '/search' && (!q || q.trim().length === 0)) {
       res.status(400).json({
         success: false,
-        error: 'Search query required'
+        error: 'VALIDATION_ERROR',
+        message: 'Please enter a search term.'
       });
       return;
     }
@@ -170,7 +172,7 @@ export const searchQuizzes = async (req: AuthenticatedRequest, res: Response): P
     logError('Error searching quizzes', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to search quizzes',
+      error: 'QUIZ_SEARCH_FAILED',
       message: 'An error occurred while searching quizzes'
     });
   }
@@ -240,16 +242,16 @@ export const getQuizForPlay = async (req: AuthenticatedRequest, res: Response): 
       const id = parseInt(req.params.id);
       res.status(404).json({
         success: false,
-        error: 'Quiz not found',
-        message: `Quiz with ID ${id} does not exist`
+        error: 'QUIZ_NOT_FOUND',
+        message: `Quiz with ID ${id} does not exist.`
       });
       return;
     }
     logError('Error fetching quiz for play', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch quiz',
-      message: 'An error occurred while fetching the quiz'
+      error: 'QUIZ_FETCH_FAILED',
+      message: 'Could not load this quiz right now. Please try again.'
     });
   }
 };
@@ -260,8 +262,8 @@ export const updateQuiz = async (req: AuthenticatedRequest, res: Response): Prom
     if (isNaN(id)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid quiz ID',
-        message: 'Quiz ID must be a number'
+        error: 'VALIDATION_ERROR',
+        message: 'Quiz ID must be a number.'
       });
       return;
     }
@@ -278,16 +280,16 @@ export const updateQuiz = async (req: AuthenticatedRequest, res: Response): Prom
       const id = parseInt(req.params.id);
       res.status(404).json({
         success: false,
-        error: 'Quiz not found',
-        message: `Quiz with ID ${id} does not exist`
+        error: 'QUIZ_NOT_FOUND',
+        message: `Quiz with ID ${id} does not exist.`
       });
       return;
     }
     logError('Error updating quiz', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update quiz',
-      message: 'An error occurred while updating the quiz'
+      error: 'QUIZ_UPDATE_FAILED',
+      message: 'Could not update the quiz right now. Please try again.'
     });
   }
 };
@@ -298,8 +300,8 @@ export const deleteQuiz = async (req: AuthenticatedRequest, res: Response): Prom
     if (isNaN(id)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid quiz ID',
-        message: 'Quiz ID must be a number'
+        error: 'VALIDATION_ERROR',
+        message: 'Quiz ID must be a number.'
       });
       return;
     }
@@ -315,16 +317,16 @@ export const deleteQuiz = async (req: AuthenticatedRequest, res: Response): Prom
       const id = parseInt(req.params.id);
       res.status(404).json({
         success: false,
-        error: 'Quiz not found',
-        message: `Quiz with ID ${id} does not exist`
+        error: 'QUIZ_NOT_FOUND',
+        message: `Quiz with ID ${id} does not exist.`
       });
       return;
     }
     logError('Error deleting quiz', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete quiz',
-      message: 'An error occurred while deleting the quiz'
+      error: 'QUIZ_DELETE_FAILED',
+      message: 'Could not delete the quiz right now. Please try again.'
     });
   }
 };
@@ -335,8 +337,8 @@ export const getQuizStats = async (req: AuthenticatedRequest, res: Response): Pr
     if (isNaN(id)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid quiz ID',
-        message: 'Quiz ID must be a number'
+        error: 'VALIDATION_ERROR',
+        message: 'Quiz ID must be a number.'
       });
       return;
     }
@@ -353,16 +355,16 @@ export const getQuizStats = async (req: AuthenticatedRequest, res: Response): Pr
       const id = parseInt(req.params.id);
       res.status(404).json({
         success: false,
-        error: 'Quiz not found',
-        message: `Quiz with ID ${id} does not exist`
+        error: 'QUIZ_NOT_FOUND',
+        message: `Quiz with ID ${id} does not exist.`
       });
       return;
     }
     logError('Error fetching quiz stats', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch quiz stats',
-      message: 'An error occurred while fetching quiz statistics'
+      error: 'QUIZ_STATS_FETCH_FAILED',
+      message: 'Could not load quiz statistics right now. Please try again.'
     });
   }
 };
@@ -381,8 +383,8 @@ export const getPopularQuizzes = async (req: AuthenticatedRequest, res: Response
     logError('Error fetching popular quizzes', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch popular quizzes',
-      message: 'An error occurred while fetching popular quizzes'
+      error: 'POPULAR_QUIZZES_FETCH_FAILED',
+      message: 'Could not load popular quizzes right now. Please try again.'
     });
   }
 };

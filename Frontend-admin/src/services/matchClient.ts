@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { logInfo, logError, logWarn } from '../utils/logger';
+import { toast } from '../lib/toast';
 
 // Socket Event Types - Import from shared types
 export interface SocketEventPayloads {
@@ -20,6 +21,7 @@ export interface SocketEventPayloads {
   authentication_error: {
     success: false;
     error: string;
+    message?: string;
     code: 'INVALID_USER' | 'INVALID_TOKEN' | 'USER_BANNED';
   };
 
@@ -345,6 +347,12 @@ export class MatchClient {
       this.socket.on('connect_error', (error) => {
         logError('WebSocket connection error:', error);
         this.isConnected = false;
+
+        toast({
+          title: 'Connection Error',
+          description: 'Failed to connect to the match server. Please try again.',
+          variant: 'destructive',
+        });
         
         if (this.reconnectAttempts === 0) {
           reject(error);
@@ -412,8 +420,14 @@ export class MatchClient {
       };
 
       const onAuthError = (data: SocketEventPayloads['authentication_error']) => {
-        logError('Authentication error:', data.error);
-        reject(new Error(data.error));
+        const friendlyMessage = data.message || data.error || 'Authentication failed';
+        logError('Authentication error:', friendlyMessage);
+        toast({
+          title: 'Error',
+          description: friendlyMessage,
+          variant: 'destructive',
+        });
+        reject(new Error(friendlyMessage));
         cleanup();
       };
 

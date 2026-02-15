@@ -16,6 +16,10 @@ dotenv.config();
 
 const MASTER_PORT = parseInt(process.env.MASTER_PORT || '3001', 10);
 
+const createSocketErrorPayload = (error: string, message: string) => {
+  return { success: false, error, message };
+};
+
 // Initialize Redis and start master
 (async () => {
   try {
@@ -103,8 +107,8 @@ async function startMaster() {
   };
 
   const emitMatchmakingErrorToBoth = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry, message: string) => {
-    io.to(a.socketId).emit('matchmaking_error', { message });
-    io.to(b.socketId).emit('matchmaking_error', { message });
+    io.to(a.socketId).emit('matchmaking_error', createSocketErrorPayload('MATCHMAKING_FAILED', message));
+    io.to(b.socketId).emit('matchmaking_error', createSocketErrorPayload('MATCHMAKING_FAILED', message));
   };
 
   const isCompatible = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
@@ -342,7 +346,8 @@ ${workers.map((w) =>
       if (!quizId || !userId) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: quizId, userId'
+          error: 'MISSING_REQUIRED_FIELDS',
+          message: 'Missing required fields: quizId, userId'
         });
       }
 
@@ -373,7 +378,8 @@ ${workers.map((w) =>
       logError('Failed to create friend match', error as Error);
       res.status(500).json({
         success: false,
-        error: 'Failed to create match'
+        error: 'FRIEND_MATCH_CREATE_FAILED',
+        message: 'Failed to create match'
       });
     }
     return;
@@ -388,7 +394,8 @@ ${workers.map((w) =>
       if (!matchId) {
         return res.status(404).json({
           success: false,
-          error: 'Match not found'
+          error: 'INVALID_JOIN_CODE',
+          message: 'Match not found'
         });
       }
 
@@ -396,7 +403,8 @@ ${workers.map((w) =>
       if (!matchData) {
         return res.status(404).json({
           success: false,
-          error: 'Match data not found'
+          error: 'MATCH_NOT_FOUND',
+          message: 'Match data not found'
         });
       }
 
@@ -409,7 +417,8 @@ ${workers.map((w) =>
       logError('Failed to get match by code', error as Error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get match'
+        error: 'MATCH_FETCH_FAILED',
+        message: 'Could not load match details right now. Please try again.'
       });
     }
     return;
@@ -443,7 +452,10 @@ ${workers.map((w) =>
 
         logInfo('User authenticated', { userId, username, socketId: socket.id });
       } catch (error) {
-        socket.emit('auth_error', { message: 'Authentication failed' });
+        socket.emit(
+          'auth_error',
+          createSocketErrorPayload('AUTH_FAILED', 'Authentication failed')
+        );
         logError('Authentication error', error as Error);
       }
     });
@@ -451,7 +463,10 @@ ${workers.map((w) =>
     socket.on('start_auto_matchmaking', async (data: { categoryId: number; quizId?: number }) => {
       try {
         if (!socket.data.userId) {
-          socket.emit('error', { message: 'Not authenticated' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+          );
           return;
         }
 
@@ -459,7 +474,13 @@ ${workers.map((w) =>
         const quizId = data.quizId ? Number(data.quizId) : undefined;
 
         if (!categoryId || Number.isNaN(categoryId)) {
-          socket.emit('matchmaking_error', { message: 'categoryId is required' });
+          socket.emit(
+            'matchmaking_error',
+            createSocketErrorPayload(
+              'VALIDATION_ERROR',
+              'Please select a category to start matchmaking.'
+            )
+          );
           return;
         }
 
@@ -496,9 +517,13 @@ ${workers.map((w) =>
         entry.timeoutTimer = setTimeout(() => {
           const current = autoMatchQueueByUserId.get(entry.userId);
           if (!current) return;
-          io.to(current.socketId).emit('auto_match_timeout', {
-            message: 'No match found within 5 minutes',
-          });
+          io.to(current.socketId).emit(
+            'auto_match_timeout',
+            createSocketErrorPayload(
+              'MATCHMAKING_TIMEOUT',
+              'No match found within 5 minutes'
+            )
+          );
           cleanupAutoQueueEntry(entry.userId);
         }, AUTO_MATCH_TIMEOUT_MS);
 
@@ -511,7 +536,13 @@ ${workers.map((w) =>
         await tryFindMatchFor(entry);
       } catch (error) {
         logError('start_auto_matchmaking error', error as Error);
-        socket.emit('matchmaking_error', { message: 'Failed to start matchmaking' });
+        socket.emit(
+          'matchmaking_error',
+          createSocketErrorPayload(
+            'MATCHMAKING_START_FAILED',
+            'Could not start matchmaking right now. Please try again.'
+          )
+        );
       }
     });
 
@@ -525,7 +556,10 @@ ${workers.map((w) =>
     socket.on('create_friend_match', async (data) => {
       try {
         if (!socket.data.userId) {
-          return socket.emit('error', { message: 'Not authenticated' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+          );
         }
 
         const { quizId } = data;
@@ -551,7 +585,13 @@ ${workers.map((w) =>
         logInfo('Friend match created (worker will be assigned on first join)', { matchId, joinCode, quizId, creatorId: socket.data.userId });
       } catch (error) {
         logError('Create match error', error as Error);
-        socket.emit('error', { message: 'Failed to create match' });
+        socket.emit(
+          'error',
+          createSocketErrorPayload(
+            'FRIEND_MATCH_CREATE_FAILED',
+            'Could not create a friend match right now. Please try again.'
+          )
+        );
       }
       return;
     });
@@ -560,19 +600,34 @@ ${workers.map((w) =>
     socket.on('join_match', async (data) => {
       try {
         if (!socket.data.userId) {
-          return socket.emit('error', { message: 'Not authenticated' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+          );
         }
 
         const { joinCode } = data;
         const matchId = await redisClient.get(`joincode:${joinCode.toUpperCase()}`);
 
         if (!matchId) {
-          return socket.emit('error', { message: 'Invalid join code' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'INVALID_JOIN_CODE',
+              'Join code is invalid or expired. Please check and try again.'
+            )
+          );
         }
 
         const matchData = await redisClient.get(`match:${matchId}`);
         if (!matchData) {
-          return socket.emit('error', { message: 'Match not found' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_NOT_FOUND',
+              'Match not found. It may have ended or expired.'
+            )
+          );
         }
 
         // Assign worker if not already assigned
@@ -584,9 +639,21 @@ ${workers.map((w) =>
           workerId = await workerPool.assignMatch(matchId);
           if (!workerId) {
             logError('No available workers', new Error(`Cannot assign match ${matchId}`));
-            socket.emit('error', { message: 'No available workers' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
             // Broadcast to all clients in match room
-            io.to(matchId).emit('error', { message: 'No available workers' });
+            io.to(matchId).emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
             return;
           }
           // Update Redis with assigned worker
@@ -606,9 +673,21 @@ ${workers.map((w) =>
 
         if (!sent) {
           logError('Failed to send join request to worker', new Error(`Worker ${workerId} unavailable for match ${matchId}`));
-          socket.emit('error', { message: 'Match worker not available' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_WORKER_UNAVAILABLE',
+              'Match worker is not available right now. Please try again.'
+            )
+          );
           // Broadcast to all clients in match room
-          io.to(matchId).emit('error', { message: 'Match worker not available' });
+          io.to(matchId).emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_WORKER_UNAVAILABLE',
+              'Match worker is not available right now. Please try again.'
+            )
+          );
           return;
         }
 
@@ -618,7 +697,13 @@ ${workers.map((w) =>
         logInfo('Player joining match on worker', { matchId, workerId, userId: socket.data.userId });
       } catch (error) {
         logError('Join match error', error as Error);
-        socket.emit('error', { message: 'Failed to join match' });
+        socket.emit(
+          'error',
+          createSocketErrorPayload(
+            'MATCH_JOIN_FAILED',
+            'Could not join match right now. Please try again.'
+          )
+        );
       }
       return;
     });
@@ -627,7 +712,10 @@ ${workers.map((w) =>
     socket.on('join_match_by_code', async (data) => {
       try {
         if (!socket.data.userId) {
-          return socket.emit('error', { message: 'Not authenticated' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+          );
         }
 
         const { joinCode } = data;
@@ -637,13 +725,25 @@ ${workers.map((w) =>
 
         if (!matchId) {
           logInfo('Match not found for join code', { joinCode });
-          return socket.emit('error', { message: 'Invalid join code' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'INVALID_JOIN_CODE',
+              'Join code is invalid or expired. Please check and try again.'
+            )
+          );
         }
 
         const matchData = await redisClient.get(`match:${matchId}`);
         if (!matchData) {
           logInfo('Match data not found in Redis', { matchId });
-          return socket.emit('error', { message: 'Match not found' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_NOT_FOUND',
+              'Match not found. It may have ended or expired.'
+            )
+          );
         }
 
         // Assign worker if not already assigned
@@ -655,9 +755,21 @@ ${workers.map((w) =>
           workerId = await workerPool.assignMatch(matchId);
           if (!workerId) {
             logError('No available workers', new Error(`Cannot assign match ${matchId}`));
-            socket.emit('error', { message: 'No available workers' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
             // Broadcast to all clients in match room
-            io.to(matchId).emit('error', { message: 'No available workers' });
+            io.to(matchId).emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
             return;
           }
           // Update Redis with assigned worker
@@ -679,9 +791,21 @@ ${workers.map((w) =>
 
         if (!sent) {
           logError('Failed to send join request to worker', new Error(`Worker ${workerId} unavailable for match ${matchId}`));
-          socket.emit('error', { message: 'Match worker not available' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_WORKER_UNAVAILABLE',
+              'Match worker is not available right now. Please try again.'
+            )
+          );
           // Broadcast to all clients in match room
-          io.to(matchId).emit('error', { message: 'Match worker not available' });
+          io.to(matchId).emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_WORKER_UNAVAILABLE',
+              'Match worker is not available right now. Please try again.'
+            )
+          );
           return;
         }
 
@@ -700,7 +824,13 @@ ${workers.map((w) =>
         logInfo('Player joining match on worker', { matchId, workerId, userId: socket.data.userId, joinCode });
       } catch (error) {
         logError('Join match by code error', error as Error);
-        socket.emit('error', { message: 'Failed to join match' });
+        socket.emit(
+          'error',
+          createSocketErrorPayload(
+            'MATCH_JOIN_FAILED',
+            'Could not join match right now. Please try again.'
+          )
+        );
       }
       return;
     });
@@ -709,18 +839,33 @@ ${workers.map((w) =>
     socket.on('connect_to_match', async (data) => {
       try {
         if (!socket.data.userId) {
-          return socket.emit('error', { message: 'Not authenticated' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+          );
         }
 
         const { matchId } = data;
         if (!matchId) {
-          return socket.emit('error', { message: 'Match ID required' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'VALIDATION_ERROR',
+              'Match ID is required to connect.'
+            )
+          );
         }
 
         const matchData = await redisClient.get(`match:${matchId}`);
         if (!matchData) {
           logInfo('Match not found for connect_to_match', { matchId });
-          return socket.emit('error', { message: 'Match not found' });
+          return socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_NOT_FOUND',
+              'Match not found. It may have ended or expired.'
+            )
+          );
         }
 
         // Assign worker if not already assigned
@@ -732,8 +877,20 @@ ${workers.map((w) =>
           workerId = await workerPool.assignMatch(matchId);
           if (!workerId) {
             logError('No available workers', new Error(`Cannot assign match ${matchId}`));
-            socket.emit('error', { message: 'No available workers' });
-            io.to(matchId).emit('error', { message: 'No available workers' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
+            io.to(matchId).emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
             return;
           }
           // Update Redis with assigned worker IMMEDIATELY
@@ -757,8 +914,20 @@ ${workers.map((w) =>
 
         if (!sent) {
           logError('Failed to send connect request to worker', new Error(`Worker ${workerId} unavailable for match ${matchId}`));
-          socket.emit('error', { message: 'Match worker not available' });
-          io.to(matchId).emit('error', { message: 'Match worker not available' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_WORKER_UNAVAILABLE',
+              'Match worker is not available right now. Please try again.'
+            )
+          );
+          io.to(matchId).emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_WORKER_UNAVAILABLE',
+              'Match worker is not available right now. Please try again.'
+            )
+          );
           return;
         }
 
@@ -777,7 +946,13 @@ ${workers.map((w) =>
         logInfo('Player connecting to match on worker', { matchId, workerId, userId: socket.data.userId });
       } catch (error) {
         logError('Connect to match error', error as Error);
-        socket.emit('error', { message: 'Failed to connect to match' });
+        socket.emit(
+          'error',
+          createSocketErrorPayload(
+            'MATCH_CONNECT_FAILED',
+            'Could not connect to the match right now. Please try again.'
+          )
+        );
       }
       return;
     });
@@ -795,12 +970,24 @@ ${workers.map((w) =>
         try {
           const matchId = data.matchId || await workerPool.getUserMatch(socket.data.userId);
           if (!matchId) {
-            return socket.emit('error', { message: 'Not in any match' });
+            return socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_NOT_FOUND',
+                'You are not currently in a match.'
+              )
+            );
           }
 
           const matchData = await redisClient.get(`match:${matchId}`);
           if (!matchData) {
-            return socket.emit('error', { message: 'Match not found' });
+            return socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_NOT_FOUND',
+                'Match not found. It may have ended or expired.'
+              )
+            );
           }
 
           const match = JSON.parse(matchData);
@@ -811,8 +998,20 @@ ${workers.map((w) =>
             workerId = await workerPool.assignMatch(matchId);
             if (!workerId) {
               logError('No available workers', new Error(`Cannot assign match ${matchId}`));
-              socket.emit('error', { message: 'No available workers' });
-              io.to(matchId).emit('error', { message: 'No available workers' });
+              socket.emit(
+                'error',
+                createSocketErrorPayload(
+                  'NO_AVAILABLE_WORKERS',
+                  'No match workers are available right now. Please try again.'
+                )
+              );
+              io.to(matchId).emit(
+                'error',
+                createSocketErrorPayload(
+                  'NO_AVAILABLE_WORKERS',
+                  'No match workers are available right now. Please try again.'
+                )
+              );
               return;
             }
             // Update Redis with assigned worker
@@ -832,7 +1031,13 @@ ${workers.map((w) =>
 
           if (!sent) {
             logError('Failed to send event to worker', new Error(`Worker ${workerId} unavailable for event ${eventName}`));
-            return socket.emit('error', { message: 'Match worker not available' });
+            return socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_WORKER_UNAVAILABLE',
+                'Match worker is not available right now. Please try again.'
+              )
+            );
           }
         } catch (error) {
           logError(`Error forwarding ${eventName}`, error as Error);

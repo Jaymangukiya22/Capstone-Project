@@ -20,7 +20,8 @@ export const getAIOpponents = async (req: AuthenticatedRequest, res: Response) =
     logError('Error fetching AI opponents', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch AI opponents'
+      error: 'AI_OPPONENTS_FETCH_FAILED',
+      message: 'Could not load AI opponents right now. Please try again.'
     });
   }
 };
@@ -36,7 +37,8 @@ export const createSoloMatch = async (req: AuthenticatedRequest, res: Response) 
     if (!quizId) {
       res.status(400).json({
         success: false,
-        error: 'Quiz ID is required'
+        error: 'VALIDATION_ERROR',
+        message: 'Please select a quiz to start a match.'
       });
       return;
     }
@@ -56,7 +58,8 @@ export const createSoloMatch = async (req: AuthenticatedRequest, res: Response) 
     logError('Error creating solo match', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create solo match'
+      error: 'SOLO_MATCH_CREATE_FAILED',
+      message: 'Could not start a solo match right now. Please try again.'
     });
   }
 };
@@ -72,7 +75,8 @@ export const createMultiplayerMatch = async (req: AuthenticatedRequest, res: Res
     if (!quizId) {
       res.status(400).json({
         success: false,
-        error: 'Quiz ID is required'
+        error: 'VALIDATION_ERROR',
+        message: 'Please select a quiz to start a match.'
       });
       return;
     }
@@ -92,7 +96,8 @@ export const createMultiplayerMatch = async (req: AuthenticatedRequest, res: Res
     logError('Error creating multiplayer match', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create multiplayer match'
+      error: 'MULTIPLAYER_MATCH_CREATE_FAILED',
+      message: 'Could not start a multiplayer match right now. Please try again.'
     });
   }
 };
@@ -108,7 +113,8 @@ export const joinMatch = async (req: AuthenticatedRequest, res: Response) => {
     if (!matchId) {
       res.status(400).json({
         success: false,
-        error: 'Match ID is required'
+        error: 'VALIDATION_ERROR',
+        message: 'Match ID is required.'
       });
       return;
     }
@@ -118,7 +124,8 @@ export const joinMatch = async (req: AuthenticatedRequest, res: Response) => {
     if (!success) {
       res.status(400).json({
         success: false,
-        error: 'Match not found, full, or already started'
+        error: 'MATCH_JOIN_FAILED',
+        message: 'Could not join match. It may be full, started, or no longer available.'
       });
       return;
     }
@@ -132,7 +139,8 @@ export const joinMatch = async (req: AuthenticatedRequest, res: Response) => {
     logError('Error joining match', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to join match'
+      error: 'MATCH_JOIN_FAILED',
+      message: 'Could not join match right now. Please try again.'
     });
   }
 };
@@ -147,7 +155,8 @@ export const getMatch = async (req: AuthenticatedRequest, res: Response) => {
     if (!matchId) {
       res.status(400).json({
         success: false,
-        error: 'Match ID is required'
+        error: 'VALIDATION_ERROR',
+        message: 'Match ID is required.'
       });
       return;
     }
@@ -157,7 +166,8 @@ export const getMatch = async (req: AuthenticatedRequest, res: Response) => {
     if (!match) {
       res.status(404).json({
         success: false,
-        error: 'Match not found'
+        error: 'MATCH_NOT_FOUND',
+        message: 'Match not found.'
       });
       return;
     }
@@ -171,7 +181,8 @@ export const getMatch = async (req: AuthenticatedRequest, res: Response) => {
     logError('Error fetching match details', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch match details'
+      error: 'MATCH_DETAILS_FETCH_FAILED',
+      message: 'Could not load match details right now. Please try again.'
     });
   }
 };
@@ -192,7 +203,8 @@ export const getAvailableMatches = async (req: AuthenticatedRequest, res: Respon
     logError('Error fetching available matches', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch available matches'
+      error: 'AVAILABLE_MATCHES_FETCH_FAILED',
+      message: 'Could not load available matches right now. Please try again.'
     });
   }
 };
@@ -221,7 +233,8 @@ export const getMatchHistory = async (req: AuthenticatedRequest, res: Response) 
     logError('Error fetching match history', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch match history'
+      error: 'MATCH_HISTORY_FETCH_FAILED',
+      message: 'Could not load match history right now. Please try again.'
     });
   }
 };

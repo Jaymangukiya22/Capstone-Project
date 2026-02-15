@@ -52,8 +52,8 @@ export class AdminController {
       if (isNaN(userId)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid user ID',
-          message: 'User ID must be a number'
+          error: 'VALIDATION_ERROR',
+          message: 'User ID must be a number.'
         });
         return;
       }
@@ -62,8 +62,8 @@ export class AdminController {
       if (!user) {
         res.status(404).json({
           success: false,
-          error: 'User not found',
-          message: `User with ID ${userId} does not exist`
+          error: 'USER_NOT_FOUND',
+          message: `User with ID ${userId} does not exist.`
         });
         return;
       }
@@ -91,8 +91,8 @@ export class AdminController {
       if (isNaN(userId)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid user ID',
-          message: 'User ID must be a number'
+          error: 'VALIDATION_ERROR',
+          message: 'User ID must be a number.'
         });
         return;
       }
@@ -101,8 +101,8 @@ export class AdminController {
       if (!user) {
         res.status(404).json({
           success: false,
-          error: 'User not found',
-          message: `User with ID ${userId} does not exist`
+          error: 'USER_NOT_FOUND',
+          message: `User with ID ${userId} does not exist.`
         });
         return;
       }
@@ -112,8 +112,8 @@ export class AdminController {
       if (attemptCount > 0) {
         res.status(400).json({
           success: false,
-          error: 'Cannot delete user',
-          message: 'User has associated quiz attempts. Please reassign or delete attempts first.'
+          error: 'USER_DELETE_NOT_ALLOWED',
+          message: 'User has quiz attempts. Please delete attempts first.'
         });
         return;
       }

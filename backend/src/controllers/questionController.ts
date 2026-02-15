@@ -67,8 +67,9 @@ export class QuestionController {
       const quizId = parseInt(req.params.quizId);
       if (isNaN(quizId)) {
         res.status(400).json({
-          error: 'Invalid quiz ID',
-          message: 'Quiz ID must be a number'
+          success: false,
+          error: 'VALIDATION_ERROR',
+          message: 'Quiz ID must be a number.'
         });
         return;
       }
@@ -91,8 +92,9 @@ export class QuestionController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
-          error: 'Invalid question ID',
-          message: 'Question ID must be a number'
+          success: false,
+          error: 'VALIDATION_ERROR',
+          message: 'Question ID must be a number.'
         });
         return;
       }
@@ -100,8 +102,9 @@ export class QuestionController {
       const question = await questionService.getQuestionById(id);
       if (!question) {
         res.status(404).json({
-          error: 'Question not found',
-          message: `Question with ID ${id} does not exist`
+          success: false,
+          error: 'QUESTION_NOT_FOUND',
+          message: `Question with ID ${id} does not exist.`
         });
         return;
       }
@@ -151,8 +154,9 @@ export class QuestionController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
-          error: 'Invalid question ID',
-          message: 'Question ID must be a number'
+          success: false,
+          error: 'VALIDATION_ERROR',
+          message: 'Question ID must be a number.'
         });
         return;
       }
@@ -173,8 +177,9 @@ export class QuestionController {
       const quizId = parseInt(req.params.quizId);
       if (isNaN(quizId)) {
         res.status(400).json({
-          error: 'Invalid quiz ID',
-          message: 'Quiz ID must be a number'
+          success: false,
+          error: 'VALIDATION_ERROR',
+          message: 'Quiz ID must be a number.'
         });
         return;
       }

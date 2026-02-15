@@ -40,8 +40,8 @@ export const authenticateToken = async (
     if (!token) {
       res.status(401).json({
         success: false,
-        error: 'Access token required',
-        message: 'Please provide a valid access token'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
       });
       return;
     }
@@ -51,7 +51,8 @@ export const authenticateToken = async (
       logError('JWT_SECRET not configured', new Error('Missing JWT_SECRET'));
       res.status(500).json({
         success: false,
-        error: 'Server configuration error'
+        error: 'SERVER_CONFIG_ERROR',
+        message: 'Server configuration error. Please try again later.'
       });
       return;
     }
@@ -66,8 +67,8 @@ export const authenticateToken = async (
     if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Invalid or expired token',
-        message: 'User not found or account deactivated'
+        error: 'INVALID_TOKEN',
+        message: 'Your session has expired. Please log in again.'
       });
       return;
     }
@@ -78,8 +79,8 @@ export const authenticateToken = async (
     logError('Authentication error', error as Error);
     res.status(401).json({
       success: false,
-      error: 'Invalid token',
-      message: 'Token verification failed'
+      error: 'INVALID_TOKEN',
+      message: 'Your session has expired. Please log in again.'
     });
   }
 };
@@ -89,7 +90,8 @@ export const requireRole = (roles: UserRole[]) => {
     if (!req.user) {
       res.status(401).json({
         success: false,
-        error: 'Authentication required'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
       });
       return;
     }
@@ -97,8 +99,8 @@ export const requireRole = (roles: UserRole[]) => {
     if (!roles.includes(req.user.role)) {
       res.status(403).json({
         success: false,
-        error: 'Insufficient permissions',
-        message: `Required role: ${roles.join(' or ')}`
+        error: 'FORBIDDEN',
+        message: 'You do not have permission to perform this action.'
       });
       return;
     }

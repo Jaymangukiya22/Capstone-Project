@@ -169,8 +169,8 @@ export const getQuizPerformanceData = async (req: AuthenticatedRequest, res: Res
     logError('Error fetching quiz performance data', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch quiz performance data',
-      message: 'An error occurred while fetching performance data'
+      error: 'PERFORMANCE_DATA_FETCH_FAILED',
+      message: 'Could not load performance data right now. Please try again.'
     });
   }
 };
@@ -206,7 +206,8 @@ export const getStudentPerformance = async (req: AuthenticatedRequest, res: Resp
     if (!student) {
       res.status(404).json({
         success: false,
-        error: 'Student not found'
+        error: 'STUDENT_NOT_FOUND',
+        message: 'Student not found.'
       });
       return;
     }

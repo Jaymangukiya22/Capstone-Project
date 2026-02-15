@@ -70,6 +70,27 @@ console.log('🔌 WebSocket URL:', WEBSOCKET_URL);
 
 // API client for making HTTP requests
 import axios from 'axios';
+import { toast } from '../lib/toast';
+
+const getApiErrorMessage = (error: any): string => {
+  const dataMessage = error?.response?.data?.message;
+  if (typeof dataMessage === 'string' && dataMessage.length > 0) return dataMessage;
+
+  const dataError = error?.response?.data?.error;
+  if (typeof dataError === 'string' && dataError.length > 0) return dataError;
+
+  const status = error?.response?.status;
+  if (status === 0 || status === undefined) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  if (status >= 500) return 'Server error. Please try again in a moment.';
+  if (status === 404) return 'Requested resource was not found.';
+  if (status === 403) return 'You do not have permission to perform this action.';
+
+  const fallback = error?.message;
+  if (typeof fallback === 'string' && fallback.length > 0) return fallback;
+  return 'Request failed. Please try again.';
+};
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -101,6 +122,8 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const friendlyMessage = getApiErrorMessage(error);
+
     if (error.response?.status === 401) {
       // Unauthorized - clear all auth data and redirect to login
       localStorage.removeItem('authToken');
@@ -114,6 +137,21 @@ apiClient.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+
+    if (error && typeof error === 'object') {
+      (error as any).friendlyMessage = friendlyMessage;
+    }
+
+    const shouldToast = !(error?.config as any)?.skipErrorToast;
+    const isAuthRedirect = error.response?.status === 401;
+    if (shouldToast && !isAuthRedirect) {
+      toast({
+        title: 'Error',
+        description: friendlyMessage,
+        variant: 'destructive',
+      });
+    }
+
     return Promise.reject(error);
   }
 );

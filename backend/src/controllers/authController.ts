@@ -23,7 +23,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       console.log('User already exists:', existingUser.username);
       res.status(409).json({
         success: false,
-        error: 'User with this email or username already exists'
+        error: 'USER_ALREADY_EXISTS',
+        message: 'An account with this email or username already exists. Please log in instead.'
       });
       return;
     }
@@ -109,7 +110,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!identifier || !password) {
       res.status(400).json({
         success: false,
-        error: 'validation error'
+        error: 'VALIDATION_ERROR',
+        message: 'Please enter your email/username and password.'
       });
       return;
     }
@@ -124,8 +126,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!user) {
       res.status(401).json({
         success: false,
-        error: 'Invalid credentials',
-        message: 'Email or password is incorrect'
+        error: 'USER_NOT_FOUND',
+        message: 'No account found for this email/username. Please register first.'
       });
       return;
     }
@@ -133,7 +135,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Account is inactive'
+        error: 'ACCOUNT_INACTIVE',
+        message: 'Your account is inactive. Please contact support.'
       });
       return;
     }
@@ -143,8 +146,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!isPasswordValid) {
       res.status(401).json({
         success: false,
-        error: 'Invalid credentials',
-        message: 'Email or password is incorrect'
+        error: 'INVALID_PASSWORD',
+        message: 'Incorrect password. Please try again.'
       });
       return;
     }
@@ -209,7 +212,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     if (!token) {
       res.status(401).json({
         success: false,
-        error: 'token required'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
       });
       return;
     }
@@ -218,7 +222,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     if (!jwtSecret) {
       res.status(500).json({
         success: false,
-        error: 'Server configuration error'
+        error: 'SERVER_CONFIG_ERROR',
+        message: 'Server configuration error. Please try again later.'
       });
       return;
     }
@@ -233,7 +238,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Invalid token'
+        error: 'INVALID_TOKEN',
+        message: 'Your session has expired. Please log in again.'
       });
       return;
     }
@@ -267,7 +273,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     logError('Token refresh error', error as Error);
     res.status(401).json({
       success: false,
-      error: 'Invalid token'
+      error: 'INVALID_TOKEN',
+      message: 'Your session has expired. Please log in again.'
     });
   }
 };
@@ -287,7 +294,8 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
     if (!user) {
       res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: 'USER_NOT_FOUND',
+        message: 'User not found.'
       });
       return;
     }
@@ -300,7 +308,8 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
     logError('Get profile error', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch profile'
+      error: 'PROFILE_FETCH_FAILED',
+      message: 'Could not load your profile right now. Please try again.'
     });
   }
 };
@@ -333,7 +342,8 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     logError('Update profile error', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update profile'
+      error: 'PROFILE_UPDATE_FAILED',
+      message: 'Could not update your profile right now. Please try again.'
     });
   }
 };

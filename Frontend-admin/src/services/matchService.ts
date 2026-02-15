@@ -2,6 +2,7 @@ import { apiClient, WEBSOCKET_URL } from './api'
 import { io, Socket } from 'socket.io-client'
 import { sessionManager } from '../utils/sessionManager'
 import type { MatchState } from '../utils/sessionManager'
+import { toast } from '../lib/toast'
 
 // Types for AI Opponents
 export interface AIOpponent {
@@ -327,6 +328,27 @@ export class GameWebSocket {
   private socket: Socket | null = null
   private matchId: string | null = null
   private eventHandlers: Map<string, Function[]> = new Map()
+
+  private readonly errorEventNames = new Set([
+    'error',
+    'auth_error',
+    'matchmaking_error',
+    'auto_match_timeout',
+  ])
+
+  private getSocketErrorMessage(payload: any): string {
+    const payloadMessage = payload?.message
+    if (typeof payloadMessage === 'string' && payloadMessage.length > 0) {
+      return payloadMessage
+    }
+
+    const payloadError = payload?.error
+    if (typeof payloadError === 'string' && payloadError.length > 0) {
+      return payloadError
+    }
+
+    return 'Something went wrong. Please try again.'
+  }
   public onLoadGameScene(callback: (data: any) => void) {
     // Use the generic event handler system so this works even if connect()
     // hasn't run yet. onAny() will dispatch LOAD_GAME_SCENE to this handler.
@@ -410,6 +432,11 @@ export class GameWebSocket {
 
         this.socket.on('connect_error', (error) => {
           console.error('❌ [SOCKET] Socket.IO connection error:', error)
+          toast({
+            title: 'Connection Error',
+            description: 'Failed to connect to the match server. Please try again.',
+            variant: 'destructive',
+          })
           reject(error)
         })
 
@@ -421,6 +448,18 @@ export class GameWebSocket {
         this.socket.onAny((eventName, ...args) => {
           const data = args[0] || {}
           console.log('📨 [SOCKET] Received event:', eventName, data);
+
+          if (this.errorEventNames.has(eventName)) {
+            const handlers = this.eventHandlers.get(eventName) || []
+            if (handlers.length === 0) {
+              toast({
+                title: 'Error',
+                description: this.getSocketErrorMessage(data),
+                variant: 'destructive',
+              })
+            }
+          }
+
           this.handleMessage(eventName, data)
         })
 

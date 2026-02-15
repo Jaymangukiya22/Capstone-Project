@@ -22,6 +22,10 @@ const app = express();
 const server = createServer(app);
 const port = process.env.MATCH_SERVICE_PORT || 3001;
 
+const createSocketErrorPayload = (error: string, message: string) => {
+  return { success: false, error, message };
+};
+
 // Store interface for Redis/InMemory compatibility
 interface StoreInterface {
   get(key: string): Promise<string | null>;
@@ -531,7 +535,13 @@ class EnhancedMatchService {
             });
 
             if (!user || !user.isActive) {
-              socket.emit('auth_error', { message: 'Invalid token or user inactive' });
+              socket.emit(
+                'auth_error',
+                createSocketErrorPayload(
+                  'INVALID_TOKEN',
+                  'Your session has expired. Please log in again.'
+                )
+              );
               return;
             }
 
@@ -583,7 +593,10 @@ class EnhancedMatchService {
             finalUserData: userData
           });
         } catch (error) {
-          socket.emit('auth_error', { message: 'Authentication failed' });
+          socket.emit(
+            'auth_error',
+            createSocketErrorPayload('AUTH_FAILED', 'Authentication failed')
+          );
           logError('Authentication error', error as Error);
         }
       });
@@ -592,7 +605,10 @@ class EnhancedMatchService {
       socket.on('create_friend_match', async (data: { quizId: number }) => {
         try {
           if (!socket.data.userId) {
-            socket.emit('error', { message: 'Not authenticated' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+            );
             return;
           }
 
@@ -601,7 +617,13 @@ class EnhancedMatchService {
           });
 
           if (!quiz) {
-            socket.emit('error', { message: 'Quiz not found' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'QUIZ_NOT_FOUND',
+                'Quiz not found. Please choose a different quiz.'
+              )
+            );
             return;
           }
 
@@ -688,7 +710,13 @@ class EnhancedMatchService {
             username: socket.data.username 
           });
         } catch (error) {
-          socket.emit('error', { message: 'Failed to create friend match' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'FRIEND_MATCH_CREATE_FAILED',
+              'Could not create a friend match right now. Please try again.'
+            )
+          );
           logError('Create friend match error', error as Error);
         }
       });
@@ -697,7 +725,10 @@ class EnhancedMatchService {
       socket.on('join_match', async (data: { joinCode: string }) => {
         try {
           if (!socket.data.userId) {
-            socket.emit('error', { message: 'Not authenticated' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+            );
             return;
           }
 
@@ -708,7 +739,13 @@ class EnhancedMatchService {
           if (!matchId) {
             const storedMatchId = await store.get(`joincode:${data.joinCode.toUpperCase()}`);
             if (!storedMatchId) {
-              socket.emit('error', { message: 'Invalid join code' });
+              socket.emit(
+                'error',
+                createSocketErrorPayload(
+                  'INVALID_JOIN_CODE',
+                  'Join code is invalid or expired. Please check and try again.'
+                )
+              );
               return;
             }
             matchId = storedMatchId;
@@ -721,7 +758,13 @@ class EnhancedMatchService {
           if (!match) {
             const matchData = await store.get(`match:${matchId}`);
             if (!matchData) {
-              socket.emit('error', { message: 'Match not found' });
+              socket.emit(
+                'error',
+                createSocketErrorPayload(
+                  'MATCH_NOT_FOUND',
+                  'Match not found. It may have ended or expired.'
+                )
+              );
               return;
             }
             
@@ -779,7 +822,13 @@ class EnhancedMatchService {
           }
           
           if (!match) {
-            socket.emit('error', { message: 'Match not found' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_NOT_FOUND',
+                'Match not found. It may have ended or expired.'
+              )
+            );
             return;
           }
           
@@ -876,18 +925,36 @@ class EnhancedMatchService {
           
           // If match is not WAITING and player is not already in it, reject
           if (match.status !== 'WAITING') {
-            socket.emit('error', { message: 'Match already started or completed' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_NOT_JOINABLE',
+                'This match has already started or ended.'
+              )
+            );
             return;
           }
           
           if (match.players.size >= match.maxPlayers && !match.players.has(socket.data.userId)) {
-            socket.emit('error', { message: 'Match is full' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_FULL',
+                'This match is already full.'
+              )
+            );
             return;
           }
           
           // Validate questions exist
           if (!match.questions || match.questions.length === 0) {
-            socket.emit('error', { message: 'No questions available for this quiz' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_QUESTIONS_AVAILABLE',
+                'No questions are available for this quiz right now.'
+              )
+            );
             return;
           }
 
@@ -985,7 +1052,13 @@ class EnhancedMatchService {
             playerCount: match.players.size 
           });
         } catch (error) {
-          socket.emit('error', { message: 'Failed to join match' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_JOIN_FAILED',
+              'Could not join match right now. Please try again.'
+            )
+          );
           logError('Join match error', error as Error);
         }
       });
@@ -994,7 +1067,10 @@ class EnhancedMatchService {
       socket.on('connect_to_match', async (data: { matchId: string }) => {
         try {
           if (!socket.data.userId) {
-            socket.emit('error', { message: 'Not authenticated' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload('AUTH_REQUIRED', 'Please log in to continue.')
+            );
             return;
           }
           
@@ -1006,7 +1082,13 @@ class EnhancedMatchService {
           if (!match) {
             const matchData = await store.get(`match:${data.matchId}`);
             if (!matchData) {
-              socket.emit('error', { message: 'Match not found' });
+              socket.emit(
+                'error',
+                createSocketErrorPayload(
+                  'MATCH_NOT_FOUND',
+                  'Match not found. It may have ended or expired.'
+                )
+              );
               return;
             }
             
@@ -1020,7 +1102,13 @@ class EnhancedMatchService {
             
             // Validate questions exist
             if (!questions || questions.length === 0) {
-              socket.emit('error', { message: 'No questions available for this quiz' });
+              socket.emit(
+                'error',
+                createSocketErrorPayload(
+                  'NO_QUESTIONS_AVAILABLE',
+                  'No questions are available for this quiz right now.'
+                )
+              );
               return;
             }
             
@@ -1205,7 +1293,13 @@ class EnhancedMatchService {
             });
           }
         } catch (error) {
-          socket.emit('error', { message: 'Failed to connect to match' });
+          socket.emit(
+            'error',
+            createSocketErrorPayload(
+              'MATCH_CONNECT_FAILED',
+              'Could not connect to the match right now. Please try again.'
+            )
+          );
           logError('Connect to match error', error as Error);
         }
       });
@@ -1216,7 +1310,13 @@ class EnhancedMatchService {
           // CRITICAL FIX: Use matchId from payload first (sent by client), then fall back to userToMatch map
           let matchId = data.matchId || this.userToMatch.get(socket.data.userId);
           if (!matchId) {
-            socket.emit('error', { message: 'Not in any match' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_NOT_FOUND',
+                'You are not currently in a match.'
+              )
+            );
             return;
           }
           
@@ -1225,7 +1325,13 @@ class EnhancedMatchService {
 
           const match = this.matches.get(matchId);
           if (!match) {
-            socket.emit('error', { message: 'Match not found' });
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'MATCH_NOT_FOUND',
+                'Match not found. It may have ended or expired.'
+              )
+            );
             return;
           }
 

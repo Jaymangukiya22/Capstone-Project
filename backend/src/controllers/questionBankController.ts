@@ -48,8 +48,8 @@ export const createQuestion = async (req: AuthenticatedRequest, res: Response): 
     logError('Error creating question', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create question',
-      message: 'An error occurred while creating the question'
+      error: 'QUESTION_CREATE_FAILED',
+      message: 'Could not create the question right now. Please try again.'
     });
   }
 };
@@ -59,6 +59,15 @@ export const getQuestionsByCategory = async (req: AuthenticatedRequest, res: Res
     const categoryId = parseInt(req.params.categoryId);
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+
+    if (isNaN(categoryId)) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Category ID must be a number.'
+      });
+      return;
+    }
 
     const result = await questionBankService.getQuestionsByCategory(categoryId, page, limit);
 
@@ -70,8 +79,8 @@ export const getQuestionsByCategory = async (req: AuthenticatedRequest, res: Res
     logError('Error fetching questions by category', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch questions',
-      message: 'An error occurred while fetching questions'
+      error: 'QUESTIONS_FETCH_FAILED',
+      message: 'Could not load questions right now. Please try again.'
     });
   }
 };
@@ -92,8 +101,8 @@ export const getAllQuestions = async (req: AuthenticatedRequest, res: Response):
     logError('Error fetching all questions', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch questions',
-      message: 'An error occurred while fetching questions'
+      error: 'QUESTIONS_FETCH_FAILED',
+      message: 'Could not load questions right now. Please try again.'
     });
   }
 };
@@ -101,13 +110,21 @@ export const getAllQuestions = async (req: AuthenticatedRequest, res: Response):
 export const getQuestionById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Question ID must be a number.'
+      });
+      return;
+    }
     const question = await questionBankService.getQuestionById(id);
 
     if (!question) {
       res.status(404).json({
         success: false,
-        error: 'Question not found',
-        message: 'The requested question does not exist'
+        error: 'QUESTION_NOT_FOUND',
+        message: 'The requested question does not exist.'
       });
       return;
     }
@@ -120,8 +137,8 @@ export const getQuestionById = async (req: AuthenticatedRequest, res: Response):
     logError('Error fetching question by ID', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch question',
-      message: 'An error occurred while fetching the question'
+      error: 'QUESTION_FETCH_FAILED',
+      message: 'Could not load this question right now. Please try again.'
     });
   }
 };
@@ -130,6 +147,15 @@ export const updateQuestion = async (req: AuthenticatedRequest, res: Response): 
   try {
     const id = parseInt(req.params.id);
     const { questionText, categoryId, difficulty, options } = req.body;
+
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Question ID must be a number.'
+      });
+      return;
+    }
 
     const question = await questionBankService.updateQuestion(id, {
       questionText,
@@ -147,8 +173,8 @@ export const updateQuestion = async (req: AuthenticatedRequest, res: Response): 
     logError('Error updating question', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update question',
-      message: 'An error occurred while updating the question'
+      error: 'QUESTION_UPDATE_FAILED',
+      message: 'Could not update the question right now. Please try again.'
     });
   }
 };
@@ -156,6 +182,14 @@ export const updateQuestion = async (req: AuthenticatedRequest, res: Response): 
 export const deleteQuestion = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Question ID must be a number.'
+      });
+      return;
+    }
     await questionBankService.deleteQuestion(id);
 
     res.json({
@@ -166,8 +200,8 @@ export const deleteQuestion = async (req: AuthenticatedRequest, res: Response): 
     logError('Error deleting question', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete question',
-      message: 'An error occurred while deleting the question'
+      error: 'QUESTION_DELETE_FAILED',
+      message: 'Could not delete the question right now. Please try again.'
     });
   }
 };
@@ -193,8 +227,8 @@ export const bulkImport = async (req: AuthenticatedRequest, res: Response): Prom
     logError('Error in bulk import', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to import questions',
-      message: 'An error occurred during bulk import'
+      error: 'BULK_IMPORT_FAILED',
+      message: 'Could not import questions right now. Please try again.'
     });
   }
 };
@@ -204,8 +238,8 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
     if (!req.file) {
       res.status(400).json({
         success: false,
-        error: 'No file uploaded',
-        message: 'Please upload an Excel file'
+        error: 'VALIDATION_ERROR',
+        message: 'Please upload an Excel file.'
       });
       return;
     }
@@ -217,8 +251,8 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
     if (!categoryId) {
       res.status(400).json({
         success: false,
-        error: 'Category ID required',
-        message: 'Please provide a valid category ID'
+        error: 'VALIDATION_ERROR',
+        message: 'Please provide a valid category ID.'
       });
       return;
     }
@@ -265,8 +299,8 @@ export const uploadExcel = async (req: AuthenticatedRequest, res: Response): Pro
     logError('Error uploading Excel file', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to process Excel file',
-      message: error instanceof Error ? error.message : 'An error occurred while processing the file'
+      error: 'EXCEL_IMPORT_FAILED',
+      message: 'Could not process that Excel file right now. Please try again.'
     });
   }
 };
@@ -295,8 +329,8 @@ export const searchQuestions = async (req: AuthenticatedRequest, res: Response):
     if (!query || typeof query !== 'string') {
       res.status(400).json({
         success: false,
-        error: 'Search query required',
-        message: 'Please provide a search query'
+        error: 'VALIDATION_ERROR',
+        message: 'Please enter a search term.'
       });
       return;
     }

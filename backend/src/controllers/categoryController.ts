@@ -29,7 +29,7 @@ export class CategoryController {
       if (error) {
         res.status(400).json({
           success: false,
-          error: 'validation error',
+          error: 'VALIDATION_ERROR',
           message: error.details[0].message
         });
         return;
@@ -47,14 +47,16 @@ export class CategoryController {
         if (error.message === 'Category name already exists') {
           res.status(409).json({
             success: false,
-            error: 'Category name already exists'
+            error: 'CATEGORY_ALREADY_EXISTS',
+            message: 'A category with this name already exists.'
           });
           return;
         }
         if (error.message === 'Parent category not found') {
           res.status(404).json({
             success: false,
-            error: 'Parent category not found'
+            error: 'PARENT_CATEGORY_NOT_FOUND',
+            message: 'Parent category was not found. Please choose a different parent.'
           });
           return;
         }
@@ -69,7 +71,7 @@ export class CategoryController {
       if (error) {
         res.status(400).json({
           success: false,
-          error: 'Validation error',
+          error: 'VALIDATION_ERROR',
           message: error.details[0].message
         });
         return;
@@ -136,8 +138,9 @@ export class CategoryController {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({
-          error: 'Invalid category ID',
-          message: 'Category ID must be a number'
+          success: false,
+          error: 'VALIDATION_ERROR',
+          message: 'Category ID must be a number.'
         });
         return;
       }
@@ -161,8 +164,8 @@ export class CategoryController {
         const id = parseInt(req.params.id);
         res.status(404).json({
           success: false,
-          error: 'Category not found',
-          message: `Category with ID ${id} does not exist`
+          error: 'CATEGORY_NOT_FOUND',
+          message: `Category with ID ${id} does not exist.`
         });
         return;
       }
@@ -176,8 +179,8 @@ export class CategoryController {
       if (isNaN(id)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid category ID',
-          message: 'Category ID must be a number'
+          error: 'VALIDATION_ERROR',
+          message: 'Category ID must be a number.'
         });
         return;
       }
@@ -186,7 +189,7 @@ export class CategoryController {
       if (error) {
         res.status(400).json({
           success: false,
-          error: 'Validation error',
+          error: 'VALIDATION_ERROR',
           message: error.details[0].message
         });
         return;
@@ -204,8 +207,8 @@ export class CategoryController {
         const id = parseInt(req.params.id);
         res.status(404).json({
           success: false,
-          error: 'Category not found',
-          message: `Category with ID ${id} does not exist`
+          error: 'CATEGORY_NOT_FOUND',
+          message: `Category with ID ${id} does not exist.`
         });
         return;
       }
@@ -237,22 +240,24 @@ export class CategoryController {
           const id = parseInt(req.params.id);
           res.status(404).json({
             success: false,
-            error: 'Category not found',
-            message: `Category with ID ${id} does not exist`
+            error: 'CATEGORY_NOT_FOUND',
+            message: `Category with ID ${id} does not exist.`
           });
           return;
         }
         if (error.message.toLowerCase().includes('subcategories')) {
           res.status(400).json({
             success: false,
-            error: error.message
+            error: 'CATEGORY_DELETE_FAILED',
+            message: error.message
           });
           return;
         }
         if (error.message.toLowerCase().includes('associated')) {
           res.status(400).json({
             success: false,
-            error: error.message
+            error: 'CATEGORY_DELETE_FAILED',
+            message: error.message
           });
           return;
         }
@@ -267,8 +272,8 @@ export class CategoryController {
       if (isNaN(id)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid category ID',
-          message: 'Category ID must be a number'
+          error: 'VALIDATION_ERROR',
+          message: 'Category ID must be a number.'
         });
         return;
       }
@@ -291,8 +296,8 @@ export class CategoryController {
       if (isNaN(parentId)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid parent category ID',
-          message: 'Parent category ID must be a number'
+          error: 'VALIDATION_ERROR',
+          message: 'Parent category ID must be a number.'
         });
         return;
       }
@@ -317,8 +322,8 @@ export class CategoryController {
       if (!query || query.trim().length === 0) {
         res.status(400).json({
           success: false,
-          error: 'Search query required',
-          message: 'Please provide a search query parameter "q"'
+          error: 'VALIDATION_ERROR',
+          message: 'Please enter a search term.'
         });
         return;
       }

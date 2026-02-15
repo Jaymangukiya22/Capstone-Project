@@ -94,7 +94,19 @@ const FriendMatchInterface: React.FC = () => {
   const [isMatchCompleted, setIsMatchCompleted] = useState(false);
   const [isWaitingForOpponent, setIsWaitingForOpponent] = useState(false);
   const [waitingForOpponentName, setWaitingForOpponentName] = useState('opponent');
-  
+  const [reconnectDeadline, setReconnectDeadline] = useState<number | null>(null);
+  const [reconnectSecondsLeft, setReconnectSecondsLeft] = useState<number>(0);
+
+  const [autoReconnectEnabled, setAutoReconnectEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('autoReconnectEnabled')
+      if (stored === null) return true
+      return stored === 'true'
+    } catch {
+      return true
+    }
+  })
+
   // Navigation guard to prevent going back during friend match
   const { disableGuard } = useQuizNavigationGuard(!isLoading && !isWaitingForPlayers, isMatchCompleted);
   
@@ -148,6 +160,116 @@ const FriendMatchInterface: React.FC = () => {
       });
     }
   }, []);
+
+  // Keep countdown updated when opponent disconnects
+  useEffect(() => {
+    if (!reconnectDeadline) return
+
+    const timer = window.setInterval(() => {
+      const msLeft = reconnectDeadline - Date.now()
+      const secondsLeft = Math.max(Math.ceil(msLeft / 1000), 0)
+      setReconnectSecondsLeft(secondsLeft)
+      if (secondsLeft <= 0) {
+        setReconnectDeadline(null)
+      }
+    }, 250)
+
+    return () => window.clearInterval(timer)
+  }, [reconnectDeadline])
+
+  const handleToggleAutoReconnect = () => {
+    setAutoReconnectEnabled(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('autoReconnectEnabled', String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
+  const handleReconnectNow = async () => {
+    try {
+      const matchInfo = sessionStorage.getItem('friendMatch')
+      if (!matchInfo) {
+        toast({
+          title: 'Error',
+          description: 'No match info found to reconnect.',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      const parsed = JSON.parse(matchInfo)
+      
+      // CRITICAL: Force disconnect existing socket to ensure clean reconnection
+      console.log(' Forcing socket disconnect before reconnect...')
+      gameWebSocket.disconnect()
+      wsConnected.current = false
+      setIsConnected(false)
+      
+      // Wait a bit for socket to fully close
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // Now reconnect with fresh socket
+      await connectToMatch(parsed.websocketUrl, parsed.mode, parsed.joinCode, true)
+    } catch (e) {
+      console.error('Reconnect now failed:', e)
+      toast({
+        title: 'Reconnect failed',
+        description: 'Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // Connection lifecycle
+  useEffect(() => {
+    const onConnect = () => {
+      setIsConnected(true)
+    }
+
+    const onDisconnect = () => {
+      setIsConnected(false)
+
+      const withinGrace = reconnectSecondsLeft > 0
+
+      if (autoReconnectEnabled && withinGrace) {
+        window.setTimeout(() => {
+          handleReconnectNow().catch(() => {})
+        }, 750)
+      }
+    }
+
+    // Browser online/offline events for network reconnection
+    const handleBrowserOnline = () => {
+      console.log(' Browser came back online, attempting reconnection...')
+      // Force a reconnection attempt when browser detects network is back
+      if (!isConnected && matchId) {
+        window.setTimeout(() => {
+          handleReconnectNow().catch(() => {})
+        }, 500)
+      }
+    }
+
+    const handleBrowserOffline = () => {
+      console.log(' Browser went offline')
+      setIsConnected(false)
+    }
+
+    gameWebSocket.on('connect', onConnect)
+    gameWebSocket.on('disconnect', onDisconnect)
+    window.addEventListener('online', handleBrowserOnline)
+    window.addEventListener('offline', handleBrowserOffline)
+
+    return () => {
+      gameWebSocket.off('connect', onConnect)
+      gameWebSocket.off('disconnect', onDisconnect)
+      window.removeEventListener('online', handleBrowserOnline)
+      window.removeEventListener('offline', handleBrowserOffline)
+    }
+  }, [reconnectSecondsLeft, autoReconnectEnabled, isConnected, matchId])
 
   // Initialize friend match from sessionStorage
   useEffect(() => {
@@ -901,27 +1023,101 @@ const FriendMatchInterface: React.FC = () => {
     // Player disconnected
     gameWebSocket.on('player_disconnected', (data: any) => {
       console.log('Player disconnected:', data);
+
+      // Set reconnect deadline from server
+      if (typeof data?.deadline === 'number' && typeof data?.reconnectionWindowSeconds === 'number') {
+        setReconnectDeadline(data.deadline);
+        setReconnectSecondsLeft(data.reconnectionWindowSeconds);
+      }
       
       // Only show disconnection toast if the match is still active
-      // Don't show if quiz is completing or already completed
       if (!isSubmitting && currentQuestionData) {
         toast({
           title: "Player Disconnected",
-          description: `${data.username || 'A player'} left the match`,
+          description: data.message || `${data.username || 'A player'} left the match`,
           variant: "destructive"
         });
       }
+
+      // Mark waiting state if grace period active
+      if (data?.reconnectionWindowSeconds && data.reconnectionWindowSeconds > 0) {
+        setIsWaitingForOpponent(true);
+        setWaitingForOpponentName(data.username || 'opponent');
+      }
     });
 
-    // Error handling
-    gameWebSocket.on('error', (data: any) => {
-      console.error('WebSocket error:', data);
-      toast({
-        title: "Error",
-        description: data.message || "An error occurred",
-        variant: "destructive"
-      });
+    // Match reconnected (when player refreshes / reconnects mid-game)
+    gameWebSocket.on('match_reconnected', (data: any) => {
+      console.log(' MATCH_RECONNECTED event:', data);
+
+      try {
+        // Unlock UI state only if player hasn't submitted current question
+        const hasSubmitted = data.hasSubmittedCurrent === true;
+        setIsSubmitting(hasSubmitted);
+        hasSubmittedCurrentQuestion.current = hasSubmitted;
+        
+        // If player already submitted, they should be waiting
+        setIsWaitingForOpponent(hasSubmitted);
+
+        // Clear reconnect countdown
+        setReconnectDeadline(null);
+        setReconnectSecondsLeft(0);
+
+        if (Array.isArray(data.players)) {
+          setPlayers([...data.players]);
+        }
+
+        if (data.question) {
+          setCurrentQuestionData(data.question);
+          setCurrentQuestion((data.questionIndex ?? 0) + 1);
+          setTotalQuestions(data.totalQuestions ?? 0);
+        }
+
+        // Use server-provided timeRemaining or calculate from timeElapsed
+        if (typeof data.timeRemaining === 'number') {
+          setQuestionTimeRemaining(data.timeRemaining);
+        } else if (typeof data.timeElapsed === 'number') {
+          const timeLimit = data.question?.timeLimit || 30;
+          const remaining = Math.max(0, timeLimit - data.timeElapsed);
+          setQuestionTimeRemaining(remaining);
+        }
+
+        // Reset local timer baseline to sync with server
+        setQuestionStartTime(Date.now());
+        setIsWaitingForPlayers(false);
+        setIsLoading(false);
+
+        toast({
+          title: 'Reconnected',
+          description: hasSubmitted 
+            ? 'You are back in the match. Waiting for opponent to answer...'
+            : 'You are back in the match.',
+        });
+      } catch (e) {
+        console.error('Error handling match_reconnected:', e);
+      }
     });
+
+    // Time extended when player reconnects - sync ALL players to same time
+    gameWebSocket.on('time_extended', (data: any) => {
+      console.log(' TIME_EXTENDED event:', data);
+      
+      try {
+        if (typeof data.newTimeLimit === 'number') {
+          // Sync timer to the new time limit (includes bonus time)
+          setQuestionTimeRemaining(data.newTimeLimit);
+          setQuestionStartTime(Date.now());
+          
+          toast({
+            title: 'Time Extended',
+            description: data.message || 'Bonus time added for reconnection',
+          });
+        }
+      } catch (e) {
+        console.error('Error handling time_extended:', e);
+      }
+    });
+
   };
 
   // --- OPTIMIZATION 3: UseCallback for heavy handlers ---
@@ -1310,6 +1506,44 @@ const FriendMatchInterface: React.FC = () => {
             <span className="text-sm font-medium">
               Friend Match in Progress - Navigation is blocked until completion
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Reconnect Countdown Banner */}
+      {!isLoading && !isWaitingForPlayers && !isMatchCompleted && reconnectSecondsLeft > 0 && (
+        <div className="border-b border-red-200 bg-red-50 px-3 py-3">
+          <div className="container mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-red-900">
+              <span className="font-semibold">{waitingForOpponentName}</span>
+              <span> disconnected.</span>
+              <span className="ml-2 font-semibold tabular-nums">
+                {reconnectSecondsLeft}s
+              </span>
+              <span> to reconnect before the match ends.</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleAutoReconnect}
+                className={
+                  autoReconnectEnabled
+                    ? 'px-3 py-1.5 rounded-md border border-green-300 bg-green-100 text-green-800 text-xs font-medium'
+                    : 'px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 text-xs font-medium'
+                }
+              >
+                Auto reconnect: {autoReconnectEnabled ? 'On' : 'Off'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleReconnectNow}
+                className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90"
+              >
+                Reconnect now
+              </button>
+            </div>
           </div>
         </div>
       )}

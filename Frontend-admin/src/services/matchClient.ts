@@ -348,13 +348,22 @@ export class MatchClient {
         logError('WebSocket connection error:', error);
         this.isConnected = false;
 
-        toast({
-          title: 'Connection Error',
-          description: 'Failed to connect to the match server. Please try again.',
-          variant: 'destructive',
-        });
+        // Only show error toast if this is the final attempt or not reconnecting
+        // Socket.IO will automatically retry, so don't spam user with errors
+        const willRetry = this.socket?.io?.opts?.reconnection !== false && 
+                         (this.reconnectAttempts < this.maxReconnectAttempts);
         
-        if (this.reconnectAttempts === 0) {
+        if (!willRetry) {
+          toast({
+            title: 'Connection Error',
+            description: 'Failed to connect to the match server. Please try again.',
+            variant: 'destructive',
+          });
+        } else {
+          logInfo(`Connection error, will retry... (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+        }
+        
+        if (this.reconnectAttempts === 0 && !willRetry) {
           reject(error);
         }
       });

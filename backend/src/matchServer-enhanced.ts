@@ -407,6 +407,82 @@ class EnhancedMatchService {
     this.setupSocketHandlers();
   }
 
+  private async completeMatchDueToDisconnect(
+    matchId: string,
+    disconnectedUserId: number
+  ) {
+    const match = this.matches.get(matchId);
+    if (!match) return;
+
+    if (match.status !== 'IN_PROGRESS') return;
+
+    const remainingPlayer = Array.from(match.players.values()).find(
+      (p: any) => p.userId !== disconnectedUserId
+    );
+
+    const completionData = {
+      results: Array.from(match.players.values()).map((player: any) => {
+        const totalAnswers = player.answers?.length || 0;
+        const correctAnswers = (player.answers || []).filter(
+          (answer: any) => answer.isCorrect
+        ).length;
+        const accuracy = totalAnswers > 0
+          ? Math.round((correctAnswers / totalAnswers) * 100)
+          : 0;
+
+        const totalTimeSpent = (player.answers || []).reduce(
+          (sum: number, answer: any) => sum + (answer.timeSpent || 0),
+          0
+        );
+
+        return {
+          userId: player.userId,
+          username: player.username,
+          firstName: player.firstName,
+          lastName: player.lastName,
+          score: player.score || 0,
+          answers: player.answers || [],
+          correctAnswers,
+          totalAnswers,
+          accuracy,
+          timeSpent: totalTimeSpent,
+          forfeited: player.userId === disconnectedUserId,
+        };
+      }),
+      winner: remainingPlayer
+        ? {
+            userId: remainingPlayer.userId,
+            username: remainingPlayer.username,
+            firstName: remainingPlayer.firstName,
+            lastName: remainingPlayer.lastName,
+            score: remainingPlayer.score || 0,
+            forfeited: false,
+          }
+        : null,
+      matchId,
+      completedAt: new Date().toISOString(),
+      isFriendMatch: true,
+      reason: 'OPPONENT_LEFT',
+      message: 'Opponent disconnected and did not return in time. Match ended.',
+    };
+
+    match.status = 'COMPLETED';
+    this.io.to(matchId).emit('match_completed', completionData);
+
+    setTimeout(() => {
+      match.players.forEach((player: any) => {
+        this.userToMatch.delete(player.userId);
+      });
+
+      if (match.joinCode) {
+        this.joinCodeToMatch.delete(match.joinCode);
+      }
+
+      this.matches.delete(matchId);
+      logInfo('Match ended due to disconnect - cleanup completed', { matchId });
+    }, 1000);
+  }
+
   // Metrics helpers
   public getPlayersPerMatch(): Array<{ matchId: string; count: number }> {
     const result: Array<{ matchId: string; count: number }> = [];
@@ -868,7 +944,9 @@ class EnhancedMatchService {
               // If match is in progress, send current question state
               if (match.status === 'IN_PROGRESS') {
                 const currentQuestion = match.questions[match.currentQuestionIndex];
-                const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+                const timeElapsedMs = match.questionStartTime
+                  ? Date.now() - match.questionStartTime
+                  : 0;
                 
                 if (currentQuestion) {
                   logInfo('🔍 Sending next_question to reconnected player', {
@@ -877,20 +955,35 @@ class EnhancedMatchService {
                     socketId: socket.id,
                     questionIndex: match.currentQuestionIndex
                   });
-                  
-                  // ✅ Send next_question to the room (not just this socket) so frontend can handle it
-                  this.io.to(matchId).emit('next_question', {
+
+                  const timeElapsedSeconds = Math.floor(timeElapsedMs / 1000);
+                  const timeRemaining = Math.max(
+                    (match.timeLimit || 30) - timeElapsedSeconds,
+                    0
+                  );
+
+                  socket.emit('match_reconnected', {
                     question: {
                       id: currentQuestion.id,
                       questionText: currentQuestion.questionText,
                       options: currentQuestion.options.map((opt: any) => ({
                         id: opt.id,
-                        optionText: opt.optionText
+                        optionText: opt.optionText,
                       })),
-                      timeLimit: match.timeLimit
+                      timeLimit: match.timeLimit,
                     },
                     questionIndex: match.currentQuestionIndex,
-                    totalQuestions: match.questions.length
+                    totalQuestions: match.questions.length,
+                    timeRemaining,
+                    hasSubmittedCurrent: existingPlayer?.hasSubmittedCurrent || false,
+                    players: Array.from(match.players.values()).map((p: any) => ({
+                      userId: p.userId,
+                      username: p.username,
+                      firstName: p.firstName,
+                      lastName: p.lastName,
+                      isReady: p.isReady,
+                      score: p.score || 0,
+                    })),
                   });
                   
                   // Notify other players that this player reconnected
@@ -1567,10 +1660,24 @@ class EnhancedMatchService {
                 player.socketId = '';
                 
                 // Notify other players of temporary disconnect
-                socket.to(matchId).emit('player_temporarily_disconnected', {
+                const deadline = Date.now() + 30000;
+                
+                // Use this.io.to instead of socket.to to ensure broadcast reaches all players
+                // even when the disconnecting socket has already left the room
+                this.io.to(matchId).emit('player_disconnected', {
                   userId: socket.data.userId,
                   username: socket.data.username,
-                  message: `${socket.data.username} disconnected - reconnecting...`
+                  message: `${socket.data.username} disconnected. Waiting up to 30 seconds for reconnection...`,
+                  reconnectionWindowSeconds: 30,
+                  deadline,
+                });
+                
+                logInfo('🔌 PLAYER_DISCONNECTED event emitted', {
+                  matchId,
+                  disconnectedUserId: socket.data.userId,
+                  disconnectedUsername: socket.data.username,
+                  deadline,
+                  room: matchId
                 });
                 
                 // Set a 30-second grace period for reconnection
@@ -1582,17 +1689,8 @@ class EnhancedMatchService {
                       matchId,
                       playerSocketAfter: player.socketId
                     });
-                    
-                    // Remove player after grace period
-                    match.players.delete(socket.data.userId);
-                    this.userToMatch.delete(socket.data.userId);
-                    
-                    // Notify other players
-                    socket.to(matchId).emit('player_permanently_disconnected', {
-                      userId: socket.data.userId,
-                      username: socket.data.username,
-                      message: `${socket.data.username} disconnected permanently`
-                    });
+
+                    this.completeMatchDueToDisconnect(matchId, socket.data.userId);
                   }
                 }, 30000); // 30 second grace period
                 
@@ -1606,7 +1704,10 @@ class EnhancedMatchService {
                 
                 socket.to(matchId).emit('player_disconnected', {
                   userId: socket.data.userId,
-                  username: socket.data.username
+                  username: socket.data.username,
+                  message: `${socket.data.username} left the match.`,
+                  reconnectionWindowSeconds: 0,
+                  deadline: Date.now(),
                 });
               }
             }

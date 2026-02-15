@@ -397,6 +397,8 @@ export class GameWebSocket {
         this.socket.on('connect', () => {
           console.log('✅ [SOCKET] Connected to match WebSocket via Socket.IO')
           console.log('✅ [SOCKET] Socket ID:', this.socket?.id);
+
+          this.handleMessage('connect', { socketId: this.socket?.id })
           
           // Update session with connection info
           sessionManager.updateMatchState({
@@ -428,15 +430,25 @@ export class GameWebSocket {
         this.socket.on('disconnect', (reason) => {
           console.log('❌ [SOCKET] Socket.IO connection closed. Reason:', reason)
           this.socket = null
+          this.handleMessage('disconnect', { reason })
         })
 
         this.socket.on('connect_error', (error) => {
           console.error('❌ [SOCKET] Socket.IO connection error:', error)
-          toast({
-            title: 'Connection Error',
-            description: 'Failed to connect to the match server. Please try again.',
-            variant: 'destructive',
-          })
+          // Only show toast on final failure, not during reconnection attempts
+          const isOffline = !navigator.onLine
+          const willRetry = this.socket?.io?.opts?.reconnection !== false
+          
+          if (!willRetry && !isOffline) {
+            toast({
+              title: 'Connection Error',
+              description: 'Failed to connect to the match server. Please try again.',
+              variant: 'destructive',
+            })
+          } else {
+            console.log('[SOCKET] Will retry connection...')
+          }
+          this.handleMessage('connect_error', { error })
           reject(error)
         })
 

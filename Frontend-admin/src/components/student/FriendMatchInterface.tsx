@@ -796,6 +796,17 @@ const FriendMatchInterface: React.FC = () => {
         return;
       }
       
+      // SAFARI FIX: Validate question data has required fields before setting
+      if (!data.question || !data.question.options || !Array.isArray(data.question.options)) {
+        console.error(' Match started but question data is invalid:', data);
+        toast({
+          title: "Error",
+          description: "Invalid question data received. Please restart the match.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       const matchStartKey = `started_${matchId}_${Date.now()}`;
       sessionStorage.setItem(matchStartKey, 'true');
       
@@ -828,38 +839,50 @@ const FriendMatchInterface: React.FC = () => {
       });
     });
 
-    // Next question - SAFARI FIX: Ensure proper state update order
+    // Next question - CRITICAL FIX: Don't use requestAnimationFrame (causes Safari white screen)
     gameWebSocket.on('next_question', (data: any) => {
       console.log(' NEXT QUESTION EVENT:', data);
       
-      // SAFARI FIX: Use requestAnimationFrame to ensure UI updates properly
-      requestAnimationFrame(() => {
-        // CRITICAL: Reset submission flag for new question
-        hasSubmittedCurrentQuestion.current = false;
-        
-        // Reset waiting state
-        setIsWaitingForOpponent(false);
-        setWaitingForOpponentName('opponent');
-        
-        // SAFARI FIX: Reset submitting state first
-        setIsSubmitting(false);
-        
-        // Update question data - SAFARI FIX: Ensure all updates happen in single batch
-        setCurrentQuestionData(data.question);
-        setCurrentQuestion(data.questionIndex + 1);
-        setQuestionTimeRemaining(data.question.timeLimit || 30);
-        setQuestionStartTime(Date.now());
-        
-        if (data.totalQuestions) {
-          setTotalQuestions(data.totalQuestions);
-        }
-        
-        console.log(` Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
-      });
+      // SAFARI FIX: Validate question data before setting state
+      if (!data.question || !data.question.options || !Array.isArray(data.question.options)) {
+        console.error('Invalid next_question data received:', data);
+        return;
+      }
+      
+      // SAFARI FIX: State updates are automatically batched in event handlers
+      // Using requestAnimationFrame causes a frame with stale state in Safari
+      
+      // CRITICAL: Reset submission flag for new question
+      hasSubmittedCurrentQuestion.current = false;
+      
+      // Reset waiting state
+      setIsWaitingForOpponent(false);
+      setWaitingForOpponentName('opponent');
+      
+      // Reset submitting state first
+      setIsSubmitting(false);
+      
+      // Update question data - React will batch these updates automatically
+      setCurrentQuestionData(data.question);
+      setCurrentQuestion(data.questionIndex + 1);
+      setQuestionTimeRemaining(data.question.timeLimit || 30);
+      setQuestionStartTime(Date.now());
+      
+      if (data.totalQuestions) {
+        setTotalQuestions(data.totalQuestions);
+      }
+      
+      console.log(` Moving to question ${data.questionIndex + 1} of ${data.totalQuestions || totalQuestions}`);
     });
 
     gameWebSocket.on('player_next_question', (data: any) => {
       console.log(' INDIVIDUAL NEXT QUESTION:', data);
+      
+      // SAFARI FIX: Validate question data before setting state
+      if (!data.question || !data.question.options || !Array.isArray(data.question.options)) {
+        console.error('Invalid player_next_question data received:', data);
+        return;
+      }
       
       // Only advance if this is for the current player
       const userData = localStorage.getItem('user');
@@ -1068,9 +1091,14 @@ const FriendMatchInterface: React.FC = () => {
         }
 
         if (data.question) {
-          setCurrentQuestionData(data.question);
-          setCurrentQuestion((data.questionIndex ?? 0) + 1);
-          setTotalQuestions(data.totalQuestions ?? 0);
+          // SAFARI FIX: Validate question data before setting
+          if (!data.question.options || !Array.isArray(data.question.options)) {
+            console.error('Invalid question data in match_reconnected:', data.question);
+          } else {
+            setCurrentQuestionData(data.question);
+            setCurrentQuestion((data.questionIndex ?? 0) + 1);
+            setTotalQuestions(data.totalQuestions ?? 0);
+          }
         }
 
         // Use server-provided timeRemaining or calculate from timeElapsed
@@ -1474,11 +1502,26 @@ const FriendMatchInterface: React.FC = () => {
     );
   }
 
+  // SAFARI FIX: Validate question data has required fields
+  if (!currentQuestionData.options || !Array.isArray(currentQuestionData.options)) {
+    console.error('Invalid question data - options missing:', currentQuestionData);
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-2">Loading next question...</p>
+          <p className="text-xs text-muted-foreground">
+            Please wait a moment.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Convert to format expected by QuestionCard
   const questionForCard = {
     id: currentQuestionData.id,
-    question: currentQuestionData.questionText,
-    options: currentQuestionData.options.map(opt => opt.optionText),
+    question: currentQuestionData.questionText || 'Question',
+    options: currentQuestionData.options?.map(opt => opt.optionText).filter(Boolean) || [],
     correctAnswer: '' // Not needed for display
   };
 
@@ -1489,7 +1532,7 @@ const FriendMatchInterface: React.FC = () => {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Isolated Timer - prevents parent re-renders every second */}
       <MatchTimer 
         timeRemaining={questionTimeRemaining} 
@@ -1567,7 +1610,7 @@ const FriendMatchInterface: React.FC = () => {
       </div>
 
       {/* Mobile-optimized layout matching QuizInterface */}
-      <div className="flex-1 flex flex-col h-screen">
+      <div className="flex-1 flex flex-col">
         {/* Compact Quiz Header - Fixed height */}
         <div className="flex-shrink-0 px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 border-b border-border">
           <QuizHeader

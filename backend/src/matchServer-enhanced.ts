@@ -1267,6 +1267,24 @@ class EnhancedMatchService {
                 newSocketId: socket.id
               });
             } else {
+              // CRITICAL FIX: Check if match is full before adding new player
+              if (match.players.size >= match.maxPlayers) {
+                logInfo('Rejecting player - match is full', {
+                  matchId: data.matchId,
+                  userId: socket.data.userId,
+                  currentPlayers: match.players.size,
+                  maxPlayers: match.maxPlayers
+                });
+                socket.emit(
+                  'error',
+                  createSocketErrorPayload(
+                    'MATCH_FULL',
+                    'This match is already full.'
+                  )
+                );
+                return;
+              }
+
               // Add new player
               const player: MatchPlayer = {
                 userId: socket.data.userId,
@@ -1282,11 +1300,12 @@ class EnhancedMatchService {
                 answers: []
               };
               match.players.set(socket.data.userId, player);
-              logInfo('New player joining match', {
+              logInfo('New player joined match via connect_to_match', {
                 matchId: data.matchId,
                 userId: socket.data.userId,
                 socketId: socket.id,
-                totalPlayers: match.players.size
+                totalPlayers: match.players.size,
+                maxPlayers: match.maxPlayers
               });
             }
             

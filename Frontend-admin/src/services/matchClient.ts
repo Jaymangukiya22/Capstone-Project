@@ -323,9 +323,14 @@ export class MatchClient {
         upgrade: true,  // Allow transport upgrade for better compatibility
         timeout: 10000,
         reconnection: true,
-        reconnectionAttempts: this.maxReconnectAttempts,
+        // Keep retrying: a transient server-side load spike must NOT permanently
+        // kill an in-progress match. Backoff (below) prevents a reconnect storm.
+        reconnectionAttempts: Infinity,
         reconnectionDelay: this.options.reconnectDelay || 1000,
         reconnectionDelayMax: 5000,
+        // Jitter spreads reconnect attempts so a mass-disconnect event does not
+        // hit the server as a synchronized thundering herd.
+        randomizationFactor: 0.5,
         // Safari-specific: Ensure proper connection handling
         forceNew: false,
         multiplex: true
@@ -442,11 +447,15 @@ export class MatchClient {
 
       const cleanup = () => {
         this.socket?.off('authenticated', onAuthenticated);
-        this.socket?.off('authentication_error', onAuthError);
+        this.socket?.off('auth_error', onAuthError);
       };
 
       this.socket.once('authenticated', onAuthenticated);
-      this.socket.once('authentication_error', onAuthError);
+      // Server emits 'auth_error' (see matchServerMaster.ts), not
+      // 'authentication_error' - this was listening for an event the
+      // server never sends, so auth failures silently fell through to the
+      // 5s timeout below instead of surfacing the real error.
+      this.socket.once('auth_error', onAuthError);
 
       // Timeout after 5 seconds
       setTimeout(() => {
@@ -748,8 +757,8 @@ export const authenticateUser = async (userInfo: {
 }): Promise<void> => {
   // Get user data from localStorage for complete auth info
   const userData = localStorage.getItem('user');
-  let authData = userInfo;
-  
+  let authData: SocketEventPayloads['authenticate'] = userInfo;
+
   if (userData) {
     try {
       const user = JSON.parse(userData);
@@ -761,6 +770,16 @@ export const authenticateUser = async (userInfo: {
     } catch (error) {
       logWarn('Failed to parse user data from localStorage:', error);
     }
+  }
+
+  // The match server now verifies this JWT server-side instead of trusting
+  // userId/username as-sent (see AUDIT_FINDINGS.md S1) - without it,
+  // authentication fails.
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    authData = { ...authData, token };
+  } else {
+    logWarn('No authToken in localStorage - match server authentication will fail');
   }
 
   await matchClient.authenticate(authData);

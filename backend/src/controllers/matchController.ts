@@ -244,13 +244,25 @@ export const getMatchHistory = async (req: AuthenticatedRequest, res: Response) 
 ================================ */
 export const checkPendingMatch = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { userId } = req.params;
+    // Ownership from the verified JWT, NOT the path param - previously
+    // /pending/:userId let anyone read any user's pending-match state (IDOR).
+    // A user may only check their own.
+    const userId = req.user?.id;
 
     if (!userId) {
-      res.status(400).json({
+      res.status(401).json({
         success: false,
-        error: 'VALIDATION_ERROR',
-        message: 'User ID is required.'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
+      });
+      return;
+    }
+
+    if (String(req.params.userId) !== String(userId)) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'You can only check your own pending match.'
       });
       return;
     }
@@ -320,13 +332,25 @@ export const checkPendingMatch = async (req: AuthenticatedRequest, res: Response
 ================================ */
 export const clearPendingMatch = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { userId } = req.params;
+    // Ownership from the verified JWT, NOT the path param - previously
+    // DELETE /pending/:userId let anyone wipe any user's pending-match state
+    // (IDOR), denying that user's reconnection. A user may only clear their own.
+    const userId = req.user?.id;
 
     if (!userId) {
-      res.status(400).json({
+      res.status(401).json({
         success: false,
-        error: 'VALIDATION_ERROR',
-        message: 'User ID is required.'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
+      });
+      return;
+    }
+
+    if (String(req.params.userId) !== String(userId)) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'You can only clear your own pending match.'
       });
       return;
     }

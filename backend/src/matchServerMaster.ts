@@ -6,12 +6,19 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import { logInfo, logError, logDebug } from './utils/logger';
 
 import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
 import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
 import sequelize from './config/database';
 import { User, Quiz, QuizQuestion } from './models';
+
+// Mirrors middleware/auth.ts's cache key/TTL exactly, so a socket connect
+// right after a REST request can hit the same warm cache entry instead of
+// forcing a second DB round trip.
+const AUTH_CACHE_TTL_SECONDS = 60;
+const authCacheKey = (userId: number) => `user:${userId}:auth`;
 
 dotenv.config();  
 
@@ -62,8 +69,24 @@ async function startMaster() {
       origin: true, // Nginx handles CORS filtering
       credentials: true
     },
-    transports: ['websocket', 'polling'],
-    adapter: createAdapter(pub, sub)
+    // websocket-only: we run multiple replicas behind Nginx and don't want
+    // long-polling's handshake/session affinity requirements.
+    transports: ['websocket'],
+    adapter: createAdapter(pub, sub),
+    // Fast dead-connection detection: ping every 10s, evict if no pong in 5s
+    // (default ~45s). Speeds up failover across replicas.
+    pingInterval: 10000,
+    pingTimeout: 5000,
+    // Seamlessly restore a client's rooms + missed events after a short drop,
+    // so a blip does not tear down the match session. (socket.io >= 4.6)
+    connectionStateRecovery: {
+      maxDisconnectionDuration: parseInt(process.env.SOCKET_RECOVERY_MS || '120000', 10),
+      skipMiddlewares: true
+    },
+    // Quiz payloads are tiny; deflate just burns CPU per message at scale.
+    perMessageDeflate: false,
+    // Cap payload size so a malformed/huge frame can't blow up memory.
+    maxHttpBufferSize: parseInt(process.env.SOCKET_MAX_BUFFER || '65536', 10)
   });
 
   // Middleware
@@ -438,17 +461,98 @@ ${workers.map((w) =>
   io.on('connection', (socket) => {
     logInfo('Client connected to master', { socketId: socket.id });
 
-    // Authenticate
+    // Authenticate - verifies the same JWT the REST API issues (see
+    // backend/src/utils/auth.ts generateToken / middleware/auth.ts
+    // authenticateToken). Previously this trusted whatever userId/username
+    // the client sent with zero verification, letting any socket claim to
+    // be any user (see AUDIT_FINDINGS.md S1) - every downstream action
+    // (join_match, submit_answer, player_ready, etc.) trusts
+    // socket.data.userId, so this is the single point that must be real.
     socket.on('authenticate', async (data) => {
       try {
-        const userId = data.userId || data.id;
-        const username = data.username || `Player${userId}`;
+        const token = data?.token;
+        if (!token || typeof token !== 'string') {
+          socket.emit(
+            'auth_error',
+            { success: false, error: 'INVALID_TOKEN', message: 'Authentication token is required.' }
+          );
+          return;
+        }
+
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+          logError('JWT_SECRET not configured', new Error('Missing JWT_SECRET'));
+          socket.emit(
+            'auth_error',
+            createSocketErrorPayload('AUTH_FAILED', 'Authentication failed')
+          );
+          return;
+        }
+
+        let decoded: any;
+        try {
+          decoded = jwt.verify(token, jwtSecret);
+        } catch (verifyError) {
+          socket.emit(
+            'auth_error',
+            { success: false, error: 'INVALID_TOKEN', message: 'Your session has expired. Please log in again.' }
+          );
+          return;
+        }
+
+        const userId = decoded?.userId;
+        if (!userId) {
+          socket.emit(
+            'auth_error',
+            { success: false, error: 'INVALID_USER', message: 'Invalid authentication token.' }
+          );
+          return;
+        }
+
+        // Same cache-or-DB isActive check as the REST middleware, so a
+        // deactivated/deleted account can't keep using a still-valid JWT on
+        // the match server after being locked out of the REST API.
+        let isActive = true;
+        try {
+          const cached = await redisClient.get(authCacheKey(userId));
+          if (cached) {
+            isActive = JSON.parse(cached).isActive !== false;
+          } else {
+            const dbUser = await User.findByPk(userId, { attributes: ['id', 'isActive'] });
+            if (!dbUser) {
+              socket.emit(
+                'auth_error',
+                { success: false, error: 'INVALID_USER', message: 'Your session has expired. Please log in again.' }
+              );
+              return;
+            }
+            isActive = dbUser.isActive;
+          }
+        } catch (cacheError) {
+          logError('Auth cache/DB check failed during socket authenticate, allowing on valid JWT alone', cacheError as Error);
+        }
+
+        if (!isActive) {
+          socket.emit(
+            'auth_error',
+            { success: false, error: 'USER_BANNED', message: 'Your account is deactivated.' }
+          );
+          return;
+        }
+
+        // Identity comes from the VERIFIED token claims, never from the
+        // client-supplied payload.
+        const username = decoded.username || `Player${userId}`;
 
         socket.data.userId = userId;
         socket.data.username = username;
 
-        socket.emit('authenticated', { 
-          user: { id: userId, username } 
+        socket.emit('authenticated', {
+          success: true,
+          userId,
+          username,
+          message: 'Authenticated',
+          user: { id: userId, username }
         });
 
         logInfo('User authenticated', { userId, username, socketId: socket.id });

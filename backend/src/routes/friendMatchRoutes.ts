@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { logInfo, logError } from '../utils/logger';
 import { getMatchService } from '../services/matchService';
 import { getRedisClient } from '../config/redis';
+import { authenticateToken } from '../middleware/auth';
 
 // Simple HTTP client instead of axios
 const httpClient = {
@@ -65,6 +66,14 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
+// Every friend-match route requires a verified JWT. Previously the whole
+// router was unauthenticated: POST / created matches trusting a client-
+// supplied body userId (the REST sibling of AUDIT_FINDINGS.md S1), and the
+// GET routes leaked match data / listed all active matches to anyone. The
+// frontend's apiClient already attaches the Bearer token on every call, so
+// this doesn't change the real flow.
+router.use(authenticateToken);
+
 // Match service URL - use container name in Docker, localhost for development
 const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://quizup_matchserver:3001';
 
@@ -74,11 +83,13 @@ const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://quizup_matchs
  */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { quizId, userId: bodyUserId, username: bodyUsername } = req.body;
-    
-    // Get userId from request body if provided (for testing), otherwise from auth
-    const userId = bodyUserId || req.user?.id || 1;
-    const username = bodyUsername || req.user?.username || `User${userId}`;
+    const { quizId } = req.body;
+
+    // Identity comes from the verified JWT (authenticateToken middleware),
+    // NOT from the request body - a client-supplied userId/username used to
+    // let anyone create a match as any user with no authentication at all.
+    const userId = req.user!.id;
+    const username = req.user!.username;
 
     logInfo('Friend match request received', { quizId, userId, username, MATCH_SERVICE_URL });
 

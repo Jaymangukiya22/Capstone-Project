@@ -1,5 +1,11 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+
+// Constant, valid bcrypt hash of a throwaway string. Used to equalize login
+// timing when the user does not exist (see authController.login), so response
+// time does not reveal whether an account exists.
+export const DUMMY_PASSWORD_HASH =
+  '$2b$10$ikLEnIxRtXueY9cC2QpzuuFhzntwlPuB9NnZdVUYEVPpu.GN39gU6';
 
 export enum UserRole {
   ADMIN = 'ADMIN',

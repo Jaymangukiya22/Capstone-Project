@@ -52,6 +52,17 @@ const shouldLogToConsole =
 
 // Console transport for development (or explicitly enabled)
 if (shouldLogToConsole) {
+  if (process.env.NODE_ENV === 'production') {
+    // winston's Console transport has no built-in non-blocking/async write
+    // mode — it writes directly to process.stdout, so under sustained high
+    // log throughput a slow/non-draining stdout can add I/O overhead. Keep
+    // LOG_TO_CONSOLE off in production unless actively debugging.
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[logger] LOG_TO_CONSOLE=true in production — console transport is active and can add I/O overhead under load.'
+    );
+  }
+
   logger.add(new winston.transports.Console({
     format: winston.format.combine(
       winston.format.colorize(),

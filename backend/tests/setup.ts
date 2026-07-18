@@ -1,5 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { Category } from '../src/models/Category';
 import { Quiz } from '../src/models/Quiz';
 import { QuizQuestion } from '../src/models/QuizQuestion';

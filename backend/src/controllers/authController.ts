@@ -1,50 +1,29 @@
 import { Request, Response } from 'express';
 import { User, UserRole } from '../models';
-import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/auth';
+import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken, DUMMY_PASSWORD_HASH } from '../utils/auth';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { Op } from 'sequelize';
+import { UniqueConstraintError } from 'sequelize';
 import { logInfo, logError } from '../utils/logger';
 import jwt from 'jsonwebtoken';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log('Registration attempt:', { body: req.body });
-    const { username, email, password, firstName, lastName, role } = req.body;
-
-    // Check if user already exists
-    console.log('Checking for existing user...');
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [{ email }, { username }]
-      }
-    });
-
-    if (existingUser) {
-      console.log('User already exists:', existingUser.username);
-      res.status(409).json({
-        success: false,
-        error: 'USER_ALREADY_EXISTS',
-        message: 'An account with this email or username already exists. Please log in instead.'
-      });
-      return;
-    }
+    const { username, email, password, firstName, lastName } = req.body;
 
     // Hash password
-    console.log('Hashing password...');
     const passwordHash = await hashPassword(password);
 
-    // Create user
-    console.log('Creating user with data:', { username, email, firstName, lastName, role });
-    // Default to ADMIN for testing (change to PLAYER in production)
+    // Create directly and rely on the DB unique constraints (email/username).
+    // A pre-insert findOne existence check is a TOCTOU race under concurrency;
+    // the UniqueConstraintError catch below handles duplicates atomically.
     const user = await User.create({
       username,
       email,
       passwordHash,
       firstName,
       lastName,
-      role: UserRole.PLAYER  // Changed from PLAYER to ADMIN for testing
+      role: UserRole.PLAYER
     });
-    console.log('User created successfully:', user.id);
 
     // Return user without password
     const userResponse = {
@@ -80,13 +59,18 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
+    // Handled locally (not rethrown to the global errorHandler) so the
+    // response keeps the specific USER_ALREADY_EXISTS code.
+    if (error instanceof UniqueConstraintError) {
+      res.status(409).json({
+        success: false,
+        error: 'USER_ALREADY_EXISTS',
+        message: 'An account with this email or username already exists. Please log in instead.'
+      });
+      return;
+    }
+
     const err: any = error;
-    console.error('Detailed registration error:', {
-      name: err?.name,
-      message: err?.message,
-      parent: err?.parent,
-      original: err?.original,
-    });
     logError('Registration error', err as Error, {
       body: req.body,
       name: err?.name,
@@ -124,10 +108,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!user) {
+      // Username enumeration defenses: same error code as a wrong password,
+      // and a dummy bcrypt compare so the response time matches the
+      // user-found path (no timing side-channel).
+      await comparePassword(password, DUMMY_PASSWORD_HASH);
       res.status(401).json({
         success: false,
-        error: 'USER_NOT_FOUND',
-        message: 'No account found for this email/username. Please register first.'
+        error: 'INVALID_CREDENTIALS',
+        message: 'Email/username or password is incorrect.'
       });
       return;
     }
@@ -146,17 +134,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!isPasswordValid) {
       res.status(401).json({
         success: false,
-        error: 'INVALID_PASSWORD',
-        message: 'Incorrect password. Please try again.'
+        error: 'INVALID_CREDENTIALS',
+        message: 'Email/username or password is incorrect.'
       });
       return;
     }
 
-    // Update last login
-    await User.update(
+    // Update last login — fire-and-forget; login must not block on this write
+    User.update(
       { lastLoginAt: new Date() },
       { where: { id: user.id } }
-    );
+    ).catch(err => logError('lastLoginAt update failed', err as Error));
 
     // Generate tokens
     const token = generateToken({
@@ -193,7 +181,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    console.error('Detailed login error:', error);
     logError('Login error', error as Error);
     res.status(500).json({
       success: false,

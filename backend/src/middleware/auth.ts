@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, UserRole } from '../models';
 import { logError } from '../utils/logger';
+import { getRedisClient } from '../config/redis';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -11,6 +12,28 @@ export interface AuthenticatedRequest extends Request {
     role: UserRole;
   };
 }
+
+interface CachedAuthUser {
+  id: number;
+  username: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+}
+
+const AUTH_CACHE_TTL_SECONDS = 60;
+const authCacheKey = (userId: number) => `user:${userId}:auth`;
+
+// Invalidation hook for logout/deactivation flows: no such endpoint exists on
+// this branch today, but any future one must call this so a cached
+// isActive/role snapshot cannot outlive the change for up to the TTL below.
+export const invalidateAuthCache = async (userId: number): Promise<void> => {
+  try {
+    await getRedisClient().del(authCacheKey(userId));
+  } catch (error) {
+    logError('Failed to invalidate auth cache', error as Error, { userId });
+  }
+};
 
 export const authenticateToken = async (
   req: AuthenticatedRequest,
@@ -58,13 +81,54 @@ export const authenticateToken = async (
     }
 
     const decoded = jwt.verify(token, jwtSecret) as any;
-    
-    // Fetch user from database to ensure they still exist and are active
-    const user = await User.findByPk(decoded.userId, {
-      attributes: ['id', 'username', 'email', 'role', 'isActive']
-    });
 
-    if (!user || !user.isActive) {
+    // Redis cache (60s TTL): avoids a Postgres round trip on every
+    // authenticated request. A deactivated user may keep access for up to
+    // the TTL — acceptable per product decision.
+    let user: CachedAuthUser | null = null;
+    try {
+      const cached = await getRedisClient().get(authCacheKey(decoded.userId));
+      if (cached) user = JSON.parse(cached);
+    } catch (error) {
+      logError('Auth cache read failed, falling back to database', error as Error);
+    }
+
+    if (!user) {
+      // Fetch user from database to ensure they still exist and are active
+      const dbUser = await User.findByPk(decoded.userId, {
+        attributes: ['id', 'username', 'email', 'role', 'isActive']
+      });
+
+      if (!dbUser) {
+        res.status(401).json({
+          success: false,
+          error: 'INVALID_TOKEN',
+          message: 'Your session has expired. Please log in again.'
+        });
+        return;
+      }
+
+      user = {
+        id: dbUser.id,
+        username: dbUser.username,
+        email: dbUser.email,
+        role: dbUser.role as UserRole,
+        isActive: dbUser.isActive
+      };
+
+      try {
+        await getRedisClient().set(
+          authCacheKey(user.id),
+          JSON.stringify(user),
+          'EX',
+          AUTH_CACHE_TTL_SECONDS
+        );
+      } catch (error) {
+        logError('Auth cache write failed', error as Error);
+      }
+    }
+
+    if (!user.isActive) {
       res.status(401).json({
         success: false,
         error: 'INVALID_TOKEN',

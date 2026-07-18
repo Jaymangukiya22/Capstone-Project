@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import authRoutes from '../../src/routes/authRoutes';
 import { User } from '../../src/models/User';
 import { testSequelize, createTestUser } from '../setup';
@@ -199,7 +199,8 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('Invalid credentials');
+      // Merged with the wrong-password case to prevent username enumeration.
+      expect(response.body.error).toBe('INVALID_CREDENTIALS');
     });
 
     it('should return 401 for invalid password', async () => {
@@ -214,7 +215,8 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('Invalid credentials');
+      // Merged with the unknown-username case to prevent username enumeration.
+      expect(response.body.error).toBe('INVALID_CREDENTIALS');
     });
 
     it('should return 401 for inactive user', async () => {

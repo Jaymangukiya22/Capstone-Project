@@ -157,12 +157,14 @@ services:
       # per ~8 matches (old: 500 workers) would need ~625 processes for 5k
       # matches and OOM the box. Instead: a few workers, each holding many.
       #   3 workers x 2500 matches = 7500 match capacity (> the 5k target)
-      # MAX_MATCHES_PER_WORKER (pool's view) and MAX_MATCHES (worker's own hard
-      # cap) MUST stay in sync or the pool will route to a worker that rejects.
+      # NOTE: do not set MAX_MATCHES here. The pool forks each worker with
+      # MAX_MATCHES = MAX_MATCHES_PER_WORKER (enhancedWorkerPool.spawnWorker),
+      # so a separate MAX_MATCHES env is dead config and previously contradicted
+      # MAX_MATCHES_PER_WORKER (e.g. a stray MAX_MATCHES=3). Set only
+      # MAX_MATCHES_PER_WORKER; the worker's own cap derives from it.
       MIN_WORKERS: ${MIN_WORKERS:-3}
       MAX_WORKERS: ${MAX_WORKERS:-4}
       MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-2500}
-      MAX_MATCHES: ${MAX_MATCHES:-2500}
       WORKER_IDLE_TIMEOUT: ${WORKER_IDLE_TIMEOUT:-300000}
       # Scaling
       SCALE_UP_THRESHOLD: ${SCALE_UP_THRESHOLD:-0.5}

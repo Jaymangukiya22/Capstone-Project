@@ -63,6 +63,15 @@ class WorkerMatchService {
   private questionTimers: Map<string, NodeJS.Timeout> = new Map();
   private staleMatchReaperInterval: NodeJS.Timeout | null = null;
 
+  // Per-worker cache of a quiz's questions. loadQuizQuestions runs a heavy
+  // 3-level nested-include query and was previously re-run on every match
+  // hydration (create/join/playerReady/submitAnswer) - at scale, many matches
+  // share the same quiz and re-issued the identical query. Questions are
+  // static during runtime; cache them with a short TTL so a quiz edit still
+  // propagates within QUIZ_CACHE_TTL_MS.
+  private questionsCache: Map<number, { questions: any[]; expiresAt: number }> = new Map();
+  private readonly questionsCacheTtlMs: number = parseInt(process.env.QUIZ_CACHE_TTL_MS || '300000', 10);
+
   // Stale-match reaper: force-terminate matches with no activity for 5 minutes,
   // checked every 60 seconds.
   private readonly staleMatchTimeoutMs: number = parseInt(process.env.STALE_MATCH_TIMEOUT_MS || '300000', 10);
@@ -275,6 +284,23 @@ class WorkerMatchService {
   }
 
   private async loadQuizQuestions(quizId: number): Promise<any[]> {
+    // Serve from the per-worker cache when fresh - avoids the heavy nested
+    // include on every match hydration for a quiz already loaded on this worker.
+    const cached = this.questionsCache.get(quizId);
+    if (cached && cached.expiresAt > Date.now()) {
+      // Return a deep copy so per-match mutation can't corrupt the shared cache.
+      return cached.questions.map(q => ({ ...q, options: q.options.map((o: any) => ({ ...o })) }));
+    }
+
+    const loaded = await this.loadQuizQuestionsFromDb(quizId);
+    if (loaded.length > 0) {
+      this.questionsCache.set(quizId, { questions: loaded, expiresAt: Date.now() + this.questionsCacheTtlMs });
+    }
+    // Deep copy on the way out too, for the same isolation reason.
+    return loaded.map(q => ({ ...q, options: q.options.map((o: any) => ({ ...o })) }));
+  }
+
+  private async loadQuizQuestionsFromDb(quizId: number): Promise<any[]> {
     try {
       const quizQuestions = await QuizQuestion.findAll({
         where: { quizId },
@@ -553,12 +579,15 @@ class WorkerMatchService {
       this.userToMatch.set(userId, matchId);
       match.lastActivityAt = Date.now();
 
-      // Save to Redis immediately
+      // Save to Redis immediately. This await is the actual consistency
+      // guarantee - the Redis write is durable before we proceed. The old
+      // blind 500ms sleep here was redundant (it "waited for Redis" after
+      // already awaiting the write) and added 500ms to every second-player
+      // join; the worker-assignment race it claimed to prevent is handled by
+      // the master (it writes match.workerId synchronously before forwarding),
+      // and any residual join/ready ordering race is covered by the retry
+      // loop in playerReady().
       await this.saveMatchState(matchId, match);
-      
-      // Wait longer to ensure Redis is fully updated before next join
-      // This prevents race conditions where second player gets assigned to different worker
-      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Notify master
       this.notifyMaster({
@@ -691,12 +720,15 @@ class WorkerMatchService {
       this.ensureQuestionTimerForHydratedMatch(matchId, match);
     }
 
-    // CRITICAL FIX: Wait for player to be in match (with retries for race condition)
+    // Wait for the player to be in the match (guards CLIENT_READY arriving
+    // before this worker finished processing the join). Early-exits the
+    // instant the player appears, so the happy path costs zero iterations;
+    // finer 50ms granularity (same ~1s max window) recovers faster than the
+    // old 100ms steps when a real race does occur.
     let retries = 0;
-    const maxRetries = 10;
+    const maxRetries = 20;
     while (!match.players.has(userId) && retries < maxRetries) {
-      logInfo(`Worker ${workerId}: Player not yet in match, retrying... (${retries + 1}/${maxRetries})`, { matchId, userId });
-      await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+      await new Promise(resolve => setTimeout(resolve, 50));
       retries++;
       
       // Reload match from Redis in case it was updated

@@ -12,6 +12,10 @@ if (!cluster.isWorker) {
 
 const workerId = cluster.worker!.id;
 const MAX_MATCHES = parseInt(process.env.MAX_MATCHES || '5', 10);
+// Extra time (on top of the quiz's per-question timeLimit) before the server
+// force-advances a question nobody has finished submitting. Covers network
+// latency on the client's own timeout firing and its submit round-trip.
+const QUESTION_TIMEOUT_GRACE_SECONDS = parseInt(process.env.QUESTION_TIMEOUT_GRACE_SECONDS || '5', 10);
 
 // Match data structures
 interface MatchPlayer {
@@ -48,6 +52,8 @@ interface MatchRoom {
   joinCode?: string;
   mode?: 'FRIEND' | 'AUTO';
   questionTimeoutId?: NodeJS.Timeout;
+  dbId?: number; // Postgres Match.id, cached after first ensureDbMatch() resolution
+  lastActivityAt: number; // updated on answer submission, question advance, player join/reconnect
 }
 
 class WorkerMatchService {
@@ -55,10 +61,17 @@ class WorkerMatchService {
   private userToMatch: Map<number, string> = new Map();
   private redis: any;
   private questionTimers: Map<string, NodeJS.Timeout> = new Map();
+  private staleMatchReaperInterval: NodeJS.Timeout | null = null;
+
+  // Stale-match reaper: force-terminate matches with no activity for 5 minutes,
+  // checked every 60 seconds.
+  private readonly staleMatchTimeoutMs: number = parseInt(process.env.STALE_MATCH_TIMEOUT_MS || '300000', 10);
+  private readonly staleMatchCheckIntervalMs: number = parseInt(process.env.STALE_MATCH_CHECK_INTERVAL_MS || '60000', 10);
 
   constructor(redis: any) {
     this.redis = redis;
     this.startHeartbeat();
+    this.startStaleMatchReaper();
     // Notify master that this worker is fully initialized and ready to accept matches
     this.notifyMaster({
       type: 'worker_ready',
@@ -70,6 +83,189 @@ class WorkerMatchService {
     setInterval(() => {
       this.notifyMaster({ type: 'heartbeat' });
     }, 30000); // Every 30 seconds
+  }
+
+  private startStaleMatchReaper() {
+    this.staleMatchReaperInterval = setInterval(() => {
+      this.reapStaleMatches();
+    }, this.staleMatchCheckIntervalMs);
+  }
+
+  private reapStaleMatches() {
+    const now = Date.now();
+    this.matches.forEach((match, matchId) => {
+      if (match.status === 'COMPLETED') return;
+
+      const lastActivity = match.lastActivityAt || match.createdAt.getTime();
+      if (now - lastActivity > this.staleMatchTimeoutMs) {
+        this.terminateStaleMatch(matchId, match);
+      }
+    });
+  }
+
+  private async terminateStaleMatch(matchId: string, match: MatchRoom) {
+    const idleMs = Date.now() - (match.lastActivityAt || match.createdAt.getTime());
+    logInfo(`Worker ${workerId}: Terminating stale match due to inactivity`, { matchId, idleMs });
+
+    this.clearQuestionTimer(matchId);
+
+    this.emitToMatch(matchId, 'match_terminated', {
+      matchId,
+      reason: 'inactivity',
+      message: 'Match ended due to inactivity.'
+    });
+
+    // Same cleanup used when a match ends normally (see endMatch): drop every
+    // player -> match mapping, the match itself, its Redis snapshot, and tell
+    // the master so worker-pool bookkeeping (matchCount/activeMatches) stays correct.
+    match.players.forEach((player) => {
+      this.userToMatch.delete(player.userId);
+    });
+    this.matches.delete(matchId);
+
+    try {
+      await this.redis.del(`match:${matchId}`);
+    } catch (error) {
+      logError(`Worker ${workerId}: Failed to delete stale match from Redis`, error as Error);
+    }
+
+    this.notifyMaster({ type: 'match_completed', matchId });
+  }
+
+  public shutdown() {
+    if (this.staleMatchReaperInterval) {
+      clearInterval(this.staleMatchReaperInterval);
+      this.staleMatchReaperInterval = null;
+    }
+    this.questionTimers.forEach((timer) => clearTimeout(timer));
+    this.questionTimers.clear();
+  }
+
+  private clearQuestionTimer(matchId: string) {
+    const timer = this.questionTimers.get(matchId);
+    if (timer) {
+      clearTimeout(timer);
+      this.questionTimers.delete(matchId);
+    }
+  }
+
+  // Server-owned deadline for the current question so a disconnected/stalled
+  // opponent can't wedge the match forever waiting on a submission that will
+  // never come (the only prior escape hatch was the 5-minute stale-match
+  // reaper, which kills the whole match instead of just the one question).
+  private scheduleQuestionTimer(matchId: string, questionIndex: number) {
+    this.clearQuestionTimer(matchId);
+    const match = this.matches.get(matchId);
+    if (!match) return;
+
+    const timeoutMs = (match.timeLimit + QUESTION_TIMEOUT_GRACE_SECONDS) * 1000;
+    const timer = setTimeout(() => {
+      this.handleQuestionTimeout(matchId, questionIndex).catch((error) =>
+        logError(`Worker ${workerId}: Failed to handle question timeout`, error as Error)
+      );
+    }, timeoutMs);
+
+    this.questionTimers.set(matchId, timer);
+  }
+
+  // If a match is IN_PROGRESS but was just hydrated from Redis (e.g. this
+  // worker didn't originate it, or replaced a dead worker holding it), this
+  // process has no question timer running for it yet. Schedule one for
+  // whatever time remains on the current question instead of leaving the
+  // match with no server-side deadline until the next answer/hydration.
+  private ensureQuestionTimerForHydratedMatch(matchId: string, match: MatchRoom) {
+    if (match.status !== 'IN_PROGRESS' || this.questionTimers.has(matchId)) return;
+
+    const elapsedMs = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+    const remainingMs = match.timeLimit * 1000 + QUESTION_TIMEOUT_GRACE_SECONDS * 1000 - elapsedMs;
+    const questionIndex = match.currentQuestionIndex;
+
+    if (remainingMs <= 0) {
+      // Already overdue - handle it right away rather than scheduling a
+      // negative/zero timeout.
+      this.handleQuestionTimeout(matchId, questionIndex).catch((error) =>
+        logError(`Worker ${workerId}: Failed to handle overdue question timeout`, error as Error)
+      );
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.handleQuestionTimeout(matchId, questionIndex).catch((error) =>
+        logError(`Worker ${workerId}: Failed to handle question timeout`, error as Error)
+      );
+    }, remainingMs);
+
+    this.questionTimers.set(matchId, timer);
+  }
+
+  private async handleQuestionTimeout(matchId: string, questionIndex: number) {
+    const match = this.matches.get(matchId);
+    if (!match) return;
+
+    // The question already advanced (both players submitted in time) or the
+    // match ended by the time this fired - nothing to do.
+    if (match.status !== 'IN_PROGRESS' || match.currentQuestionIndex !== questionIndex) {
+      return;
+    }
+
+    const currentQuestion = match.questions[match.currentQuestionIndex];
+    if (!currentQuestion) return;
+
+    const correctOptionIds = currentQuestion.options
+      .filter((opt: any) => opt.isCorrect)
+      .map((opt: any) => opt.id);
+
+    let anyForced = false;
+    for (const player of match.players.values()) {
+      if (player.hasSubmittedCurrent) continue;
+      anyForced = true;
+
+      player.answers.push({
+        questionId: currentQuestion.id,
+        selectedOptions: [],
+        isCorrect: false,
+        timeSpent: match.timeLimit,
+        points: 0
+      });
+      player.hasSubmittedCurrent = true;
+
+      if (player.socketId) {
+        this.emitToSocket(player.socketId, 'answer_result', {
+          isCorrect: false,
+          points: 0,
+          correctOptions: correctOptionIds,
+          totalScore: player.score,
+          timedOut: true
+        });
+      }
+    }
+
+    if (!anyForced) return;
+
+    logInfo(`Worker ${workerId}: Question timed out, force-advancing`, {
+      matchId,
+      questionIndex: match.currentQuestionIndex
+    });
+
+    match.lastActivityAt = Date.now();
+    await this.saveMatchState(matchId, match);
+
+    this.emitToMatch(matchId, 'question_timed_out', {
+      matchId,
+      questionIndex: match.currentQuestionIndex
+    });
+
+    this.emitToMatch(matchId, 'score_update', {
+      matchId,
+      players: this.getPlayerList(match)
+    });
+
+    if (match.currentQuestionIndex >= match.questions.length - 1) {
+      await this.endMatch(matchId);
+      return;
+    }
+
+    await this.nextQuestion(matchId);
   }
 
   private notifyMaster(message: any) {
@@ -160,7 +356,8 @@ class WorkerMatchService {
       questions,
       createdAt: new Date(),
       joinCode,
-      mode: 'FRIEND'
+      mode: 'FRIEND',
+      lastActivityAt: Date.now()
     };
 
     // Add creator
@@ -243,7 +440,8 @@ class WorkerMatchService {
         questions,
         createdAt: new Date(storedMatch.createdAt),
         joinCode: storedMatch.joinCode,
-        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO')
+        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
+        lastActivityAt: Date.now()
       };
 
       // Restore players
@@ -281,6 +479,8 @@ class WorkerMatchService {
         playersInRedis: Array.isArray(storedMatch.players) ? storedMatch.players.length : 0,
         matchesInThisWorker: this.matches.size
       });
+
+      this.ensureQuestionTimerForHydratedMatch(matchId, match);
     }
 
     if (match.status !== 'WAITING' && !match.players.has(userId)) {
@@ -297,11 +497,17 @@ class WorkerMatchService {
       const player = match.players.get(userId)!;
       player.socketId = socketId;
       this.userToMatch.set(userId, matchId);
+      match.lastActivityAt = Date.now();
 
       // Send reconnection state
       if (match.status === 'IN_PROGRESS') {
         const currentQuestion = match.questions[match.currentQuestionIndex];
         const timeElapsed = match.questionStartTime ? Date.now() - match.questionStartTime : 0;
+
+        // The reconnecting client can't tell "opponent is still thinking" from
+        // "opponent disconnected and this match is dead" without this - it was
+        // previously only getting its own state back.
+        const opponent = Array.from(match.players.values()).find(p => p.userId !== userId);
 
         this.emitToSocket(socketId, 'match_reconnected', {
           question: this.sanitizeQuestion(currentQuestion, match.timeLimit),
@@ -310,7 +516,14 @@ class WorkerMatchService {
           timeElapsed: Math.floor(timeElapsed / 1000),
           playerScore: player.score,
           playerAnswers: player.answers,
-          hasSubmittedCurrent: player.hasSubmittedCurrent
+          hasSubmittedCurrent: player.hasSubmittedCurrent,
+          opponent: opponent ? {
+            userId: opponent.userId,
+            username: opponent.username,
+            connected: !!opponent.socketId,
+            score: opponent.score,
+            hasSubmittedCurrent: opponent.hasSubmittedCurrent
+          } : null
         });
       } else {
         // Pre-game reconnect: just send current lobby state
@@ -338,6 +551,7 @@ class WorkerMatchService {
 
       match.players.set(userId, player);
       this.userToMatch.set(userId, matchId);
+      match.lastActivityAt = Date.now();
 
       // Save to Redis immediately
       await this.saveMatchState(matchId, match);
@@ -451,7 +665,8 @@ class WorkerMatchService {
         questions,
         createdAt: new Date(storedMatch.createdAt),
         joinCode: storedMatch.joinCode,
-        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO')
+        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
+        lastActivityAt: Date.now()
       };
 
       // Restore players
@@ -473,6 +688,7 @@ class WorkerMatchService {
       }
 
       this.matches.set(matchId, match);
+      this.ensureQuestionTimerForHydratedMatch(matchId, match);
     }
 
     // CRITICAL FIX: Wait for player to be in match (with retries for race condition)
@@ -589,6 +805,7 @@ class WorkerMatchService {
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
+    match.lastActivityAt = Date.now();
 
     Array.from(match.players.values()).forEach(p => {
       p.hasSubmittedCurrent = false;
@@ -602,6 +819,8 @@ class WorkerMatchService {
       questionIndex: 0,
       totalQuestions: match.questions.length
     });
+
+    this.scheduleQuestionTimer(matchId, 0);
 
     logInfo(`Worker ${workerId}: Match started - waiting for player answers`, {
       matchId,
@@ -633,7 +852,8 @@ class WorkerMatchService {
         questions,
         createdAt: new Date(storedMatch.createdAt),
         joinCode: storedMatch.joinCode,
-        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO')
+        mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
+        lastActivityAt: Date.now()
       };
 
       if (storedMatch.players && Array.isArray(storedMatch.players)) {
@@ -654,6 +874,7 @@ class WorkerMatchService {
       }
 
       this.matches.set(matchId, match);
+      this.ensureQuestionTimerForHydratedMatch(matchId, match);
     }
 
     if (match.status !== 'IN_PROGRESS') {
@@ -718,23 +939,10 @@ class WorkerMatchService {
       points
     });
     player.hasSubmittedCurrent = true;
+    match.lastActivityAt = Date.now();
 
-    const matchDb = await this.ensureDbMatch(match);
-    if (matchDb) {
-      await this.insertDbAnswer({
-        matchDbId: matchDb.id,
-        userId,
-        questionId: currentQuestion.id,
-        questionIndex: match.currentQuestionIndex,
-        selectedOptions: sanitizedSelectedOptions,
-        correctOptions: correctOptionIds,
-        isCorrect,
-        timeSpent: validTimeSpent,
-        points
-      });
-      await this.upsertDbPlayer(matchDb.id, match, userId);
-    }
-
+    // Redis is the reconnection source of truth during a live match — a single
+    // op, kept awaited and ahead of the emits below.
     await this.saveMatchState(matchId, match);
 
     this.emitToSocket(player.socketId, 'answer_result', {
@@ -754,6 +962,29 @@ class WorkerMatchService {
       players: this.getPlayerList(match),
       updatedUserId: userId
     });
+
+    // Postgres write is the audit/history record, NOT the live source of
+    // truth — fire it off the critical path so it never delays the
+    // player-facing emits above. In-memory state is already updated
+    // synchronously (score/answers, above), so a failed or slow DB write
+    // here cannot desync live gameplay or crash the match; only .catch-logged.
+    const questionIndexAtSubmission = match.currentQuestionIndex;
+    this.ensureDbMatchId(match)
+      .then((matchDbId) => {
+        if (matchDbId === null) return;
+        return this.insertDbAnswer({
+          matchDbId,
+          userId,
+          questionId: currentQuestion.id,
+          questionIndex: questionIndexAtSubmission,
+          selectedOptions: sanitizedSelectedOptions,
+          correctOptions: correctOptionIds,
+          isCorrect,
+          timeSpent: validTimeSpent,
+          points
+        }).then(() => this.upsertDbPlayer(matchDbId, match, userId));
+      })
+      .catch((error) => logError(`Worker ${workerId}: Failed to persist answer to database`, error as Error));
 
     const allSubmitted = Array.from(match.players.values()).every(
       p => p.hasSubmittedCurrent
@@ -794,6 +1025,7 @@ class WorkerMatchService {
     });
 
     match.questionStartTime = Date.now();
+    match.lastActivityAt = Date.now();
     await this.saveMatchState(matchId, match);
 
     const currentQuestion = match.questions[match.currentQuestionIndex];
@@ -802,12 +1034,15 @@ class WorkerMatchService {
       questionIndex: match.currentQuestionIndex,
       totalQuestions: match.questions.length
     });
+
+    this.scheduleQuestionTimer(matchId, match.currentQuestionIndex);
   }
 
   private async endMatch(matchId: string) {
     const match = this.matches.get(matchId);
     if (!match) return;
 
+    this.clearQuestionTimer(matchId);
     match.status = 'COMPLETED';
     await this.saveMatchState(matchId, match);
 
@@ -838,16 +1073,28 @@ class WorkerMatchService {
     results.sort((a, b) => b.score - a.score);
     const winnerId = results.length > 0 ? results[0].userId : null;
 
-    try {
-      const matchDb = await this.ensureDbMatch(match);
-      if (matchDb) {
+    // Tell both clients the match is over immediately - Postgres is the
+    // audit/history record, not the live source of truth (mirrors the same
+    // fire-and-forget pattern submitAnswer already uses), so persistence
+    // shouldn't add DB round-trip latency to a player-facing emit.
+    this.emitToMatch(matchId, 'match_completed', {
+      results,
+      winner: results[0] || null,
+      matchId,
+      completedAt: new Date().toISOString(),
+      isFriendMatch: (match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')) === 'FRIEND'
+    });
+
+    this.ensureDbMatch(match)
+      .then(async (matchDb) => {
+        if (!matchDb) return;
         await matchDb.update({
           status: 'COMPLETED',
           endedAt: new Date(),
           winnerId
         } as any);
 
-        for (const result of results) {
+        await Promise.all(results.map(async (result) => {
           const existing = await MatchPlayerModel.findOne({
             where: { matchId: matchDb.id, userId: result.userId }
           });
@@ -871,19 +1118,9 @@ class WorkerMatchService {
               finishedAt: new Date()
             } as any);
           }
-        }
-      }
-    } catch (error) {
-      logError(`Worker ${workerId}: Failed to save match to database`, error as Error);
-    }
-
-    this.emitToMatch(matchId, 'match_completed', {
-      results,
-      winner: results[0] || null,
-      matchId,
-      completedAt: new Date().toISOString(),
-      isFriendMatch: (match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')) === 'FRIEND'
-    });
+        }));
+      })
+      .catch((error) => logError(`Worker ${workerId}: Failed to save match to database`, error as Error));
 
     setTimeout(async () => {
       match.players.forEach(p => {
@@ -976,9 +1213,18 @@ class WorkerMatchService {
 
   private async ensureDbMatch(match: MatchRoom): Promise<Match | null> {
     try {
+      if (match.dbId !== undefined) {
+        const cached = await Match.findByPk(match.dbId);
+        if (cached) return cached;
+      }
+
       const existing = await Match.findOne({ where: { matchId: match.id } });
-      if (existing) return existing;
-      return await Match.create({
+      if (existing) {
+        match.dbId = existing.id;
+        return existing;
+      }
+
+      const created = await Match.create({
         matchId: match.id,
         quizId: match.quizId,
         type: 'FRIEND_MATCH' as any,
@@ -987,10 +1233,20 @@ class WorkerMatchService {
         startedAt: match.createdAt,
         mode: match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')
       } as any);
+      match.dbId = created.id;
+      return created;
     } catch (error) {
       logError(`Worker ${workerId}: Failed to ensure Match row`, error as Error);
       return null;
     }
+  }
+
+  // Hot-path variant for the per-answer flow: once match.dbId is cached, this
+  // resolves with ZERO database round trips (no Match.findOne/findByPk at all).
+  private async ensureDbMatchId(match: MatchRoom): Promise<number | null> {
+    if (match.dbId !== undefined) return match.dbId;
+    const matchDb = await this.ensureDbMatch(match);
+    return matchDb ? matchDb.id : null;
   }
 
   private async upsertDbPlayer(matchDbId: number, match: MatchRoom, userId: number) {
@@ -1056,6 +1312,16 @@ class WorkerMatchService {
       activeMatches: Array.from(this.matches.keys())
     };
   }
+
+  // Invoked when the master's own idle-match sweep (enhancedWorkerPool's
+  // cleanupStaleMatches) decides a match is stale, so this worker's actual
+  // match state gets torn down on the same signal instead of running an
+  // independent, uncoordinated 5-minute timer against the same data.
+  public async forceTerminateMatch(matchId: string) {
+    const match = this.matches.get(matchId);
+    if (!match) return;
+    await this.terminateStaleMatch(matchId, match);
+  }
 }
 
 // Initialize worker
@@ -1102,6 +1368,10 @@ async function startWorker() {
             await workerService.clientReady(message);
             break;
 
+          case 'terminate_match':
+            await workerService.forceTerminateMatch(message.matchId);
+            break;
+
           case 'disconnect':
             // Player disconnected - handled by socket.io adapter
             logInfo(`Worker ${workerId}: Player disconnect event`, { userId: message.userId, matchId: message.matchId });
@@ -1109,6 +1379,7 @@ async function startWorker() {
 
           case 'shutdown':
             logInfo(`Worker ${workerId}: Shutdown requested`);
+            workerService.shutdown();
             process.exit(0);
             break;
 
@@ -1129,11 +1400,13 @@ async function startWorker() {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logInfo(`Worker ${workerId}: SIGTERM received`);
+  workerService?.shutdown();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logInfo(`Worker ${workerId}: SIGINT received`);
+  workerService?.shutdown();
   process.exit(0);
 });
 

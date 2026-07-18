@@ -26,6 +26,9 @@ export class EnhancedWorkerPool {
   private matchToWorker: Map<string, number> = new Map();
   private matchLastActivity: Map<string, number> = new Map();
   private userToMatch: Map<number, string> = new Map();
+  // Reverse index of matchToUsers so teardownMatch can clear every
+  // userToMatch entry for a match without a linear scan of userToMatch.
+  private matchToUsers: Map<string, Set<number>> = new Map();
   private io: SocketIOServer;
   private redis: Redis;
   private scaleCheckInterval: NodeJS.Timeout | null = null;
@@ -49,7 +52,9 @@ export class EnhancedWorkerPool {
 
     cluster.on('exit', (worker, code, signal) => {
       logError('Worker died', new Error(`Worker ${worker.id} died (${signal || code})`));
-      this.handleWorkerDeath(worker);
+      this.handleWorkerDeath(worker).catch((error) =>
+        logError('Failed to clean up after worker death', error as Error)
+      );
     });
 
     cluster.on('online', (worker) => {
@@ -163,8 +168,8 @@ export class EnhancedWorkerPool {
     workerInfo.activeMatches.add(matchId);
     this.matchToWorker.set(matchId, workerId);
     this.matchLastActivity.set(matchId, Date.now());
-    this.userToMatch.set(userId, matchId);
-    
+    this.trackUserInMatch(matchId, userId);
+
     // CRITICAL FIX: Only increment counter once per unique match
     if (!this.trackedMatches.has(matchId)) {
       this.trackedMatches.add(matchId);
@@ -190,10 +195,7 @@ export class EnhancedWorkerPool {
 
     workerInfo.matchCount = Math.max(0, workerInfo.matchCount - 1);
     workerInfo.activeMatches.delete(matchId);
-    this.matchToWorker.delete(matchId);
-    this.matchLastActivity.delete(matchId);
-    // Remove from tracked matches when completed
-    this.trackedMatches.delete(matchId);
+    this.teardownMatch(matchId);
 
     if (workerInfo.matchCount === 0) {
       workerInfo.status = 'idle';
@@ -208,29 +210,77 @@ export class EnhancedWorkerPool {
   }
 
   private handlePlayerJoined(matchId: string, userId: number) {
-    this.userToMatch.set(userId, matchId);
+    this.trackUserInMatch(matchId, userId);
   }
 
   private handlePlayerLeft(matchId: string, userId: number) {
     this.userToMatch.delete(userId);
+    this.matchToUsers.get(matchId)?.delete(userId);
   }
 
-  private handleWorkerDeath(worker: Worker) {
+  private trackUserInMatch(matchId: string, userId: number) {
+    this.userToMatch.set(userId, matchId);
+    let users = this.matchToUsers.get(matchId);
+    if (!users) {
+      users = new Set();
+      this.matchToUsers.set(matchId, users);
+    }
+    users.add(userId);
+  }
+
+  // Single teardown path for every way a match can stop existing (completed,
+  // worker death, idle sweep) so matchToWorker/matchLastActivity/
+  // trackedMatches/userToMatch/matchToUsers can't drift out of sync with
+  // each other depending on which exit path was taken.
+  private teardownMatch(matchId: string) {
+    this.matchToWorker.delete(matchId);
+    this.matchLastActivity.delete(matchId);
+    this.trackedMatches.delete(matchId);
+
+    const userIds = this.matchToUsers.get(matchId);
+    if (userIds) {
+      for (const userId of userIds) {
+        if (this.userToMatch.get(userId) === matchId) {
+          this.userToMatch.delete(userId);
+        }
+      }
+      this.matchToUsers.delete(matchId);
+    }
+  }
+
+  private async handleWorkerDeath(worker: Worker) {
     const workerInfo = this.workers.get(worker.id);
     if (!workerInfo) return;
 
     // Reassign all matches from dead worker
-    workerInfo.activeMatches.forEach(matchId => {
-      this.matchToWorker.delete(matchId);
-      this.matchLastActivity.delete(matchId);
-      
+    for (const matchId of workerInfo.activeMatches) {
+      this.teardownMatch(matchId);
+
       // Notify players that match ended due to server error
       this.io.to(matchId).emit('match_error', {
         message: 'Match server restarted. Please rejoin.'
       });
 
+      // The Redis match blob caches which worker owns it (see
+      // matchServerWorker.ts saveMatchState). If we don't clear that here,
+      // a client's rejoin reads the stale workerId and the master routes it
+      // straight back to the worker that just died instead of calling
+      // assignMatch() again - leaving the rejoining client stuck.
+      try {
+        const key = `match:${matchId}`;
+        const matchData = await this.redis.get(key);
+        if (matchData) {
+          const parsed = JSON.parse(matchData);
+          delete parsed.workerId;
+          const ttl = await this.redis.ttl(key);
+          await this.redis.setex(key, ttl > 0 ? ttl : 3600, JSON.stringify(parsed));
+        }
+      } catch (error) {
+        logError('Failed to clear stale workerId after worker death', error as Error);
+      }
+
       logInfo('Reassigning match after worker death', { matchId, workerId: worker.id });
-    });
+    }
 
     this.workers.delete(worker.id);
 
@@ -272,6 +322,18 @@ export class EnhancedWorkerPool {
     // If no workers available at all
     if (!selectedWorker) {
       logError('No workers available', new Error(`Cannot assign match ${matchId} - no workers`));
+      return null;
+    }
+
+    // Every worker is at or over its declared capacity and there's no room
+    // to spawn more (MAX_WORKERS reached). Without this, load-balancing
+    // would keep stacking matches onto whichever worker is "least" overloaded
+    // instead of refusing - overloading a single worker's event loop, which
+    // makes every match it holds feel stuck. Callers already treat a null
+    // return as "no workers" and surface NO_AVAILABLE_WORKERS to the client,
+    // so this fails loud instead of silently degrading.
+    if (minLoad >= 1 && this.workers.size >= MAX_WORKERS) {
+      logError('Worker pool at capacity', new Error(`Cannot assign match ${matchId} - all ${this.workers.size} workers at/over capacity`));
       return null;
     }
 
@@ -370,10 +432,16 @@ export class EnhancedWorkerPool {
               workerInfo.status = 'idle';
             }
           }
+
+          // Tell the worker to actually tear down its own match state
+          // instead of only decrementing this pool's bookkeeping - the
+          // worker runs its own independent 5-minute idle reaper on a
+          // different clock, and without this message the two can disagree
+          // about whether the match still exists.
+          workerInfo.worker.send({ type: 'terminate_match', matchId });
         }
 
-        this.matchToWorker.delete(matchId);
-        this.matchLastActivity.delete(matchId);
+        this.teardownMatch(matchId);
 
         this.io.to(matchId).emit('match_error', {
           message: 'Match timed out due to inactivity.'
@@ -446,10 +514,21 @@ export class EnhancedWorkerPool {
         });
 
         idleWorkers.forEach(workerInfo => {
+          const workerId = workerInfo.worker.id;
           workerInfo.worker.send({ type: 'shutdown' });
-          workerInfo.worker.kill();
-          this.workers.delete(workerInfo.worker.id);
-          logInfo('Worker removed', { workerId: workerInfo.worker.id });
+
+          // Give the worker's own shutdown() a moment to run (clears its
+          // reaper interval, etc.) before force-killing it - previously
+          // .kill() was called in the same tick as the shutdown message,
+          // racing the IPC message rather than waiting for it.
+          setTimeout(() => {
+            const current = this.workers.get(workerId);
+            if (current && !current.worker.isDead()) {
+              current.worker.kill();
+            }
+            this.workers.delete(workerId);
+            logInfo('Worker removed', { workerId });
+          }, 2000);
         });
       }
     }
@@ -474,6 +553,16 @@ export class EnhancedWorkerPool {
         if (now - workerInfo.lastHeartbeat > timeout) {
           logError('Worker heartbeat timeout', new Error(`Worker ${workerId} not responding`));
           workerInfo.status = 'dead';
+          // Attempt a graceful shutdown message first - a worker that's just
+          // slow (GC/event-loop stall) rather than truly dead may still be
+          // able to act on it - but don't wait for it: the whole point of
+          // this reaper is that the worker has already stopped heartbeating,
+          // so it may never process the message.
+          try {
+            workerInfo.worker.send({ type: 'shutdown' });
+          } catch {
+            // Worker's IPC channel may already be gone; fall through to kill.
+          }
           workerInfo.worker.kill();
         }
       }
@@ -544,7 +633,10 @@ export class EnhancedWorkerPool {
 
     this.workers.clear();
     this.matchToWorker.clear();
+    this.matchLastActivity.clear();
+    this.trackedMatches.clear();
     this.userToMatch.clear();
+    this.matchToUsers.clear();
 
     logInfo('Worker pool shutdown complete');
   }

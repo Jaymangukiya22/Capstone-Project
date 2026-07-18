@@ -36,10 +36,14 @@ const sequelize = new Sequelize({
     MatchAnswer
   ],
   pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000,
+    // Previously hardcoded to max:10 regardless of DB_POOL_MAX/DB_POOL_MIN -
+    // Postgres itself is tuned for a much larger max_connections budget
+    // (docker-compose.yml POSTGRES_MAX_CONNECTIONS), so a pool this small was
+    // the actual bottleneck under concurrent load, not the database.
+    max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+    min: parseInt(process.env.DB_POOL_MIN || '0', 10),
+    acquire: parseInt(process.env.DB_POOL_ACQUIRE_TIMEOUT || '30000', 10),
+    idle: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '10000', 10),
   },
 });
 

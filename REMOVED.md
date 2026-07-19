@@ -10,7 +10,25 @@ Branch `hotfix/error-handeling`. Each group is its own commit so any of them can
 | `955adfd` | `test_disconnect_fix.js` (root), `deploy.js`, `deploy-all.sh`, `deploy-all.bat`, `QUICK_FIX.sh` | `test_disconnect_fix.js`: standalone manual socket.io smoke script, never wired into `npm test`/jest — not literally broken, but redundant and superseded by the reconnection-path analysis in AUDIT_FINDINGS.md Section 1. `deploy.js`: Node reimplementation of `deploy.sh`/`deploy.bat` covering the same three modes — redundant. `deploy-all.sh`/`.bat`: batch-ran all three deploy modes including the now-abandoned "network" mode. `QUICK_FIX.sh`: one-off fix for the 403 Forbidden Vite build issue, already applied and documented as VERIFIED (that doc was removed in the next commit). Canonical deploy path kept: `deploy.sh`/`deploy.bat` (local, multi-mode) + `deploy-ec2.sh`/`deploy-ec2-envs.sh`/`deploy-ec2-update.sh` (cloudflared + EC2 production). |
 | `c5c0d83` | `DISCONNECT_FIX_VERIFIED.md`, `FIX_DISCONNECT_DURING_MATCH.md`, `FIX_403_FORBIDDEN.md`, `FILES_CREATED.md`, `FINAL_SUMMARY.md` | Point-in-time "fix applied/verified" status docs superseded by current code state (the 403 fix's corresponding script was just removed; the disconnect-fix docs are superseded by the gaps found in AUDIT_FINDINGS.md Section 1, which found the current reconnection path still has real holes these docs don't cover). `FILES_CREATED.md`/`FINAL_SUMMARY.md` are stale scaffolding-completion logs from an earlier infra pass, fully superseded by git history. |
 
-## Explicitly left in place (not this pass's call)
+## Cleanup pass 2 (post-observability rebuild)
+
+Removed the code/config the observability rebuild made dead, plus the deployment/docs sprawl the user approved:
+
+| What | Why |
+|---|---|
+| `backend/src/tracing.ts` + its `server.ts` import + the 4 `@opentelemetry/*` deps | No-op OpenTelemetry stub (fully commented out); superseded by the correlation-ID approach. The OTel packages were unused. |
+| `backend/src/middleware/metricsMiddleware.ts` | Hand-written metrics middleware imported nowhere (server.ts uses express-prom-bundle; its `metricsMiddleware` const is a local promBundle instance). |
+| `/metrics-custom` route + `metricsEndpoint` export | Redundant now that business metrics register on the default registry served at `/metrics`. |
+| `influxdb` service + `influxdb_data`/`influxdb_config` volumes + cloudflare Grafana datasource provisioning (`cloudflare.yml`, `cloudflare.yml.example`) | Only the already-deleted cloudflare analytics dashboards used influxdb. |
+| `monitoring/autoscaler/autoscale-matchserver.ps1` | Standalone script wired into nothing; the worker pool autoscales itself in `enhancedWorkerPool`. |
+| `docker-stack.yml` + `scripts/verify-replicas.sh` / `.bat` | Docker Swarm path — doesn't match the single-host target; verify-replicas were swarm-only tools. Only echo/help text referenced them (fixed the stale `generate-env.js` line). |
+| 15 root markdown docs (`DEPLOYMENT_*`, `PRODUCTION_*`, `SCALING_*`, `QUICK_*`, `README_DEPLOYMENT.md`, `SETUP_GUIDE.md`, `DOCUMENTATION_GUIDE.md`, `INFRASTRUCTURE_UPDATES.md`) | Overlapping deployment/scaling guides. Kept: `README.md`, `ARCHITECTURE.md`, `CLOUDFLARE_TUNNEL_SETUP.md`, `AUDIT_FINDINGS.md`, `REMOVED.md`, `DEV_NOTES.md`. |
+| "network" deploy mode removed from `deploy.sh` + `deploy.bat` (functions, dispatch branch, usage text) | Abandoned network mode; depended on the removed `.env.network`. Localhost + self-hosted (cloudflared) modes kept and syntax-verified. |
+| `.env.network`, `.env.unified` (local only — gitignored) | Abandoned network mode + old unified template. |
+
+**Kept despite being a removal candidate: `docker-compose.prod.yml`** — the earlier plan was to remove it, but `.github/workflows/ci.yml` actively uses it (`docker compose -f docker-compose.prod.yml pull/up/ps`) for its deploy job. Removing it would break CI, and migrating CI to `docker-compose.yml` would change prod deploy behavior (it would pull in the whole monitoring stack). Flagged for a deliberate decision rather than silently breaking CI or changing its deploy target.
+
+## Explicitly left in place (superseded by cleanup pass 2 above for the resolved items)
 
 - **`.env.network`** — gitignored/untracked; deleting it isn't git-reversible. Still referenced by `deploy.sh`/`deploy.bat`'s "network" mode menu option.
 - **12 overlapping deployment/scaling markdown docs** (`DEPLOYMENT_CHECKLIST.md`, `DEPLOYMENT_GUIDE.md`, `DEPLOYMENT_MODES.md`, `DEPLOYMENT_QUICK_START.md`, `DEPLOYMENT_SUMMARY.md`, `PRODUCTION_DEPLOYMENT_GUIDE.md`, `PRODUCTION-2000-MATCHES-GUIDE.md`, `QUICK_START.md`, `QUICK_REFERENCE.md`, `README_DEPLOYMENT.md`, `SCALING_CONFIGURATION.md`, `SCALING_SUMMARY.md`, `SETUP_GUIDE.md`, `DOCUMENTATION_GUIDE.md`, `INFRASTRUCTURE_UPDATES.md`) — needs a human call on a `docs/` consolidation, not a mechanical delete.

@@ -273,11 +273,7 @@ if (deploymentMode === 'localhost') {
 }
 
 console.log('\n🚀 Next Steps:');
-if (deploymentMode === 'production') {
-  console.log('1. docker stack deploy -c docker-stack.yml quizup');
-} else {
-  console.log('1. docker-compose up -d');
-}
+console.log('1. docker compose up -d');
 console.log('2. Test the application');
 console.log('3. Monitor performance');
 

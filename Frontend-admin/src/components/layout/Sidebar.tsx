@@ -10,6 +10,7 @@ import {
   User,
   BarChart
 } from "lucide-react"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,7 @@ function getDisplayName(firstName?: string, lastName?: string, username?: string
 // User Profile Component
 function UserProfile() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   if (!user) {
     return (
@@ -70,7 +72,7 @@ function UserProfile() {
 
   const handleLogout = () => {
     logout();
-    window.location.href = '/login';
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -91,7 +93,7 @@ function UserProfile() {
         <Button
           variant="ghost"
           className="w-full justify-start text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-          onClick={() => window.location.href = '/profile'}
+          onClick={() => navigate('/profile')}
         >
           <User className="mr-3 h-4 w-4 text-gray-400 dark:text-gray-500" />
           Profile
@@ -177,7 +179,7 @@ const bottomNavigation = [
 
 export function Sidebar() {
   const { user } = useAuth();
-  const currentPath = window.location.pathname;
+  const { pathname: currentPath } = useLocation();
   
   // Determine which navigation to show based on user role
   const navigation = user?.role === 'ADMIN' ? adminNavigation : studentNavigation;
@@ -207,9 +209,9 @@ export function Sidebar() {
           const Icon = item.icon
           const isActive = currentPath === item.href || (item.href === '/categories' && currentPath === '/')
           return (
-            <a
+            <Link
               key={item.name}
-              href={item.href}
+              to={item.href}
               className={cn(
                 "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150",
                 isActive
@@ -219,12 +221,12 @@ export function Sidebar() {
             >
               <Icon className={cn(
                 "mr-3 h-5 w-5",
-                isActive 
-                  ? "text-blue-600 dark:text-blue-400" 
+                isActive
+                  ? "text-blue-600 dark:text-blue-400"
                   : "text-gray-400 dark:text-gray-500"
               )} />
               {item.name}
-            </a>
+            </Link>
           )
         })}
       </nav>
@@ -234,14 +236,14 @@ export function Sidebar() {
         {bottomNavigation.map((item) => {
           const Icon = item.icon
           return (
-            <a
+            <Link
               key={item.name}
-              href={item.href}
+              to={item.href}
               className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
             >
               <Icon className="mr-3 h-5 w-5 text-gray-400 dark:text-gray-500" />
               {item.name}
-            </a>
+            </Link>
           )
         })}
       </div>

@@ -1294,27 +1294,31 @@ const FriendMatchInterface: React.FC = () => {
     }
   }, [currentQuestion, totalQuestions, questionStartTime, submitCurrentAnswer]);
 
-  // Navigation handlers
-  const handleNext = () => {
+  // Navigation handlers. These are useCallback'd so the memoized children
+  // (MemoizedQuizNavigation) and the isolated MatchTimer receive stable
+  // function props - otherwise every parent re-render (score/opponent socket
+  // events) recreates them, defeating the memo and, for MatchTimer's
+  // onTimeUp, re-running its interval effect and churning the countdown.
+  const handleNext = useCallback(() => {
     submitCurrentAnswer();
-  };
+  }, [submitCurrentAnswer]);
 
   // Quiz submission - DISABLE individual completion to wait for both players
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     submitCurrentAnswer();
     setIsSubmitting(true);
-    
+
     // Don't complete quiz individually - wait for server to handle both players
     console.log(' Answer submitted, waiting for server to handle completion...');
     setTimeout(() => {
       setIsSubmitting(false);
     }, 1000);
-  };
+  }, [submitCurrentAnswer]);
 
   // Handle time up from header timer – delegate to the main timeout handler
-  const handleTimeUp = () => {
+  const handleTimeUp = useCallback(() => {
     handleQuestionTimeUp();
-  };
+  }, [handleQuestionTimeUp]);
 
   // Function to get display name for a player
   const getPlayerDisplayName = (player: MatchPlayer) => {
@@ -1333,6 +1337,19 @@ const FriendMatchInterface: React.FC = () => {
 
     return [sorted[0] || null, sorted[1] || null];
   }, [players]);
+
+  // Placeholder question list for the sidebar (progress dots). Memoized on
+  // totalQuestions so it isn't a brand-new array every render - otherwise it
+  // defeats MemoizedQuizSidebar's memo on every parent (socket) re-render.
+  const sidebarQuestions = useMemo(
+    () => Array(totalQuestions).fill(null).map((_, i) => ({
+      id: i + 1,
+      question: `Question ${i + 1}`,
+      options: ['A', 'B', 'C', 'D'],
+      correctAnswer: 'A',
+    })),
+    [totalQuestions]
+  );
 
   // Helper function to save state
   const saveCurrentState = () => {
@@ -1696,12 +1713,7 @@ const FriendMatchInterface: React.FC = () => {
           <div className="hidden xl:block xl:w-80 2xl:w-96 flex-shrink-0 border-r border-border">
             <div className="h-full overflow-y-auto p-4">
               <MemoizedQuizSidebar
-                questions={Array(totalQuestions).fill(null).map((_, i) => ({
-                  id: i + 1,
-                  question: `Question ${i + 1}`,
-                  options: ['A', 'B', 'C', 'D'],
-                  correctAnswer: 'A'
-                }))}
+                questions={sidebarQuestions}
                 currentQuestion={currentQuestion}
                 answeredQuestions={answeredQuestions}
               />

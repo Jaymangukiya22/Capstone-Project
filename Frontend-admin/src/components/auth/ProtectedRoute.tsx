@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
@@ -21,6 +22,7 @@ export function ProtectedRoute({
   redirectTo = '/login' 
 }: ProtectedRouteProps) {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Wait for auth state to load
@@ -28,30 +30,20 @@ export function ProtectedRoute({
 
     // Redirect to login if not authenticated
     if (!isAuthenticated || !user) {
-      console.log('🔒 ProtectedRoute: User not authenticated, redirecting to login');
-      window.location.href = redirectTo;
+      navigate(redirectTo, { replace: true });
       return;
     }
 
     // Check role-based access if roles are specified
     if (allowedRoles && allowedRoles.length > 0) {
       const hasAccess = allowedRoles.includes(user.role);
-      
+
       if (!hasAccess) {
-        console.log(`🚫 ProtectedRoute: User role "${user.role}" not in allowed roles:`, allowedRoles);
-        
         // Redirect based on user role
-        if (user.role === 'ADMIN') {
-          window.location.href = '/categories';
-        } else {
-          window.location.href = '/student-quiz';
-        }
-        return;
+        navigate(user.role === 'ADMIN' ? '/categories' : '/student-quiz', { replace: true });
       }
     }
-
-    console.log('✅ ProtectedRoute: Access granted for role:', user.role);
-  }, [isAuthenticated, isLoading, user, allowedRoles, redirectTo]);
+  }, [isAuthenticated, isLoading, user, allowedRoles, redirectTo, navigate]);
 
   // Show loading state while checking authentication
   if (isLoading) {

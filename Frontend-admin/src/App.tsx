@@ -1,4 +1,5 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
+import { useLocation, useNavigate } from "react-router-dom"
 import { Layout } from "@/components/layout/Layout"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { usePendingMatchCheck } from "@/components/student/PendingMatchModal"
@@ -48,13 +49,15 @@ function FullScreenSpinner({ label }: { label?: string }) {
 // Simple protected route component
 function ProtectedPage({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-  if (isLoading) {
-    return <FullScreenSpinner />;
-  }
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate('/login', { replace: true });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
 
-  if (!isAuthenticated) {
-    window.location.href = '/login';
+  if (isLoading || !isAuthenticated) {
     return <FullScreenSpinner />;
   }
 
@@ -64,14 +67,15 @@ function ProtectedPage({ children }: { children: React.ReactNode }) {
 // Simple public route component
 function PublicPage({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
       // Redirect based on role
       const redirectPath = user.role === 'ADMIN' ? '/categories' : '/student-quiz';
-      window.location.replace(redirectPath);
+      navigate(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, isLoading, user]);
+  }, [isAuthenticated, isLoading, user, navigate]);
 
   if (isLoading) {
     return <FullScreenSpinner />;
@@ -88,8 +92,11 @@ function AppContent() {
   // Check for pending matches on app load
   const { PendingMatchModal } = usePendingMatchCheck();
   
-  // Simple routing based on current path
-  const currentPath = window.location.pathname;
+  // Reactive routing: useLocation re-renders on client-side navigation (navigate())
+  // so pages swap without a full page reload. Match-flow transitions still use
+  // window.location on purpose (see the match components) - a full reload there
+  // keeps the socket/guard/sessionStorage flow exactly as it was.
+  const { pathname: currentPath } = useLocation();
 
   // Check if current page should be full-screen (without layout)
   const isFullScreenPage = ['/quiz-countdown', '/quiz-interface', '/friend-match', '/quiz-results', '/login', '/signup', '/auth-test'].includes(currentPath);

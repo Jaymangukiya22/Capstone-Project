@@ -13,8 +13,8 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Upload, Download, AlertCircle, CheckCircle, X } from "lucide-react"
-import Papa from "papaparse"
-import * as XLSX from "xlsx"
+// papaparse and xlsx (xlsx ~1MB) are dynamically imported inside the handlers
+// below so they only load when the user downloads a template or uploads a file.
 import type { Question, ImportRow, ImportValidationError } from "@/types/question"
 
 interface ImportCsvDialogProps {
@@ -100,7 +100,7 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
       .join(",")
   }
 
-  const downloadTemplate = (format: 'csv' | 'xlsx') => {
+  const downloadTemplate = async (format: 'csv' | 'xlsx') => {
     const templateData = [
       {
         question: "What is the capital of France?",
@@ -121,6 +121,7 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
     ]
 
     if (format === 'csv') {
+      const Papa = (await import("papaparse")).default
       const csv = Papa.unparse(templateData)
       const blob = new Blob([csv], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
@@ -130,6 +131,7 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
       a.click()
       URL.revokeObjectURL(url)
     } else {
+      const XLSX = await import("xlsx")
       const ws = XLSX.utils.json_to_sheet(templateData)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "Questions")
@@ -179,15 +181,17 @@ export function ImportCsvDialog({ open, onOpenChange, onImport }: ImportCsvDialo
       let data: any[]
 
       if (file.name.endsWith('.csv')) {
+        const Papa = (await import("papaparse")).default
         const text = await file.text()
         const result = Papa.parse(text, { header: true, skipEmptyLines: true })
-        
+
         if (result.errors.length > 0) {
           throw new Error(`CSV parsing error: ${result.errors[0].message}`)
         }
-        
+
         data = result.data
       } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const XLSX = await import("xlsx")
         const buffer = await file.arrayBuffer()
         const workbook = XLSX.read(buffer)
         const worksheet = workbook.Sheets[workbook.SheetNames[0]]

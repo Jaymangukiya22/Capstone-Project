@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from "../ui/select"
 import { Upload, Download, AlertCircle, CheckCircle } from "lucide-react"
-import * as XLSX from "xlsx"
 import { useCategories } from "../../hooks/useCategories"
 import type { Category } from "../../types/api"
 import { questionBankService } from "../../services/questionBankService"
@@ -75,18 +74,20 @@ export function ImportCsvDialog({
     ? apiCategories
     : []) as Category[]
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
     const templateData = [
       {
         question: "Fastest language",
         option_a: "C++",
-        option_b: "C", 
+        option_b: "C",
         option_c: "Java",
         option_d: "Python",
         correct_answer: "option_b"
       }
     ]
 
+    // xlsx is ~1MB — load it only when the user actually downloads the template.
+    const XLSX = await import("xlsx")
     const ws = XLSX.utils.json_to_sheet(templateData)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Questions")

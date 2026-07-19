@@ -82,19 +82,6 @@ const reportDbPool = () => {
 
 let updater: NodeJS.Timeout | null = null;
 
-/** Serves the default registry. /metrics (express-prom-bundle) already does
- *  this; kept so the legacy /metrics-custom route still returns real data. */
-export const metricsEndpoint = async (_req: any, res: any) => {
-  try {
-    pruneAndReportActiveUsers();
-    reportDbPool();
-    res.set('Content-Type', client.register.contentType);
-    res.end(await client.register.metrics());
-  } catch (error) {
-    res.status(500).end((error as Error).message);
-  }
-};
-
 export const initMetrics = () => {
   if (updater) return;
   updater = setInterval(() => {

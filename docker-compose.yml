@@ -454,30 +454,6 @@ services:
     cpus: ${ALERTMANAGER_CPU_LIMIT:-0.15}
     mem_limit: ${ALERTMANAGER_MEMORY_LIMIT:-128M}
 
-  influxdb:
-    image: influxdb:2.7-alpine
-    container_name: quizup_influxdb
-    ports:
-      - "8086:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: admin123
-      DOCKER_INFLUXDB_INIT_ORG: quizup
-      DOCKER_INFLUXDB_INIT_BUCKET: cloudflare
-      DOCKER_INFLUXDB_INIT_RETENTION: 30d
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
-      - influxdb_config:/etc/influxdb2
-    networks:
-      - quizup_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 # =============================================================================
 # NETWORKS
 # =============================================================================
@@ -505,8 +481,4 @@ volumes:
   alertmanager_data:
     driver: local
   loki_data:
-    driver: local
-  influxdb_data:
-    driver: local
-  influxdb_config:
     driver: local

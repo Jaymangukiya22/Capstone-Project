@@ -1,4 +1,3 @@
-import "./tracing";
 import * as dotenv from "dotenv";
 dotenv.config();
 import express from "express";
@@ -26,7 +25,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { enhancedRequestLogger } from "./middleware/requestLogger";
 import { requestContext } from "./middleware/requestContext";
 import { logInfo, logError } from "./utils/logger";
-import { metricsEndpoint, initMetrics } from "./utils/metrics";
+import { initMetrics } from "./utils/metrics";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -208,11 +207,8 @@ app.get("/debug/routes", (req, res) => {
   });
 });
 
-// Metrics endpoint (exposed by express-prom-bundle)
-// Available at /metrics
-
-// Custom metrics endpoint with our business metrics
-app.get("/metrics-custom", metricsEndpoint);
+// Metrics endpoint (exposed by express-prom-bundle at /metrics) — includes the
+// business metrics registered in utils/metrics.ts on the default registry.
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -277,7 +273,6 @@ async function startServer() {
         environment: process.env.NODE_ENV || "development",
         healthCheck: `http://${networkIP}:${PORT}/health`,
         metrics: `http://${networkIP}:${PORT}/metrics`,
-        customMetrics: `http://${networkIP}:${PORT}/metrics-custom`,
         networkAccess: `http://${networkIP}:${PORT}`,
       });
     });

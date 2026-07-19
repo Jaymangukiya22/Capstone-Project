@@ -58,7 +58,7 @@ groups:
 
       # Postgres connections high (example threshold 80% of max)
       - alert: PostgresConnectionsHigh
-        expr: pg_stat_activity_count > (pg_settings_max_connections * 0.8)
+        expr: pg_stat_activity_total_connections > (pg_settings_max_connections * 0.8)
         for: 10m
         labels:
           severity: warning

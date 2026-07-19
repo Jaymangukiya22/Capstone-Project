@@ -13,6 +13,7 @@ import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis'
 import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
 import sequelize from './config/database';
 import { User, Quiz, QuizQuestion } from './models';
+import { matchRegister } from './matchMetrics';
 
 // Mirrors middleware/auth.ts's cache key/TTL exactly, so a socket connect
 // right after a REST request can hit the same warm cache entry instead of
@@ -358,8 +359,17 @@ ${workers.map((w) =>
 `;
     }
     
+    // Append the prom-client registry (histograms/counters fed by worker IPC
+    // + default nodejs_/process_ metrics for the master event loop).
+    let promText = '';
+    try {
+      promText = await matchRegister.metrics();
+    } catch (err) {
+      logError('Failed to render prom-client metrics', err as Error);
+    }
+
     res.set('Content-Type', 'text/plain');
-    res.send((metrics + perWorkerMetrics).trim());
+    res.send(((metrics + perWorkerMetrics).trim() + '\n\n' + promText).trim());
   });
 
   // Create friend match (HTTP API)

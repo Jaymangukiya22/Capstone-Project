@@ -24,6 +24,7 @@ import friendMatchRoutes from "./routes/friendMatchRoutes";
 import performanceRoutes from "./routes/performanceRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { enhancedRequestLogger } from "./middleware/requestLogger";
+import { requestContext } from "./middleware/requestContext";
 import { logInfo, logError } from "./utils/logger";
 import { metricsEndpoint, initMetrics } from "./utils/metrics";
 
@@ -125,6 +126,7 @@ console.log('   CORS_ORIGIN env:', process.env.CORS_ORIGIN);
 console.log('   CORS handled by Nginx');
 
 app.use(compression());
+app.use(requestContext); // correlation id + AsyncLocalStorage log context (must be early)
 app.use(metricsMiddleware);
 app.use(enhancedRequestLogger);
 app.use(express.json({ limit: "10mb" }));

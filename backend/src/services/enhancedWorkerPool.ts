@@ -2,6 +2,13 @@ import cluster, { Worker } from 'cluster';
 import { Server as SocketIOServer } from 'socket.io';
 import Redis from 'ioredis';
 import { logInfo, logError } from '../utils/logger';
+import {
+  recordAnswer,
+  recordMatchCompleted,
+  reconnectionsTotal,
+  questionsAdvancedTotal,
+  workerEventLoopLag,
+} from '../matchMetrics';
 
 const MAX_MATCHES_PER_WORKER = parseInt(process.env.MAX_MATCHES_PER_WORKER || '5', 10);
 const MIN_WORKERS = parseInt(process.env.MIN_WORKERS || '10', 10);
@@ -124,7 +131,28 @@ export class EnhancedWorkerPool {
         break;
 
       case 'heartbeat':
-        // Already updated lastHeartbeat above
+        // lastHeartbeat already updated above. Heartbeats also carry the
+        // worker's sampled event-loop lag for the per-worker gauge.
+        if (typeof message.eventLoopLagSeconds === 'number') {
+          workerEventLoopLag.set({ worker_id: String(worker.id) }, message.eventLoopLagSeconds);
+        }
+        break;
+
+      // ---- Metrics reported by workers (see matchMetrics.ts) ----
+      case 'metric_answer':
+        recordAnswer(message.result, message.timeSpentSeconds);
+        break;
+
+      case 'metric_question_advanced':
+        questionsAdvancedTotal.inc({ reason: message.reason || 'all_answered' });
+        break;
+
+      case 'metric_match_completed':
+        recordMatchCompleted(message.durationSeconds);
+        break;
+
+      case 'metric_reconnect':
+        reconnectionsTotal.inc();
         break;
 
       case 'worker_ready':

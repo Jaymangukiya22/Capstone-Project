@@ -1,0 +1,43 @@
+# Promtail tails the apps' JSON log files (bind-mounted read-only under
+# /var/log/quizup/<service>/) and ships them to Loki. Robust log shipping out
+# of the app's hot path. The service label comes from the directory name; the
+# JSON fields (event, userId, matchId, timeSpent, traceId, requestId, level)
+# are parsed so Grafana can filter e.g. `{service="matchserver"} | json | event="answer_submitted"`.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: quizup-app-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: quizup
+          service: backend
+          __path__: /var/log/quizup/backend/combined.log
+      - targets: [localhost]
+        labels:
+          job: quizup
+          service: matchserver
+          __path__: /var/log/quizup/matchserver/combined.log
+    pipeline_stages:
+      # Parse the winston JSON line so structured fields are queryable and the
+      # log timestamp is used instead of ingest time.
+      - json:
+          expressions:
+            level: level
+            event: event
+            timestamp: timestamp
+      - labels:
+          level:
+          event:
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02 15:04:05'

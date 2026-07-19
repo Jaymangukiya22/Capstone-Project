@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, UserRole } from '../models';
-import { logError } from '../utils/logger';
+import { logError, logContext } from '../utils/logger';
 import { getRedisClient } from '../config/redis';
+import { markUserActive } from '../utils/metrics';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -138,6 +139,11 @@ export const authenticateToken = async (
     }
 
     req.user = user;
+    markUserActive(user.id); // feeds quizup_active_api_users gauge
+    // Enrich the request-scoped log context so this user's id appears on every
+    // subsequent log line for the request (correlation across services by user).
+    const store = logContext.getStore();
+    if (store) store.userId = user.id;
     next();
   } catch (error) {
     logError('Authentication error', error as Error);

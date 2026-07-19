@@ -1,114 +1,107 @@
 /**
- * QuizUP Metrics Setup
- * Add this to your backend server.ts to enable monitoring
+ * QuizUP backend business metrics.
+ *
+ * IMPORTANT: these register on prom-client's DEFAULT registry, which is the
+ * one express-prom-bundle exposes at GET /metrics (server.ts). The previous
+ * version created its own `new Registry()` served only at /metrics-custom,
+ * which Prometheus never scraped - so none of these were actually collected.
+ * It also set active-users to Math.random(), i.e. fake data. Both fixed here.
  */
 
-import promClient from 'prom-client';
-import { Sequelize } from 'sequelize';
+import client from 'prom-client';
+import { sequelize } from '../config/database';
 
-// Create a Registry which registers the metrics
-const register = new promClient.Registry();
+// ---- Metrics (default registry) ----
 
-// Add a default label which is added to all metrics
-register.setDefaultLabels({
-  app: 'quizup-backend'
+// Real "active users on the API" = distinct userIds seen in an authenticated
+// request within the sliding window below. Fed by markUserActive() from the
+// auth middleware. (Live *connected* users is a separate, match-server metric:
+// matchserver_connected_users.)
+const activeApiUsers = new client.Gauge({
+  name: 'quizup_active_api_users',
+  help: 'Distinct authenticated users seen on the API in the last 60s',
 });
 
-// Create custom metrics
-const httpRequestsTotal = new promClient.Counter({
-  name: 'quizup_http_requests_total',
-  help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'status_code']
-});
-
-const httpRequestDuration = new promClient.Histogram({
-  name: 'quizup_http_request_duration_seconds',
-  help: 'Duration of HTTP requests in seconds',
-  labelNames: ['method', 'route'],
-  buckets: [0.1, 0.5, 1, 2, 5]
-});
-
-const activeUsers = new promClient.Gauge({
-  name: 'quizup_active_users',
-  help: 'Number of currently active users'
-});
-
-const quizAttemptsTotal = new promClient.Counter({
+const quizAttemptsTotal = new client.Counter({
   name: 'quizup_quiz_attempts_total',
-  help: 'Total number of quiz attempts',
-  labelNames: ['difficulty', 'status']
+  help: 'Total quiz attempts',
+  labelNames: ['status'] as const,
 });
 
-const databaseConnections = new promClient.Gauge({
-  name: 'quizup_database_connections',
-  help: 'Number of active database connections'
+const dbPoolSize = new client.Gauge({
+  name: 'quizup_db_pool_size',
+  help: 'Sequelize connection pool: total connections',
+});
+const dbPoolUsed = new client.Gauge({
+  name: 'quizup_db_pool_used',
+  help: 'Sequelize connection pool: connections currently in use',
+});
+const dbPoolWaiting = new client.Gauge({
+  name: 'quizup_db_pool_waiting',
+  help: 'Sequelize connection pool: pending acquire requests (starvation signal)',
 });
 
-// Register the metrics
-register.registerMetric(httpRequestsTotal);
-register.registerMetric(httpRequestDuration);
-register.registerMetric(activeUsers);
-register.registerMetric(quizAttemptsTotal);
-register.registerMetric(databaseConnections);
+// ---- Active-user sliding window ----
 
-// Middleware to track HTTP requests
-export const metricsMiddleware = (req: any, res: any, next: any) => {
-  const start = Date.now();
+const ACTIVE_WINDOW_MS = 60_000;
+const lastSeenByUser = new Map<number, number>();
 
-  res.on('finish', () => {
-    const duration = (Date.now() - start) / 1000;
-
-    httpRequestsTotal.inc({
-      method: req.method,
-      route: req.route?.path || req.path,
-      status_code: res.statusCode
-    });
-
-    httpRequestDuration.observe({
-      method: req.method,
-      route: req.route?.path || req.path
-    }, duration);
-  });
-
-  next();
+/** Call from the auth middleware on every authenticated request. */
+export const markUserActive = (userId: number) => {
+  if (typeof userId === 'number') lastSeenByUser.set(userId, Date.now());
 };
 
-// Update metrics periodically
-export const updateMetrics = async () => {
+/** Call where a quiz attempt is created/finished. */
+export const incQuizAttempt = (status: 'started' | 'completed' | 'abandoned') => {
+  quizAttemptsTotal.inc({ status });
+};
+
+const pruneAndReportActiveUsers = () => {
+  const cutoff = Date.now() - ACTIVE_WINDOW_MS;
+  for (const [userId, seen] of lastSeenByUser) {
+    if (seen < cutoff) lastSeenByUser.delete(userId);
+  }
+  activeApiUsers.set(lastSeenByUser.size);
+};
+
+const reportDbPool = () => {
   try {
-    // Update active users count (example)
-    activeUsers.set(Math.floor(Math.random() * 100));
-
-    // Update database connections (example)
-    // const connectionCount = await sequelize.query(
-    //   "SELECT count(*) as count FROM pg_stat_activity WHERE state = 'active'",
-    //   { type: Sequelize.QueryTypes.SELECT }
-    // );
-    // databaseConnections.set(parseInt(connectionCount[0].count) || 0);
-
-  } catch (error) {
-    console.error('Error updating metrics:', error);
+    // sequelize v6 exposes the underlying sequelize-pool here. Shapes vary by
+    // version, so read defensively and only set what's available.
+    const pool: any = (sequelize as any)?.connectionManager?.pool;
+    if (!pool) return;
+    if (typeof pool.size === 'number') dbPoolSize.set(pool.size);
+    if (typeof pool.using === 'number') dbPoolUsed.set(pool.using);
+    else if (typeof pool.borrowed === 'number') dbPoolUsed.set(pool.borrowed);
+    if (typeof pool.pending === 'number') dbPoolWaiting.set(pool.pending);
+    else if (typeof pool.waiting === 'number') dbPoolWaiting.set(pool.waiting);
+  } catch {
+    // never let metrics collection throw into the request path
   }
 };
 
-// Export metrics endpoint
-export const metricsEndpoint = async (req: any, res: any) => {
-  try {
-    // Update metrics
-    await updateMetrics();
+let updater: NodeJS.Timeout | null = null;
 
-    res.set('Content-Type', register.contentType);
-    const metrics = await register.metrics();
-    res.end(metrics);
+/** Serves the default registry. /metrics (express-prom-bundle) already does
+ *  this; kept so the legacy /metrics-custom route still returns real data. */
+export const metricsEndpoint = async (_req: any, res: any) => {
+  try {
+    pruneAndReportActiveUsers();
+    reportDbPool();
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
   } catch (error) {
     res.status(500).end((error as Error).message);
   }
 };
 
-// Initialize metrics
 export const initMetrics = () => {
-  // Update metrics every 30 seconds
-  setInterval(updateMetrics, 30000);
-
-  console.log('📊 Metrics initialized');
+  if (updater) return;
+  updater = setInterval(() => {
+    pruneAndReportActiveUsers();
+    reportDbPool();
+  }, 15_000);
+  if (typeof updater.unref === 'function') updater.unref();
+  // eslint-disable-next-line no-console
+  console.log('📊 Business metrics initialized (default registry, served at /metrics)');
 };

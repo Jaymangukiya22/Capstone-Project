@@ -73,12 +73,12 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "@mermaid-js/mermaid-cli": "^11.4.2",
     "@docusaurus/core": "^3.8.1",
     "@docusaurus/preset-classic": "^3.8.1",
     "@docusaurus/theme-classic": "^3.8.1",
     "@docusaurus/theme-mermaid": "^3.8.1",
     "@faker-js/faker": "^10.0.0",
+    "@mermaid-js/mermaid-cli": "^11.4.2",
     "@types/bcrypt": "^6.0.0",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",

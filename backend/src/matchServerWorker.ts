@@ -1,4 +1,5 @@
 import cluster from 'cluster';
+import { monitorEventLoopDelay } from 'perf_hooks';
 import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, MatchPlayer as MatchPlayerModel, MatchAnswer } from './models/index';
@@ -54,6 +55,8 @@ interface MatchRoom {
   questionTimeoutId?: NodeJS.Timeout;
   dbId?: number; // Postgres Match.id, cached after first ensureDbMatch() resolution
   lastActivityAt: number; // updated on answer submission, question advance, player join/reconnect
+  traceId?: string; // correlation id threaded through this match's structured logs
+  startedAtMs?: number; // wall-clock ms when the match started (for duration metric)
 }
 
 class WorkerMatchService {
@@ -89,8 +92,16 @@ class WorkerMatchService {
   }
 
   private startHeartbeat() {
+    // Sample this worker's event-loop delay so the master can expose it as a
+    // per-worker gauge (a worker with high lag is overloaded and its matches
+    // will feel stuck).
+    const lagMonitor = monitorEventLoopDelay({ resolution: 20 });
+    lagMonitor.enable();
+
     setInterval(() => {
-      this.notifyMaster({ type: 'heartbeat' });
+      const eventLoopLagSeconds = lagMonitor.mean / 1e9; // ns -> s
+      lagMonitor.reset();
+      this.notifyMaster({ type: 'heartbeat', eventLoopLagSeconds });
     }, 30000); // Every 30 seconds
   }
 
@@ -238,6 +249,23 @@ class WorkerMatchService {
       });
       player.hasSubmittedCurrent = true;
 
+      // Timed-out non-answer still counts as time spent (the full question
+      // window) for this user's records + the aggregate answer-time metric.
+      logInfo('answer_submitted', {
+        event: 'answer_submitted',
+        userId: player.userId,
+        username: player.username,
+        matchId,
+        traceId: match.traceId,
+        questionIndex: match.currentQuestionIndex,
+        questionId: currentQuestion.id,
+        isCorrect: false,
+        timeSpent: match.timeLimit,
+        points: 0,
+        timedOut: true,
+      });
+      this.notifyMaster({ type: 'metric_answer', result: 'timeout', timeSpentSeconds: match.timeLimit });
+
       if (player.socketId) {
         this.emitToSocket(player.socketId, 'answer_result', {
           isCorrect: false,
@@ -250,6 +278,8 @@ class WorkerMatchService {
     }
 
     if (!anyForced) return;
+
+    this.notifyMaster({ type: 'metric_question_advanced', reason: 'timeout' });
 
     logInfo(`Worker ${workerId}: Question timed out, force-advancing`, {
       matchId,
@@ -383,7 +413,8 @@ class WorkerMatchService {
       createdAt: new Date(),
       joinCode,
       mode: 'FRIEND',
-      lastActivityAt: Date.now()
+      lastActivityAt: Date.now(),
+      traceId: uuidv4()
     };
 
     // Add creator
@@ -467,7 +498,8 @@ class WorkerMatchService {
         createdAt: new Date(storedMatch.createdAt),
         joinCode: storedMatch.joinCode,
         mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
-        lastActivityAt: Date.now()
+        lastActivityAt: Date.now(),
+        traceId: storedMatch.traceId || uuidv4()
       };
 
       // Restore players
@@ -561,7 +593,20 @@ class WorkerMatchService {
         });
       }
 
-      logInfo(`Worker ${workerId}: Player reconnected`, { matchId, userId });
+      logInfo('player_reconnected', {
+        event: 'player_reconnected',
+        userId,
+        username: player.username,
+        matchId,
+        traceId: match.traceId,
+        matchStatus: match.status,
+        questionIndex: match.currentQuestionIndex,
+      });
+      // Only count reconnections into a live game (the recovery path that
+      // matters for the "refresh always recovers" requirement).
+      if (match.status === 'IN_PROGRESS') {
+        this.notifyMaster({ type: 'metric_reconnect' });
+      }
     } else {
       // Add new player
       const player: MatchPlayer = {
@@ -695,7 +740,8 @@ class WorkerMatchService {
         createdAt: new Date(storedMatch.createdAt),
         joinCode: storedMatch.joinCode,
         mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
-        lastActivityAt: Date.now()
+        lastActivityAt: Date.now(),
+        traceId: storedMatch.traceId || uuidv4()
       };
 
       // Restore players
@@ -837,6 +883,7 @@ class WorkerMatchService {
     match.status = 'IN_PROGRESS';
     match.currentQuestionIndex = 0;
     match.questionStartTime = Date.now();
+    match.startedAtMs = Date.now();
     match.lastActivityAt = Date.now();
 
     Array.from(match.players.values()).forEach(p => {
@@ -885,7 +932,8 @@ class WorkerMatchService {
         createdAt: new Date(storedMatch.createdAt),
         joinCode: storedMatch.joinCode,
         mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
-        lastActivityAt: Date.now()
+        lastActivityAt: Date.now(),
+        traceId: storedMatch.traceId || uuidv4()
       };
 
       if (storedMatch.players && Array.isArray(storedMatch.players)) {
@@ -973,6 +1021,26 @@ class WorkerMatchService {
     player.hasSubmittedCurrent = true;
     match.lastActivityAt = Date.now();
 
+    // Structured per-user event (queryable in Loki) + aggregate metric to the
+    // master. This is the "time spent by each user" record the product wants.
+    logInfo('answer_submitted', {
+      event: 'answer_submitted',
+      userId,
+      username: player.username,
+      matchId,
+      traceId: match.traceId,
+      questionIndex: match.currentQuestionIndex,
+      questionId: currentQuestion.id,
+      isCorrect,
+      timeSpent: validTimeSpent,
+      points,
+    });
+    this.notifyMaster({
+      type: 'metric_answer',
+      result: isCorrect ? 'correct' : 'incorrect',
+      timeSpentSeconds: validTimeSpent,
+    });
+
     // Redis is the reconnection source of truth during a live match — a single
     // op, kept awaited and ahead of the emits below.
     await this.saveMatchState(matchId, match);
@@ -1034,6 +1102,8 @@ class WorkerMatchService {
       return;
     }
 
+    this.notifyMaster({ type: 'metric_question_advanced', reason: 'all_answered' });
+
     if (match.currentQuestionIndex >= match.questions.length - 1) {
       await this.endMatch(matchId);
       return;
@@ -1074,6 +1144,15 @@ class WorkerMatchService {
     const match = this.matches.get(matchId);
     if (!match) return;
 
+    // Re-entrancy guard. Both players submitting the final question can each
+    // observe allSubmitted=true after their own `await saveMatchState`, so
+    // both reach endMatch; a stalled question timer firing concurrently is a
+    // second path in. Without this, the match completes twice - double DB
+    // write, double match_completed emit, double metrics. The status flip
+    // below is synchronous before the first await, so the first caller wins
+    // and any concurrent caller returns here.
+    if (match.status === 'COMPLETED') return;
+
     this.clearQuestionTimer(matchId);
     match.status = 'COMPLETED';
     await this.saveMatchState(matchId, match);
@@ -1104,6 +1183,27 @@ class WorkerMatchService {
 
     results.sort((a, b) => b.score - a.score);
     const winnerId = results.length > 0 ? results[0].userId : null;
+
+    // Per-user completion record (total time spent, score, accuracy) for Loki,
+    // plus the aggregate match-duration metric to the master.
+    const durationSeconds = match.startedAtMs ? (Date.now() - match.startedAtMs) / 1000 : 0;
+    for (const r of results) {
+      logInfo('match_completed', {
+        event: 'match_completed',
+        userId: r.userId,
+        username: r.username,
+        matchId,
+        traceId: match.traceId,
+        score: r.score,
+        correctAnswers: r.correctAnswers,
+        totalAnswers: r.totalAnswers,
+        accuracy: r.accuracy,
+        totalTimeSpent: r.timeSpent,
+        won: r.userId === winnerId,
+        matchDurationSeconds: Math.round(durationSeconds),
+      });
+    }
+    this.notifyMaster({ type: 'metric_match_completed', durationSeconds });
 
     // Tell both clients the match is over immediately - Postgres is the
     // audit/history record, not the live source of truth (mirrors the same
@@ -1180,6 +1280,7 @@ class WorkerMatchService {
         createdAt: match.createdAt.toISOString(),
         questions: match.questions,
         workerId,
+        traceId: match.traceId,
         players: Array.from(match.players.values()).map(p => ({
           userId: p.userId,
           username: p.username,

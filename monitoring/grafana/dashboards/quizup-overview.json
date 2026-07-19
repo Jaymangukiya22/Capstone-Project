@@ -138,6 +138,29 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "options": { "showTime": true, "wrapLogMessage": true, "dedupStrategy": "none", "enableLogDetails": true },
       "targets": [{ "expr": "{service=\"matchserver\"} | json | event=`match_completed`", "refId": "A" }]
+    },
+
+    { "type": "row", "title": "Per-container resources (cAdvisor - populates on a Linux host; Docker Desktop can't resolve container names)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 53 } },
+    {
+      "type": "timeseries", "title": "CPU cores per container", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"quizup_.*\"}[1m]))", "legendFormat": "{{name}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Memory per container", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [{ "expr": "container_memory_usage_bytes{name=~\"quizup_.*\"}", "legendFormat": "{{name}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Network bandwidth per container (rx/tx)", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "sum by (name) (rate(container_network_receive_bytes_total{name=~\"quizup_.*\"}[1m]))", "legendFormat": "{{name}} rx", "refId": "A" },
+        { "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name=~\"quizup_.*\"}[1m]))", "legendFormat": "{{name}} tx", "refId": "B" }
+      ]
     }
   ]
 }

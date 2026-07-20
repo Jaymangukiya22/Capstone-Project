@@ -22,7 +22,9 @@
  *     node:20-alpine node --max-old-space-size=4096 scripts/loadtest.js
  *
  * Env: NUM_MATCHES, USER_OFFSET (for parallel generators with distinct user
- * ranges), BATCH, BATCH_PAUSE_MS, HOLD_MS, MODE, API_URL, MATCH_URL, JWT_SECRET, QUIZ_ID.
+ * ranges), BATCH, BATCH_PAUSE_MS, HOLD_MS, MODE, API_URL, MATCH_URL, JWT_SECRET,
+ * QUIZ_ID (single quiz), QUIZ_IDS (spread matches across quizzes round-robin;
+ * comma-separated values and/or ranges, e.g. QUIZ_IDS=102-153 or QUIZ_IDS=102,110,120-125).
  */
 const jwt = require('jsonwebtoken');
 const { io } = require('socket.io-client');
@@ -30,7 +32,22 @@ const { io } = require('socket.io-client');
 const SECRET = process.env.JWT_SECRET || '7a0b42e9df5856f7cfe0094361f65630';
 const API = process.env.API_URL || 'http://localhost:3000';
 const MATCH = process.env.MATCH_URL || 'http://localhost:3001';
-const QUIZ_ID = parseInt(process.env.QUIZ_ID || '146', 10);
+
+function parseQuizIds() {
+  const raw = process.env.QUIZ_IDS;
+  if (!raw) return [parseInt(process.env.QUIZ_ID || '146', 10)];
+  const ids = [];
+  for (const part of raw.split(',')) {
+    const p = part.trim();
+    if (!p) continue;
+    const m = p.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (m) { for (let x = parseInt(m[1], 10); x <= parseInt(m[2], 10); x++) ids.push(x); }
+    else ids.push(parseInt(p, 10));
+  }
+  if (!ids.length || ids.some(Number.isNaN)) throw new Error(`Bad QUIZ_IDS: "${raw}"`);
+  return ids;
+}
+const QUIZ_IDS = parseQuizIds();
 const NUM_MATCHES = parseInt(process.env.NUM_MATCHES || '1000', 10);
 const USER_OFFSET = parseInt(process.env.USER_OFFSET || '0', 10);
 const BATCH = parseInt(process.env.BATCH || '25', 10);
@@ -68,10 +85,11 @@ function connectSock(userId) {
 
 async function establishMatch(i) {
   const creatorId = 2 * i - 1 + USER_OFFSET, joinerId = 2 * i + USER_OFFSET;
+  const quizId = QUIZ_IDS[(i - 1) % QUIZ_IDS.length];
   try {
     const r = await fetch(`${API}/api/friend-matches`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tokenFor(creatorId)}` },
-      body: JSON.stringify({ quizId: QUIZ_ID })
+      body: JSON.stringify({ quizId })
     });
     const b = await r.json();
     if (!b || !b.success) { stats.errors++; return; }
@@ -93,7 +111,7 @@ async function establishMatch(i) {
 
 const pct = (n, d) => d ? ((n / d) * 100).toFixed(0) + '%' : '-';
 (async () => {
-  console.log(`=== LOAD (${MODE}): ${NUM_MATCHES} matches / ${NUM_MATCHES * 2} users via ${MATCH} ===`);
+  console.log(`=== LOAD (${MODE}): ${NUM_MATCHES} matches / ${NUM_MATCHES * 2} users via ${MATCH} | ${QUIZ_IDS.length} quiz${QUIZ_IDS.length > 1 ? `zes (${QUIZ_IDS[0]}..${QUIZ_IDS[QUIZ_IDS.length - 1]})` : ` (${QUIZ_IDS[0]})`} ===`);
   const t0 = Date.now();
   for (let start = 1; start <= NUM_MATCHES; start += BATCH) {
     const wave = [];

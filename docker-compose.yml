@@ -175,6 +175,11 @@ services:
       SCALE_DOWN_THRESHOLD: ${SCALE_DOWN_THRESHOLD:-0.3}
       SCALE_CHECK_INTERVAL: ${SCALE_CHECK_INTERVAL:-5000}
       PROACTIVE_SPAWN_THRESHOLD: ${PROACTIVE_SPAWN_THRESHOLD:-0.6}
+      # Stale-match reaper (force-terminates matches idle this long, and now
+      # reconciles their Postgres row to CANCELLED - [M11]). Prod defaults;
+      # override low to exercise the reaper quickly in a test.
+      STALE_MATCH_TIMEOUT_MS: ${STALE_MATCH_TIMEOUT_MS:-300000}
+      STALE_MATCH_CHECK_INTERVAL_MS: ${STALE_MATCH_CHECK_INTERVAL_MS:-60000}
       LOG_LEVEL: ${MATCHSERVER_LOG_LEVEL:-debug}
       # Winston's console transport writes synchronously to stdout with no
       # buffering - fine for local dev, but adds I/O overhead under load in

@@ -54,6 +54,7 @@ interface MatchRoom {
   mode?: 'FRIEND' | 'AUTO';
   questionTimeoutId?: NodeJS.Timeout;
   dbId?: number; // Postgres Match.id, cached after first ensureDbMatch() resolution
+  dbIdPromise?: Promise<number | null>; // in-flight ensureDbMatch(), shared so concurrent first-answers don't each create a row ([M10])
   lastActivityAt: number; // updated on answer submission, question advance, player join/reconnect
   traceId?: string; // correlation id threaded through this match's structured logs
   startedAtMs?: number; // wall-clock ms when the match started (for duration metric)
@@ -142,6 +143,18 @@ class WorkerMatchService {
       this.userToMatch.delete(player.userId);
     });
     this.matches.delete(matchId);
+
+    // [M11]: reconcile the Postgres row to a terminal status. Without this an
+    // abandoned match stays IN_PROGRESS/WAITING in the DB forever even though it
+    // is gone from memory and Redis - the historical source of the stale-row
+    // pileup. Only touch a row that actually persisted (a match reaped before
+    // anyone answered never created one); off the critical path, .catch-logged.
+    if (match.dbId !== undefined) {
+      Match.update(
+        { status: 'CANCELLED' as any, endedAt: new Date() },
+        { where: { id: match.dbId, status: ['WAITING', 'IN_PROGRESS'] as any } }
+      ).catch((error) => logError(`Worker ${workerId}: Failed to mark stale match CANCELLED`, error as Error));
+    }
 
     try {
       await this.redis.del(`match:${matchId}`);
@@ -1227,11 +1240,13 @@ class WorkerMatchService {
         } as any);
 
         await Promise.all(results.map(async (result) => {
-          const existing = await MatchPlayerModel.findOne({
-            where: { matchId: matchDb.id, userId: result.userId }
-          });
-          if (!existing) {
-            await MatchPlayerModel.create({
+          // Race-safe against match_players_matchid_userid_uq ([M10]): this can
+          // race the per-answer upsertDbPlayer for the same (matchId,userId), so
+          // findOrCreate rather than findOne-then-create - the loser updates the
+          // existing row to FINISHED instead of inserting a duplicate.
+          const [existing, created] = await MatchPlayerModel.findOrCreate({
+            where: { matchId: matchDb.id, userId: result.userId },
+            defaults: {
               matchId: matchDb.id,
               userId: result.userId,
               status: 'FINISHED',
@@ -1240,8 +1255,9 @@ class WorkerMatchService {
               timeSpent: result.timeSpent,
               joinedAt: new Date(),
               finishedAt: new Date()
-            } as any);
-          } else {
+            } as any
+          });
+          if (!created) {
             await existing.update({
               status: 'FINISHED',
               score: result.score,
@@ -1351,23 +1367,25 @@ class WorkerMatchService {
         if (cached) return cached;
       }
 
-      const existing = await Match.findOne({ where: { matchId: match.id } });
-      if (existing) {
-        match.dbId = existing.id;
-        return existing;
-      }
-
-      const created = await Match.create({
-        matchId: match.id,
-        quizId: match.quizId,
-        type: 'FRIEND_MATCH' as any,
-        status: match.status as any,
-        maxPlayers: match.maxPlayers,
-        startedAt: match.createdAt,
-        mode: match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')
-      } as any);
-      match.dbId = created.id;
-      return created;
+      // Race-safe: findOrCreate is atomic against the matches_matchid_uq unique
+      // index ([M10]) - if a concurrent write inserts the row first, the losing
+      // caller gets the existing row instead of a duplicate. Previously this was
+      // findOne-then-create with no constraint, so both players' first answers
+      // could each INSERT a row for the same matchId.
+      const [row] = await Match.findOrCreate({
+        where: { matchId: match.id },
+        defaults: {
+          matchId: match.id,
+          quizId: match.quizId,
+          type: 'FRIEND_MATCH' as any,
+          status: match.status as any,
+          maxPlayers: match.maxPlayers,
+          startedAt: match.createdAt,
+          mode: match.mode || (match.joinCode ? 'FRIEND' : 'AUTO')
+        } as any
+      });
+      match.dbId = row.id;
+      return row;
     } catch (error) {
       logError(`Worker ${workerId}: Failed to ensure Match row`, error as Error);
       return null;
@@ -1375,11 +1393,17 @@ class WorkerMatchService {
   }
 
   // Hot-path variant for the per-answer flow: once match.dbId is cached, this
-  // resolves with ZERO database round trips (no Match.findOne/findByPk at all).
+  // resolves with ZERO database round trips. Before dbId is known, concurrent
+  // callers (both players' first answers) share ONE in-flight ensureDbMatch via
+  // match.dbIdPromise so exactly one create is issued, not one per caller ([M10]).
   private async ensureDbMatchId(match: MatchRoom): Promise<number | null> {
     if (match.dbId !== undefined) return match.dbId;
-    const matchDb = await this.ensureDbMatch(match);
-    return matchDb ? matchDb.id : null;
+    if (!match.dbIdPromise) {
+      match.dbIdPromise = this.ensureDbMatch(match)
+        .then(m => (m ? m.id : null))
+        .finally(() => { match.dbIdPromise = undefined; });
+    }
+    return match.dbIdPromise;
   }
 
   private async upsertDbPlayer(matchDbId: number, match: MatchRoom, userId: number) {
@@ -1387,9 +1411,12 @@ class WorkerMatchService {
     if (!player) return;
     const correctAnswers = player.answers.filter(a => a.isCorrect).length;
     const totalTimeSpent = player.answers.reduce((sum, a) => sum + a.timeSpent, 0);
-    const existing = await MatchPlayerModel.findOne({ where: { matchId: matchDbId, userId } });
-    if (!existing) {
-      await MatchPlayerModel.create({
+    // Race-safe against match_players_matchid_userid_uq ([M10]): findOrCreate
+    // won't insert a second row for the same (matchId,userId); a losing racer
+    // falls through to the update below.
+    const [existing, created] = await MatchPlayerModel.findOrCreate({
+      where: { matchId: matchDbId, userId },
+      defaults: {
         matchId: matchDbId,
         userId,
         status: 'PLAYING',
@@ -1397,9 +1424,9 @@ class WorkerMatchService {
         correctAnswers,
         timeSpent: totalTimeSpent,
         joinedAt: new Date()
-      } as any);
-      return;
-    }
+      } as any
+    });
+    if (created) return;
     await existing.update({
       score: player.score,
       correctAnswers,

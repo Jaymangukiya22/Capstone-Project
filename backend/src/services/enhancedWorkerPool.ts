@@ -41,6 +41,10 @@ export class EnhancedWorkerPool {
   private scaleCheckInterval: NodeJS.Timeout | null = null;
   private matchesCreatedTotal: number = 0;
   private trackedMatches: Set<string> = new Set(); // Track unique matches to prevent double-counting
+  // Worker ids we asked to stop (scale-down / pool shutdown). Lets the cluster
+  // 'exit' handler tell a routine stop from a genuine crash ([M12]) so a normal
+  // autoscale event isn't logged at error level with a stack trace.
+  private intentionalStops: Set<number> = new Set();
 
   constructor(io: SocketIOServer, redis: Redis) {
     this.io = io;
@@ -58,7 +62,16 @@ export class EnhancedWorkerPool {
     });
 
     cluster.on('exit', (worker, code, signal) => {
-      logError('Worker died', new Error(`Worker ${worker.id} died (${signal || code})`));
+      // A clean exit (code 0) or one we initiated (scale-down / shutdown) is a
+      // routine lifecycle event, not an error - log it at info. Only an
+      // unexpected death (non-zero code / crash signal we didn't ask for) is a
+      // real error worth surfacing in error.log ([M12]).
+      const intentional = this.intentionalStops.delete(worker.id);
+      if (code === 0 || intentional) {
+        logInfo('Worker exited', { workerId: worker.id, code, signal: signal || null, intentional });
+      } else {
+        logError('Worker died unexpectedly', new Error(`Worker ${worker.id} died (${signal || code})`));
+      }
       this.handleWorkerDeath(worker).catch((error) =>
         logError('Failed to clean up after worker death', error as Error)
       );
@@ -543,6 +556,7 @@ export class EnhancedWorkerPool {
 
         idleWorkers.forEach(workerInfo => {
           const workerId = workerInfo.worker.id;
+          this.intentionalStops.add(workerId); // routine scale-down, not a crash ([M12])
           workerInfo.worker.send({ type: 'shutdown' });
 
           // Give the worker's own shutdown() a moment to run (clears its
@@ -647,6 +661,9 @@ export class EnhancedWorkerPool {
     }
 
     // Notify all workers to shutdown
+    for (const workerInfo of this.workers.values()) {
+      this.intentionalStops.add(workerInfo.worker.id); // pool shutdown, not a crash ([M12])
+    }
     this.broadcast({ type: 'shutdown' });
 
     // Wait for graceful shutdown

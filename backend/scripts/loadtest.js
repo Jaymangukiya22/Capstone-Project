@@ -14,17 +14,30 @@
  *
  * Run IN-CONTAINER on the compose network (bypasses the host port proxy - use
  * this to find the real server ceiling; on a Linux prod host this is the normal
- * path):
+ * path). The matchserver cap is MAX_WORKERS x MAX_MATCHES_PER_WORKER (24,000 by
+ * default); split the load across parallel generators with distinct USER_OFFSET:
  *   docker run --rm --network <proj>_quizup_network --ulimit nofile=65535 \
  *     -v <repo>/backend:/app -w /app \
  *     -e MATCH_URL=http://matchserver:3001 -e API_URL=http://backend:3000 \
- *     -e NUM_MATCHES=2500 -e MODE=hold \
+ *     -e NUM_MATCHES=2500 -e MODE=hold -e QUIZ_IDS=102-153 \
  *     node:20-alpine node --max-old-space-size=4096 scripts/loadtest.js
  *
- * Env: NUM_MATCHES, USER_OFFSET (for parallel generators with distinct user
- * ranges), BATCH, BATCH_PAUSE_MS, HOLD_MS, MODE, API_URL, MATCH_URL, JWT_SECRET,
- * QUIZ_ID (single quiz), QUIZ_IDS (spread matches across quizzes round-robin;
- * comma-separated values and/or ranges, e.g. QUIZ_IDS=102-153 or QUIZ_IDS=102,110,120-125).
+ * Run against the PROD Cloudflare URLs (https/wss - TLS + socket path are
+ * handled automatically; timings auto-relax for tunnel latency):
+ *   MATCH_URL=https://match.quizdash.dpdns.org \
+ *   API_URL=https://api.quizdash.dpdns.org \
+ *   NUM_MATCHES=50 MODE=play node scripts/loadtest.js
+ * (Keep prod runs modest - Cloudflare rate-limits, and this is the real public
+ * path. Heavy ceiling tests belong in-container. See docs/STRESS_TESTING.md.)
+ *
+ * Env:
+ *   NUM_MATCHES, USER_OFFSET (distinct user ranges for parallel generators),
+ *   BATCH, BATCH_PAUSE_MS, HOLD_MS, MODE (hold|play), API_URL, MATCH_URL,
+ *   JWT_SECRET, QUIZ_ID (single) or QUIZ_IDS (round-robin; comma list and/or
+ *   ranges, e.g. QUIZ_IDS=102-153 or QUIZ_IDS=102,110,120-125).
+ *   Connection/timing (auto-defaulted; override for high-latency paths):
+ *   JOIN_WAIT_MS, READY_WAIT_MS, CONNECT_TIMEOUT_MS, SOCKET_PATH,
+ *   INSECURE_TLS=1 (skip cert verification, for a self-signed origin).
  */
 const jwt = require('jsonwebtoken');
 const { io } = require('socket.io-client');
@@ -32,6 +45,15 @@ const { io } = require('socket.io-client');
 const SECRET = process.env.JWT_SECRET || '7a0b42e9df5856f7cfe0094361f65630';
 const API = process.env.API_URL || 'http://localhost:3000';
 const MATCH = process.env.MATCH_URL || 'http://localhost:3001';
+// TLS/prod path (https/wss) has higher round-trip latency than the in-container
+// path, so the join handshake needs more slack. Auto-relax the defaults when the
+// target is TLS; any explicit env override still wins.
+const IS_TLS = /^(https|wss):/i.test(MATCH) || /^https:/i.test(API);
+if (process.env.INSECURE_TLS === '1') process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+const SOCKET_PATH = process.env.SOCKET_PATH || '/socket.io';
+const CONNECT_TIMEOUT_MS = parseInt(process.env.CONNECT_TIMEOUT_MS || (IS_TLS ? '30000' : '20000'), 10);
+const JOIN_WAIT_MS = parseInt(process.env.JOIN_WAIT_MS || (IS_TLS ? '400' : '120'), 10);
+const READY_WAIT_MS = parseInt(process.env.READY_WAIT_MS || (IS_TLS ? '600' : '220'), 10);
 
 function parseQuizIds() {
   const raw = process.env.QUIZ_IDS;
@@ -68,7 +90,7 @@ function answerCurrent(st) {
 
 function connectSock(userId) {
   return new Promise((resolve) => {
-    const s = io(MATCH, { transports: ['websocket'], forceNew: true, reconnection: false, timeout: 20000 });
+    const s = io(MATCH, { transports: ['websocket'], forceNew: true, reconnection: false, timeout: CONNECT_TIMEOUT_MS, path: SOCKET_PATH, rejectUnauthorized: process.env.INSECURE_TLS !== '1' });
     const st = { s, userId, matchId: null, started: false, currentQ: null, done: false };
     s.on('connect', () => { stats.connected++; s.emit('authenticate', { userId, username: `u${userId}`, token: tokenFor(userId) }); });
     s.on('authenticated', () => resolve(st));
@@ -79,7 +101,7 @@ function connectSock(userId) {
     s.on('match_completed', () => { if (!st.done) { st.done = true; stats.completed++; } });
     s.on('connect_error', () => { stats.errors++; resolve(null); });
     s.on('auth_error', () => { stats.errors++; resolve(null); });
-    setTimeout(() => resolve(st), 20000);
+    setTimeout(() => resolve(st), CONNECT_TIMEOUT_MS);
   });
 }
 
@@ -99,9 +121,9 @@ async function establishMatch(i) {
     if (ca) sockets.push(ca); if (cb) sockets.push(cb);
     if (!ca || !cb) { stats.errors++; return; }
     ca.s.emit('join_match_by_code', { joinCode });
-    await sleep(120);
+    await sleep(JOIN_WAIT_MS);
     cb.s.emit('join_match_by_code', { joinCode });
-    await sleep(220);
+    await sleep(READY_WAIT_MS);
     if (ca.matchId) stats.joined++;
     if (cb.matchId) stats.joined++;
     const mid = ca.matchId || cb.matchId;
@@ -111,7 +133,7 @@ async function establishMatch(i) {
 
 const pct = (n, d) => d ? ((n / d) * 100).toFixed(0) + '%' : '-';
 (async () => {
-  console.log(`=== LOAD (${MODE}): ${NUM_MATCHES} matches / ${NUM_MATCHES * 2} users via ${MATCH} | ${QUIZ_IDS.length} quiz${QUIZ_IDS.length > 1 ? `zes (${QUIZ_IDS[0]}..${QUIZ_IDS[QUIZ_IDS.length - 1]})` : ` (${QUIZ_IDS[0]})`} ===`);
+  console.log(`=== LOAD (${MODE}): ${NUM_MATCHES} matches / ${NUM_MATCHES * 2} users via ${MATCH}${IS_TLS ? ' [TLS]' : ''} | ${QUIZ_IDS.length} quiz${QUIZ_IDS.length > 1 ? `zes (${QUIZ_IDS[0]}..${QUIZ_IDS[QUIZ_IDS.length - 1]})` : ` (${QUIZ_IDS[0]})`} | join/ready ${JOIN_WAIT_MS}/${READY_WAIT_MS}ms ===`);
   const t0 = Date.now();
   for (let start = 1; start <= NUM_MATCHES; start += BATCH) {
     const wave = [];

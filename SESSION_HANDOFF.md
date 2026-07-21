@@ -1,18 +1,26 @@
 # Session Handoff — audit, fixes, observability, frontend, load testing
 
-Branch: **`fix/audit-reliability-and-security`** @ `64f0ce5` — **pushed** to `origin`.
-Everything below is committed. Working tree is clean.
+Branch: **`fix/audit-reliability-and-security`** @ `4fab5ba` — **pushed** to `origin`.
+Everything below is committed. Working tree is clean. **PR not yet opened** — see
+[PR_DESCRIPTION.md](PR_DESCRIPTION.md) for the ready-to-paste title/body and the
+compare URL (`gh` isn't installed locally).
+
+**Docs to read first:** [docs/RUNNING.md](docs/RUNNING.md) (start the stack, API
+docs, prod Cloudflare tunnel, capacity tuning) · [docs/STRESS_TESTING.md](docs/STRESS_TESTING.md)
+(load testing) · [AUDIT_FINDINGS.md](AUDIT_FINDINGS.md) (findings + fixes).
 
 > **Update (multi-quiz 5K+ stress test, this session).** Seeded the user pool to **17,000** active users (IDs 1–17,000; bulk-inserted 10,043–17,000 in Postgres). Added `QUIZ_IDS` round-robin support to the harness (commit `df60d65`). Drove matches across all **52 quizzes** with parallel in-container generators and hit a peak of **7,970 concurrent matches / 15,940 users, 0 connection errors** — the box's **4 shared cores** are the ceiling, not the match server (event-loop lag stayed flat ~22 ms; workers dead-even). Correctness at scale is **mostly** intact but the play-mode batch surfaced two new persistence findings — see **[AUDIT_FINDINGS.md](AUDIT_FINDINGS.md) Section 6 [M10]/[M11]**: `matches`/`match_players` accumulate duplicate rows under concurrent play (non-atomic `findOne`-then-`create`, no unique constraint) and abandoned matches are never DB-reconciled. Live gameplay (winners/scores) is correct; the Postgres audit tables are polluted.
 >
 > **Update 2 (fixes applied + ceiling test, same session — commit `5a8bfb8`).** **[M10]/[M11]/[M12a] fixed and verified.** Added unique constraints (`matches.matchId`, `match_players(matchId,userId)`) with an FK-safe dedupe migration ([backend/src/migrations/add-match-unique-constraints.sql](backend/src/migrations/add-match-unique-constraints.sql)), converted the match-server writes to atomic `findOrCreate` + a per-match `dbIdPromise` guard, made `terminateStaleMatch` reconcile to `CANCELLED`, and stopped logging graceful worker exits as errors. Verified: a 300-match play batch → **296/296 distinct matchIds, exactly 2 FINISHED players + 20 answers each, 0 duplicates** (was ~39% duplicated); 37 killed-mid-play matches reaped to `CANCELLED`. Then **40,000+ matches** pushed through the ceiling test with **0 duplicate rows** — the constraint holds under load.
 > **Ceiling on the prod split (matchserver = 2 CPU / 2 GiB slice of the 4-core/16 GB box):** the configured cap is **10,000 concurrent matches** (`MAX_WORKERS=4 × MAX_MATCHES_PER_WORKER=2500`), and the box serves it with **flat ~21–28 ms event-loop lag, ~0.9 GiB of the mem slice, and CPU only touching its 2-core cap during churn** — 10K is the *config* cap, not a hardware wall (beyond it, excess matches are rejected loud with `NO_AVAILABLE_WORKERS`). With the cap raised, the matchserver held **~10,600 concurrent matches on just 2 CPUs at 28 ms lag / <1 GiB**; the limit on reaching *higher concurrency* on a single box is the **shared-core ramp rate** (matchserver + backend + in-container generators all contending for the 4 host cores), not steady-state serving. See Section 6 fix-status addendum.
 >
-> **Update 3 (optimized for max concurrent matches — commit pending).** Two per-match memory wins + a resource re-tune:
+> **Update 3 (optimized for max concurrent matches — commit `a9a25ba`).** Two per-match memory wins + a resource re-tune:
 > - **Shared frozen questions**: `loadQuizQuestions` now returns one deep-frozen cached array per quiz instead of a deep copy per match (questions are read-only for a match's life). Cuts worker memory and the GC churn of copying 10 questions on every create/hydrate at ramp.
 > - **Slim Redis snapshot**: `saveMatchState` stores a `totalQuestions` count instead of the full `questions` array (hydration already reloads questions by `quizId` and never read the snapshot copy). ~40% less Redis memory per match and a smaller payload rewritten on every question advance.
 > - **Resource re-tune** (matchserver slice on the 4-core/16 GB box): mem **2G → 8G**, CPU **2 → 3**, `MAX_MATCHES_PER_WORKER` **2500 → 6000** (cap **10k → 24k**), and an explicit **`--max-old-space-size=1536` per Node process** (1 master + 4 workers share one cgroup — without a cap they can each auto-size and collectively OOM). Repo defaults in `docker-compose.yml` updated to match; real values in the gitignored `.env`.
 > - **Verified**: play batch → 300/300 distinct matchIds, 2 players + 20 answers each, 0 dup (correctness intact); capacity push → **peak ~13,000 concurrent matches at flat ~27 ms lag**, matchserver mem **~78 MiB/1000 matches** (was ~92) and redis **~5.3 MiB/1000** (was ~9), server at **12 % of its 8 GiB** — nowhere near a wall. 57k+ matches pushed cumulatively with **0 duplicate rows** (the M10 constraint holds under load). Demonstrable concurrency is still bounded by the **co-located-generator ramp rate**, not the server; with external load the 24k cap is the target.
+>
+> **Update 4 (prod-URL verification + docs — commits `dc4b5e5`, `4fab5ba`).** Verified the optimized build over the **public Cloudflare path**: a 40-match `play` batch through `https://api|match.quizdash.dpdns.org` → 40 COMPLETED, 80/80 sockets, 0 errors, 20 answers each, 0 dup. Two env issues fixed along the way (neither from the code): **nginx served 502** because it caches upstream container IPs and the backend got a new IP on restart (`docker compose restart nginx`); and **cloudflared had been down since Jul 17** (restarted it — it's a host process, `cloudflared tunnel --config ~/.cloudflared/config.yml run`; `service install` for persistence). Harness now handles TLS/wss prod URLs (auto-relaxed timing, `INSECURE_TLS`, `SOCKET_PATH`). New docs: [docs/RUNNING.md](docs/RUNNING.md), [docs/STRESS_TESTING.md](docs/STRESS_TESTING.md); README de-staled (Tunnelmole→Cloudflare, real npm scripts, API-docs URL).
 
 ---
 
@@ -96,10 +104,11 @@ MSYS_NO_PATHCONV=1 docker run --rm --name loadgen \
 
 **Key facts**
 - `JWT_SECRET` = `7a0b42e9df5856f7cfe0094361f65630` (compose default)
-- Users: **10,042** active, IDs **1–10,042** → supports ~5,021 matches. **More matches ⇒ seed more users first.**
-- Quizzes: **52** with ≥5 questions, IDs roughly **102–153**, each **10 questions**, `time_limit` 30 s.
+- Users: **44,000** active, IDs **1–44,000** → supports ~22,000 matches (seeded up this session). **More matches ⇒ seed more users first** (bulk SQL in [docs/STRESS_TESTING.md §1](docs/STRESS_TESTING.md)).
+- Match-server cap: **24,000** concurrent (`MAX_WORKERS=4 × MAX_MATCHES_PER_WORKER=6000`); mem 8G, cpu 3, per-process heap `--max-old-space-size=1536`.
+- Quizzes: **52** with ≥5 questions, IDs roughly **102–153**, each **10 questions**, `time_limit` 30 s. Use `QUIZ_IDS=102-153` to spread across them round-robin.
 - Match `i` in a generator uses users `2i-1+USER_OFFSET` and `2i+USER_OFFSET`.
-- Docker network: `quizup_quizup_network`.
+- Docker network: `quizup_quizup_network`. Prod URLs: `MATCH_URL=https://match.quizdash.dpdns.org API_URL=https://api.quizdash.dpdns.org` (TLS auto-handled).
 
 **DB verification queries** (columns are camelCase → must be double-quoted):
 ```sql

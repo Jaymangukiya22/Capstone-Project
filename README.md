@@ -40,7 +40,7 @@ QuizUP is a modern, scalable quiz platform designed for educational institutions
 - Docker & Docker Compose
 - PostgreSQL 15+ (if running locally)
 - Redis 7+ (if running locally)
-- LocalTunnel for public access (optional)
+- `cloudflared` for public access (optional — see Cloudflare Tunnel below)
 
 ### Development Setup
 
@@ -50,82 +50,70 @@ QuizUP is a modern, scalable quiz platform designed for educational institutions
 git clone <repository-url>
 cd QuizUP
 
-# Copy environment configuration
-cp .env.example .env
-
-# Start all services
-docker-compose up --build
+# Start all services (compose carries sane defaults; real secrets/tuning go in a
+# gitignored .env — there is no committed .env.example)
+docker compose up -d --build
 
 # Access the application
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:3000
+# Frontend:   http://localhost:5173
+# Backend API: http://localhost:3000   (API docs: http://localhost:3000/api-docs/)
 # Match Server: http://localhost:3001
 ```
 
 #### Manual Setup
 ```bash
-# Backend setup
+# Backend API (schema auto-syncs on start; a fresh empty DB auto-seeds)
 cd backend
 npm install
-npm run db:migrate
-npm run db:seed
 npm run dev
 
-# Match server (new terminal)
+# Match server — cluster master + workers (new terminal)
 cd backend
-npm run dev:match
+npm run dev:match:pool
 
 # Frontend (new terminal)
 cd Frontend-admin
 npm install
 npm run dev
 ```
+> Postgres + Redis must be running (e.g. `docker compose up -d postgres redis`).
+> Seeding helpers: `npm run db:setup`, `seed:quick`, `seed:massive`. Production
+> build: `npm run build` → `npm start` (API) / `npm run start:match:pool` (match).
+> One-off SQL migrations live in `backend/src/migrations/`. See **[docs/RUNNING.md](docs/RUNNING.md)**.
 
 ### Service URLs
 - **Application**: http://localhost:8090 (via nginx proxy)
 - **Frontend Dev**: http://localhost:5173 (direct Vite)
 - **Backend API**: http://localhost:3000
-- **Match Server**: http://localhost:3001
-- **Database Admin**: http://localhost:8080 (Adminer)
-- **Cache Admin**: http://localhost:8081 (Redis Commander)
+- **API Docs (Swagger UI)**: http://localhost:3000/api-docs/ (local only)
+- **Match Server**: http://localhost:3001 (`/health`, `/metrics`)
+- **Database Admin**: http://localhost:8080 (Adminer, optional/profile-gated)
+- **Cache Admin**: http://localhost:8081 (Redis Commander, optional/profile-gated)
 - **Grafana**: http://localhost:3003 (monitoring)
 
-### 🌐 Public Access with Tunnelmole
+> **Full run guide (dev, API docs, prod tunnel, capacity tuning, monitoring):**
+> **[docs/RUNNING.md](docs/RUNNING.md)** · **Load/stress testing:** **[docs/STRESS_TESTING.md](docs/STRESS_TESTING.md)**
 
-For sharing your application publicly (demos, testing, mobile access):
+### 🌐 Public Access (Cloudflare Tunnel)
 
-#### Quick Start with Tunnelmole
+Public access runs through a **Cloudflare Tunnel** (`cloudflared`) — this replaced
+the old LocalTunnel/Tunnelmole flow. cloudflared is a **host process** that forwards
+each hostname to a local port:
+
+| Public URL | → local origin |
+|---|---|
+| `https://quizdash.dpdns.org` | frontend `:5173` |
+| `https://api.quizdash.dpdns.org` | nginx `:8090` → backend |
+| `https://match.quizdash.dpdns.org` | match server `:3001` (WebSocket) |
+
 ```bash
-# Install Tunnelmole globally
-npm install -g tunnelmole
-
-# Start your application
-docker compose up -d --build
-
-# Create public tunnel (Windows)
-scripts\start-tunnelmole.bat
-
-# Create public tunnel (Linux/macOS)
-./scripts/start-tunnelmole.sh
+# with the stack already up (docker compose up -d):
+cloudflared tunnel --config ~/.cloudflared/config.yml run
 ```
 
-#### Manual Tunnelmole Setup
-```bash
-# Start tunnel (automatic URL generation)
-tmole 8090
-
-# Your app will be available at:
-# https://random-id.tunnelmole.net
-```
-
-#### Tunnelmole Benefits
-- ✅ **Much Faster** - Optimized for speed and performance
-- ✅ **Open Source** - Transparent and community-driven
-- ✅ **No Registration** - Works immediately without signup
-- ✅ **No Domain Required** - Get instant public URLs
-- ✅ **Unlimited Bandwidth** - No artificial speed limits
-- ✅ **More Reliable** - Less congested than alternatives
-- ✅ **Perfect for Development** - Ideal for testing and demos
+Setup, DNS and troubleshooting (incl. the "restart nginx after restarting
+backend/matchserver" 502 fix): **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)**
+and **[docs/RUNNING.md §5](docs/RUNNING.md)**.
 
 ## 📋 System Design Documentation
 

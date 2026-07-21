@@ -1,4 +1,3 @@
-import "./tracing";
 import * as dotenv from "dotenv";
 dotenv.config();
 import express from "express";
@@ -11,7 +10,7 @@ import swaggerUi from "swagger-ui-express";
 import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "yaml";
-import { initializeRedis } from "./config/redis";
+import { getRedisClient, initializeRedis } from "./config/redis";
 import categoryRoutes from "./routes/categoryRoutes";
 import quizRoutes from "./routes/quizRoutes";
 import questionRoutes from "./routes/questionRoutes";
@@ -23,13 +22,45 @@ import matchRoutes from "./routes/matchRoutes";
 import friendMatchRoutes from "./routes/friendMatchRoutes";
 import performanceRoutes from "./routes/performanceRoutes";
 import { errorHandler } from "./middleware/errorHandler";
-import { requestLogger } from "./middleware/requestLogger";
+import { enhancedRequestLogger } from "./middleware/requestLogger";
+import { requestContext } from "./middleware/requestContext";
 import { logInfo, logError } from "./utils/logger";
-import { metricsEndpoint, initMetrics } from "./utils/metrics";
+import { initMetrics } from "./utils/metrics";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IP_ADD = process.env.NETWORK_IP || "0.0.0.0";
+
+interface StoreInterface {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttl?: number): Promise<void>;
+  del(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+}
+
+function createRedisStore(): StoreInterface {
+  const redis = getRedisClient();
+
+  return {
+    async get(key: string): Promise<string | null> {
+      return redis.get(key);
+    },
+    async set(key: string, value: string, ttl?: number): Promise<void> {
+      if (ttl && ttl > 0) {
+        await redis.set(key, value, 'EX', ttl);
+        return;
+      }
+      await redis.set(key, value);
+    },
+    async del(key: string): Promise<void> {
+      await redis.del(key);
+    },
+    async exists(key: string): Promise<boolean> {
+      const result = await redis.exists(key);
+      return result === 1;
+    },
+  };
+}
 // Prometheus metrics middleware
 const metricsMiddleware = promBundle({
   includeMethod: true,
@@ -94,8 +125,9 @@ console.log('   CORS_ORIGIN env:', process.env.CORS_ORIGIN);
 console.log('   CORS handled by Nginx');
 
 app.use(compression());
+app.use(requestContext); // correlation id + AsyncLocalStorage log context (must be early)
 app.use(metricsMiddleware);
-app.use(requestLogger);
+app.use(enhancedRequestLogger);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -175,11 +207,8 @@ app.get("/debug/routes", (req, res) => {
   });
 });
 
-// Metrics endpoint (exposed by express-prom-bundle)
-// Available at /metrics
-
-// Custom metrics endpoint with our business metrics
-app.get("/metrics-custom", metricsEndpoint);
+// Metrics endpoint (exposed by express-prom-bundle at /metrics) — includes the
+// business metrics registered in utils/metrics.ts on the default registry.
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -224,6 +253,8 @@ async function startServer() {
     console.log(" Initializing Redis...");
     await initializeRedis();
     console.log("✅ Redis initialization successful!");
+
+    app.set('store', createRedisStore());
     
     // Connect to database
     console.log("📡 Attempting to connect to database...");
@@ -242,7 +273,6 @@ async function startServer() {
         environment: process.env.NODE_ENV || "development",
         healthCheck: `http://${networkIP}:${PORT}/health`,
         metrics: `http://${networkIP}:${PORT}/metrics`,
-        customMetrics: `http://${networkIP}:${PORT}/metrics-custom`,
         networkAccess: `http://${networkIP}:${PORT}`,
       });
     });

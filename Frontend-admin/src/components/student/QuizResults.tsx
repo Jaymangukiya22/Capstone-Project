@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ScoreDisplay from './quiz-results/ScoreDisplay';
 import Leaderboard from './quiz-results/Leaderboard';
 import FriendMatchLeaderboard from './quiz-results/FriendMatchLeaderboard';
@@ -6,11 +6,50 @@ import { useResultsNavigationGuard } from '@/hooks/useNavigationGuard';
 import { apiClient } from '@/services/api';
 import { Clock, Zap, Home, Award } from 'lucide-react';
 
+const toArray = <T,>(value: unknown): T[] => {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
+const normalizeFriendMatchData = (data: any) => {
+  const results = toArray<any>(data?.results).map((player: any) => ({
+    ...player,
+    answers: toArray<any>(player?.answers),
+  }))
+
+  return {
+    ...data,
+    results,
+  }
+}
+
+const getQuestionIds = (players: any[]): number[] => {
+  const ids = new Set<number>()
+  for (const player of players) {
+    for (const answer of toArray<any>(player?.answers)) {
+      if (typeof answer?.questionId === 'number') ids.add(answer.questionId)
+    }
+  }
+  return Array.from(ids)
+}
+
 export function QuizResults() {
   const [quizData, setQuizData] = useState<any>(null);
   const [friendMatchData, setFriendMatchData] = useState<any>(null);
   const [isFriendMatch, setIsFriendMatch] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const friendResults = useMemo(() => {
+    if (!isFriendMatch) return []
+    return toArray<any>(friendMatchData?.results)
+  }, [friendMatchData, isFriendMatch])
+
+  const questionIds = useMemo(() => {
+    return getQuestionIds(friendResults)
+  }, [friendResults])
+
+  const playerNames = useMemo(() => {
+    return friendResults.map((player: any) => player?.username || 'Player')
+  }, [friendResults])
 
   // Get current user's username
   const getCurrentUsername = () => {
@@ -39,8 +78,14 @@ export function QuizResults() {
           const results = JSON.parse(friendMatchResults);
           console.log('🔍 QuizResults: Friend match data from session:', results);
           
-          // If we have a matchId, fetch REAL data from database
-          if (results.matchId) {
+          // Note: Backend does not expose /friend-matches/:matchId/results.
+          // Also, auto-match ids (auto_*) are not stored as friend matches.
+          // Prefer session results as the source of truth.
+          const matchId = typeof results.matchId === 'string' ? results.matchId : ''
+          const shouldTryDbFetch = false
+
+          // If we have a matchId, optionally fetch REAL data from database
+          if (shouldTryDbFetch && matchId && !matchId.startsWith('auto_')) {
             console.log('📡 Fetching REAL results from DATABASE for matchId:', results.matchId);
             
             try {
@@ -73,7 +118,7 @@ export function QuizResults() {
           }
           
           // Fallback to session storage if API fails
-          setFriendMatchData(results);
+          setFriendMatchData(normalizeFriendMatchData(results));
           setIsFriendMatch(true);
           setIsLoading(false);
           return;
@@ -139,10 +184,13 @@ export function QuizResults() {
   const percentage = isFriendMatch && friendMatchData
     ? (() => {
         if (friendMatchData.results) {
-          const currentUser = friendMatchData.results.find((r: any) => r.username === getCurrentUsername());
-          return Math.round((currentUser?.score || 0) / (currentUser?.answers?.length || 1) * 100);
+          const results = toArray<any>(friendMatchData.results)
+          const currentUser = results.find((r: any) => r.username === getCurrentUsername());
+          const answers = toArray<any>(currentUser?.answers)
+          return Math.round((currentUser?.score || 0) / (answers.length || 1) * 100);
         } else if (friendMatchData.playerResults) {
-          return Math.round((friendMatchData.playerResults.score || 0) / (friendMatchData.playerResults.answers?.length || 1) * 100);
+          const answers = toArray<any>(friendMatchData.playerResults.answers)
+          return Math.round((friendMatchData.playerResults.score || 0) / (answers.length || 1) * 100);
         }
         return 0;
       })()
@@ -151,7 +199,8 @@ export function QuizResults() {
   // Get current user data for friend match
   const getCurrentUserData = () => {
     if (!friendMatchData?.results) return null;
-    return friendMatchData.results.find((r: any) => r.username === getCurrentUsername());
+    const results = toArray<any>(friendMatchData.results)
+    return results.find((r: any) => r.username === getCurrentUsername());
   };
 
   const currentUserData = isFriendMatch ? getCurrentUserData() : null;
@@ -315,7 +364,7 @@ export function QuizResults() {
 
                 {/* Question-by-Question Breakdown */}
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {currentUserData?.answers?.map((answer: any, index: number) => {
+                  {toArray<any>(currentUserData?.answers).map((answer: any, index: number) => {
                     const timeBonus = Math.max(0, Math.floor((15 - answer.timeSpent) * 2));
                     const basePoints = 100;
                     return (
@@ -357,6 +406,78 @@ export function QuizResults() {
                   })}
                 </div>
               </div>
+
+              {/* 6. ATTEMPTS (BOTH PLAYERS) */}
+              {friendResults.length > 0 && (
+                <div className="rounded-xl border bg-card/50 backdrop-blur-sm p-4 sm:p-6 animate-in slide-in-from-bottom duration-500 delay-350">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 rounded-lg bg-blue-500/10">
+                      <Award className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Attempts</h3>
+                      <p className="text-xs text-muted-foreground">Per-question answers for both players</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left border-b">
+                          <th className="py-2 pr-4">Q</th>
+                          {playerNames.map((name: string, idx: number) => (
+                            <th key={idx} className="py-2 pr-4 min-w-[220px]">{name}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {questionIds.map((questionId: number, index: number) => (
+                          <tr key={questionId} className="border-b last:border-b-0">
+                            <td className="py-3 pr-4 font-medium">{index + 1}</td>
+                            {friendResults.map((player: any, playerIdx: number) => {
+                              const answers = toArray<any>(player?.answers)
+                              const answer = answers.find(a => a?.questionId === questionId)
+                              const selected = toArray<number>(answer?.selectedOptions)
+                              const correct = toArray<number>(answer?.correctOptions)
+                              const isCorrect = Boolean(answer?.isCorrect)
+                              const timeSpent = typeof answer?.timeSpent === 'number' ? answer.timeSpent : null
+                              const points = typeof answer?.points === 'number' ? answer.points : null
+
+                              return (
+                                <td key={playerIdx} className="py-3 pr-4 align-top">
+                                  {answer ? (
+                                    <div className="space-y-1">
+                                      <div className="text-xs text-muted-foreground">
+                                        Selected: {selected.length > 0 ? selected.join(', ') : '—'}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        Correct: {correct.length > 0 ? correct.join(', ') : '—'}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <span className={isCorrect ? 'text-green-500' : 'text-red-500'}>
+                                          {isCorrect ? 'Correct' : 'Wrong'}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                          Time: {timeSpent !== null ? `${timeSpent}s` : '—'}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                          Pts: {points !== null ? points : '—'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs text-muted-foreground">—</div>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* 5. BACK TO DASHBOARD BUTTON */}
               <div className="flex justify-center animate-in slide-in-from-bottom duration-500 delay-400">

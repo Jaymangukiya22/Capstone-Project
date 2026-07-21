@@ -56,14 +56,6 @@ export const useNavigationGuard = ({
       }
     };
 
-    // Add initial history entry to prevent back navigation
-    window.history.pushState(null, '', window.location.href);
-    
-    // Add multiple history entries to make back navigation harder
-    for (let i = 0; i < 10; i++) {
-      window.history.pushState(null, '', window.location.href);
-    }
-
     // Add event listeners
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -127,16 +119,8 @@ export const useNavigationGuard = ({
     };
     document.addEventListener('keydown', handleKeyDown, true);
     
-    // Periodically push history state to prevent back navigation
-    const historyInterval = setInterval(() => {
-      if (isBlockingRef.current) {
-        window.history.pushState(null, '', window.location.href);
-      }
-    }, 1000); // Every second
-
     return () => {
       isBlockingRef.current = false;
-      clearInterval(historyInterval);
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('hashchange', handleHashChange);
@@ -171,9 +155,6 @@ export const useQuizNavigationGuard = (isQuizActive: boolean, isCompleted: boole
         description: "You cannot leave the quiz while it's in progress. Please complete the quiz first.",
         variant: "destructive"
       });
-      
-      // Force stay on current page by pushing current state again
-      window.history.pushState(null, '', window.location.href);
       
       // Do NOT allow leaving - no redirect, no confirmation
       return false;

@@ -388,7 +388,9 @@ export function QuestionsTab({ quizId, onQuestionsChange }: QuestionsTabProps) {
     try {
       // Get the quiz's category ID
       const quizResponse = await apiClient.get(`/quizzes/${quizId}`)
-      const categoryId = quizResponse.data.data.quiz.categoryId
+      const quizData = quizResponse?.data?.data
+      const quiz = quizData?.quiz ?? quizData
+      const categoryId = quiz?.categoryId
       
       if (!categoryId) {
         alert('Quiz must have a category before adding questions.')

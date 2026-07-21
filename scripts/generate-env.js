@@ -137,8 +137,8 @@ const configs = {
     MATCHSERVER_MEMORY_LIMIT: '2G',
     
     // Performance (high scale)
-    MIN_WORKERS: '4',
-    MAX_WORKERS: '8',
+    MIN_WORKERS: '20',
+    MAX_WORKERS: '40',
     DB_POOL_MAX: '50',
     REDIS_POOL_MAX: '30',
     RATE_LIMIT_MAX_REQUESTS: '2000',
@@ -273,11 +273,7 @@ if (deploymentMode === 'localhost') {
 }
 
 console.log('\n🚀 Next Steps:');
-if (deploymentMode === 'production') {
-  console.log('1. docker stack deploy -c docker-stack.yml quizup');
-} else {
-  console.log('1. docker-compose up -d');
-}
+console.log('1. docker compose up -d');
 console.log('2. Test the application');
 console.log('3. Monitor performance');
 

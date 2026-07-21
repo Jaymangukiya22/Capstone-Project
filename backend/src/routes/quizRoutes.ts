@@ -15,6 +15,7 @@ import { requireAdmin } from '../middleware/roleAuth';
 import { validateRequest } from '../middleware/validation';
 import {
   createQuizSchema,
+  updateQuizSchema,
   assignQuestionsSchema
 } from '../utils/validation';
 
@@ -33,7 +34,7 @@ router.get('/:id/stats', getQuizStats);
 
 // Admin-only routes
 router.post('/', requireAdmin, validateRequest(createQuizSchema), createQuiz);
-router.put('/:id', requireAdmin, validateRequest(createQuizSchema), updateQuiz);
+router.put('/:id', requireAdmin, validateRequest(updateQuizSchema), updateQuiz);
 router.delete('/:id', requireAdmin, deleteQuiz);
 router.post('/:id/questions', requireAdmin, validateRequest(assignQuestionsSchema), assignQuestionsToQuiz);
 

@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 
 describe('Bcrypt Test', () => {
   it('should hash password 1234567890 correctly', async () => {

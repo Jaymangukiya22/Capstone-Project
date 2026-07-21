@@ -483,6 +483,10 @@ export class MatchService {
     const joinCode = this.generateJoinCode();
     const questions = await this.loadQuizQuestions(quizId);
 
+    if (questions.length === 0) {
+      throw new Error('No questions found for quiz');
+    }
+
     const match: MatchRoom = {
       id: matchId,
       quizId,
@@ -530,6 +534,10 @@ export class MatchService {
     const matchId = uuidv4();
     const joinCode = this.generateJoinCode();
     const questions = await this.loadQuizQuestions(quizId);
+
+    if (questions.length === 0) {
+      throw new Error('No questions found for quiz');
+    }
 
     // Look up creator's real identity so we can show it to the opponent
     let username = `User${userId}`;

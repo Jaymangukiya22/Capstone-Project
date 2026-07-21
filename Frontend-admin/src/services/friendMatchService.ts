@@ -1,5 +1,6 @@
 import { apiClient } from './api'
 import { io, Socket } from 'socket.io-client'
+import { toast } from '../lib/toast'
 
 // Types for Friend Match API
 export interface FriendMatchResponse {
@@ -34,8 +35,66 @@ export interface ApiResponse<T> {
   error?: string
 }
 
+export interface PendingMatchData {
+  hasPendingMatch: boolean
+  matchId?: string
+  timeRemaining?: number
+  joinCode?: string
+  quizId?: number
+  currentQuestionIndex?: number
+  totalQuestions?: number
+}
+
 class FriendMatchService {
   private baseUrl = '/friend-matches'
+
+  private handleHttpError(error: any, fallbackMessage: string) {
+    const friendlyMessage = (error as any)?.friendlyMessage
+    const message = typeof friendlyMessage === 'string' && friendlyMessage.length > 0
+      ? friendlyMessage
+      : fallbackMessage
+
+    toast({
+      title: 'Error',
+      description: message,
+      variant: 'destructive',
+    })
+  }
+
+  /**
+   * Check if user has a pending match waiting for reconnection
+   */
+  async checkPendingMatch(userId: number): Promise<PendingMatchData | null> {
+    try {
+      const response = await apiClient.get<ApiResponse<PendingMatchData>>(
+        `/matches/pending/${userId}`
+      )
+      
+      if (response.data.success) {
+        return response.data.data
+      }
+      return null
+    } catch (error) {
+      console.error('Error checking pending match:', error)
+      return null
+    }
+  }
+
+  /**
+   * Clear pending match when user declines to rejoin
+   */
+  async clearPendingMatch(userId: number): Promise<boolean> {
+    try {
+      const response = await apiClient.delete<ApiResponse<void>>(
+        `/matches/pending/${userId}`
+      )
+      
+      return response.data.success
+    } catch (error) {
+      console.error('Error clearing pending match:', error)
+      return false
+    }
+  }
 
   /**
    * Create a friend match (1v1 with join code)
@@ -66,10 +125,16 @@ class FriendMatchService {
         return response.data.data
       } else {
         console.error('Failed to create friend match:', response.data.error || response.data.message)
+        toast({
+          title: 'Error',
+          description: response.data.message || 'Failed to create friend match.',
+          variant: 'destructive',
+        })
         return null
       }
     } catch (error) {
       console.error('Error creating friend match:', error)
+      this.handleHttpError(error, 'Failed to create friend match. Please try again.')
       return null
     }
   }
@@ -87,10 +152,16 @@ class FriendMatchService {
         return response.data.data.match
       } else {
         console.error('Failed to find match by code:', response.data.error || response.data.message)
+        toast({
+          title: 'Error',
+          description: response.data.message || 'Match not found.',
+          variant: 'destructive',
+        })
         return null
       }
     } catch (error) {
       console.error('Error finding match by code:', error)
+      this.handleHttpError(error, 'Could not find match right now. Please try again.')
       return null
     }
   }
@@ -108,10 +179,16 @@ class FriendMatchService {
         return response.data.data.matches || []
       } else {
         console.error('Failed to get active matches:', response.data.error || response.data.message)
+        toast({
+          title: 'Error',
+          description: response.data.message || 'Failed to load matches.',
+          variant: 'destructive',
+        })
         return []
       }
     } catch (error) {
       console.error('Error getting active matches:', error)
+      this.handleHttpError(error, 'Could not load matches right now. Please try again.')
       return []
     }
   }
@@ -129,10 +206,16 @@ class FriendMatchService {
         return response.data.data.match
       } else {
         console.error('Failed to get match details:', response.data.error || response.data.message)
+        toast({
+          title: 'Error',
+          description: response.data.message || 'Failed to load match details.',
+          variant: 'destructive',
+        })
         return null
       }
     } catch (error) {
       console.error('Error getting match details:', error)
+      this.handleHttpError(error, 'Could not load match details right now. Please try again.')
       return null
     }
   }
@@ -157,6 +240,27 @@ export const friendMatchService = new FriendMatchService()
 export class FriendMatchWebSocket {
   private socket: Socket | null = null
   private eventHandlers: Map<string, Function[]> = new Map()
+
+  private readonly errorEventNames = new Set([
+    'error',
+    'auth_error',
+    'matchmaking_error',
+    'auto_match_timeout',
+  ])
+
+  private getSocketErrorMessage(payload: any): string {
+    const payloadMessage = payload?.message
+    if (typeof payloadMessage === 'string' && payloadMessage.length > 0) {
+      return payloadMessage
+    }
+
+    const payloadError = payload?.error
+    if (typeof payloadError === 'string' && payloadError.length > 0) {
+      return payloadError
+    }
+
+    return 'Something went wrong. Please try again.'
+  }
 
   /**
    * Connect to friend match using Socket.IO
@@ -186,12 +290,29 @@ export class FriendMatchWebSocket {
 
         this.socket.on('connect_error', (error) => {
           console.error('Friend match Socket.IO error:', error)
+          toast({
+            title: 'Connection Error',
+            description: 'Failed to connect to the match server. Please try again.',
+            variant: 'destructive',
+          })
           reject(error)
         })
 
         // Listen for all events and forward to handlers
         this.socket.onAny((eventName, ...args) => {
           const data = args[0] || {}
+
+          if (this.errorEventNames.has(eventName)) {
+            const handlers = this.eventHandlers.get(eventName) || []
+            if (handlers.length === 0) {
+              toast({
+                title: 'Error',
+                description: this.getSocketErrorMessage(data),
+                variant: 'destructive',
+              })
+            }
+          }
+
           this.handleMessage(eventName, data)
         })
 

@@ -19,6 +19,10 @@ import { PlayerStatus } from '../types/enums';
 @Table({
   tableName: 'match_players',
   timestamps: true,
+  // Backstop for [M10]: one row per (match, user). upsertDbPlayer/endMatch now
+  // upsert against this; without it, the per-answer and end-of-match writes
+  // raced to INSERT duplicate player rows.
+  indexes: [{ unique: true, fields: ['matchId', 'userId'], name: 'match_players_matchid_userid_uq' }],
 })
 export class MatchPlayer extends Model {
   @PrimaryKey

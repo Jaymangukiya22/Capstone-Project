@@ -20,8 +20,8 @@ export const validateRequest = (schema: Joi.ObjectSchema) => {
 
       res.status(400).json({
         success: false,
-        error: 'Validation failed',
-        message: 'Request validation failed',
+        error: 'VALIDATION_ERROR',
+        message: 'Request validation failed.',
         details: errorDetails
       });
       return;
@@ -51,8 +51,8 @@ export const validateQuery = (schema: Joi.ObjectSchema) => {
 
       res.status(400).json({
         success: false,
-        error: 'Query validation failed',
-        message: 'Query parameters validation failed',
+        error: 'VALIDATION_ERROR',
+        message: 'Query parameters validation failed.',
         details: errorDetails
       });
       return;
@@ -82,8 +82,8 @@ export const validateParams = (schema: Joi.ObjectSchema) => {
 
       res.status(400).json({
         success: false,
-        error: 'Parameters validation failed',
-        message: 'URL parameters validation failed',
+        error: 'VALIDATION_ERROR',
+        message: 'URL parameters validation failed.',
         details: errorDetails
       });
       return;

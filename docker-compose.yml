@@ -50,16 +50,24 @@ services:
   redis:
     image: redis:7-alpine
     container_name: quizup_redis
-    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-4gb} --maxmemory-policy allkeys-lru --tcp-backlog 511 --timeout 0 --tcp-keepalive 300
+    # NOTE: ./redis.conf at repo root is NOT mounted/used anywhere - this
+    # command line is the actual live config. requirepass lives here, not
+    # in that file (which is unused; its own commented-out requirepass line
+    # was always a no-op).
+    command: redis-server --requirepass "${REDIS_PASSWORD}" --maxmemory ${REDIS_MAXMEMORY:-4gb} --maxmemory-policy allkeys-lru --tcp-backlog 511 --timeout 0 --tcp-keepalive 300
     volumes:
       - redis_data:/data
+    # Previously published to 0.0.0.0, reachable from outside the Docker
+    # network with no auth at all. backend/matchserver reach Redis via the
+    # internal quizup_network by service name - the host port isn't needed
+    # for normal operation. Bound to loopback only, for local debugging.
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     networks:
       - quizup_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -77,12 +85,13 @@ services:
     container_name: quizup_backend
     environment:
       NODE_ENV: ${NODE_ENV:-development}
+      SERVICE_NAME: backend  # log label; Promtail ships ./logs/backend to Loki
       DB_NAME: quizup_db
       DB_USER: quizup_user
       DB_PASSWORD: quizup_password
       DB_HOST: postgres
       DB_PORT: 5432
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_SECRET: ${JWT_SECRET:-7a0b42e9df5856f7cfe0094361f65630}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-64}
@@ -90,11 +99,17 @@ services:
       MAX_WORKERS: ${MAX_WORKERS:-2}
       DB_POOL_MIN: ${DB_POOL_MIN:-20}
       DB_POOL_MAX: ${DB_POOL_MAX:-2000}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_LEVEL: ${BACKEND_LOG_LEVEL:-info}
+      # Winston's console transport writes synchronously to stdout with no
+      # buffering - fine for local dev, but adds I/O overhead under load in
+      # production. Default off; set LOG_TO_CONSOLE=true to override.
+      LOG_TO_CONSOLE: ${LOG_TO_CONSOLE:-false}
       ENABLE_DEBUG_ROUTES: ${ENABLE_DEBUG_ROUTES:-true}
       SEED_DATABASE: ${SEED_DATABASE:-true}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./logs/backend:/app/logs  # JSON logs, tailed by Promtail -> Loki
     networks:
       - quizup_network
     depends_on:
@@ -122,35 +137,67 @@ services:
     container_name: quizup_matchserver
     environment:
       NODE_ENV: ${NODE_ENV:-development}
+      SERVICE_NAME: matchserver  # log label; Promtail ships ./logs/matchserver to Loki
       DB_NAME: quizup_db
       DB_USER: quizup_user
       DB_PASSWORD: quizup_password
       DB_HOST: postgres
       DB_PORT: 5432
-      REDIS_URL: redis://redis:6379
+      # Sequelize pool was previously hardcoded (ignored these entirely) -
+      # now that it reads them, each matchserver worker process gets its own
+      # pool, so keep it modest per-process (MAX_WORKERS x DB_POOL_MAX must
+      # stay well under Postgres's max_connections above).
+      DB_POOL_MIN: ${MATCHSERVER_DB_POOL_MIN:-5}
+      DB_POOL_MAX: ${MATCHSERVER_DB_POOL_MAX:-50}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_SECRET: ${JWT_SECRET}
       MATCH_SERVICE_PORT: 3001
       MASTER_HOST: 0.0.0.0
       UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-64}
+      # Per-process V8 heap cap for the master + forked workers (see .env). Keeps
+      # the 5 processes in this cgroup from each auto-sizing to the whole limit
+      # and collectively OOMing. 1536 x 5 = 7.5G < the 8G mem_limit below.
+      NODE_OPTIONS: ${MATCHSERVER_NODE_OPTIONS:---max-old-space-size=1536}
       # Worker Pool Configuration
-      MIN_WORKERS: ${MIN_WORKERS:-10}
-      MAX_WORKERS: ${MAX_WORKERS:-500}
-      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-5}
-      MAX_MATCHES: ${MAX_MATCHES:-8}
+      # RIGHT-SIZED FOR A 4-CORE / 16GB HOST.
+      # Quiz matches are idle-heavy I/O state machines, NOT CPU hogs, so a
+      # single Node process holds thousands of them fine. Forking one OS process
+      # per ~8 matches (old: 500 workers) would need ~625 processes for 5k
+      # matches and OOM the box. Instead: a few workers, each holding many.
+      #   4 workers x 6000 matches = 24,000 match capacity (tuned up from
+      #   4x2500=10k after the ceiling test showed ~88 MiB/1000 matches and flat
+      #   event-loop lag - memory, raised to 8G below, is the real ceiling).
+      # NOTE: do not set MAX_MATCHES here. The pool forks each worker with
+      # MAX_MATCHES = MAX_MATCHES_PER_WORKER (enhancedWorkerPool.spawnWorker),
+      # so a separate MAX_MATCHES env is dead config and previously contradicted
+      # MAX_MATCHES_PER_WORKER (e.g. a stray MAX_MATCHES=3). Set only
+      # MAX_MATCHES_PER_WORKER; the worker's own cap derives from it.
+      MIN_WORKERS: ${MIN_WORKERS:-3}
+      MAX_WORKERS: ${MAX_WORKERS:-4}
+      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-6000}
       WORKER_IDLE_TIMEOUT: ${WORKER_IDLE_TIMEOUT:-300000}
       # Scaling
       SCALE_UP_THRESHOLD: ${SCALE_UP_THRESHOLD:-0.5}
       SCALE_DOWN_THRESHOLD: ${SCALE_DOWN_THRESHOLD:-0.3}
       SCALE_CHECK_INTERVAL: ${SCALE_CHECK_INTERVAL:-5000}
       PROACTIVE_SPAWN_THRESHOLD: ${PROACTIVE_SPAWN_THRESHOLD:-0.6}
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # Stale-match reaper (force-terminates matches idle this long, and now
+      # reconciles their Postgres row to CANCELLED - [M11]). Prod defaults;
+      # override low to exercise the reaper quickly in a test.
+      STALE_MATCH_TIMEOUT_MS: ${STALE_MATCH_TIMEOUT_MS:-300000}
+      STALE_MATCH_CHECK_INTERVAL_MS: ${STALE_MATCH_CHECK_INTERVAL_MS:-60000}
+      LOG_LEVEL: ${MATCHSERVER_LOG_LEVEL:-debug}
+      # Winston's console transport writes synchronously to stdout with no
+      # buffering - fine for local dev, but adds I/O overhead under load in
+      # production. Default off; set LOG_TO_CONSOLE=true to override.
+      LOG_TO_CONSOLE: ${LOG_TO_CONSOLE:-false}
     ports:
       - "${MATCH_SERVICE_PORT:-3001}:3001"
     # ADD VOLUMES FOR PERSISTENCE ✅
     volumes:
       - ./backend/src:/app/src:ro  # Source code (read-only)
       - ./backend/tests:/app/tests:ro  # Tests (read-only)
-      - matchserver_logs:/app/logs  # Logs (persistent)
+      - ./logs/matchserver:/app/logs  # JSON logs, tailed by Promtail -> Loki
     networks:
       - quizup_network
     depends_on:
@@ -164,8 +211,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    cpus: ${MATCHSERVER_CPU_LIMIT:-6.0}
-    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-16G}
+    cpus: ${MATCHSERVER_CPU_LIMIT:-3.0}
+    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-8G}
     ulimits:
       nproc: 65535
       nofile:
@@ -193,8 +240,12 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    cpus: ${NGINX_CPU_LIMIT:-0.25}
+    cpus: ${NGINX_CPU_LIMIT:-1.0}
     mem_limit: ${NGINX_MEMORY_LIMIT:-512M}
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
   # =============================================================================
   # FRONTEND (Production Build with Nginx)
@@ -243,7 +294,7 @@ services:
     image: rediscommander/redis-commander:latest
     container_name: quizup_redis_commander
     environment:
-      REDIS_HOSTS: local:redis:6379
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD}
       HTTP_USER: ${REDIS_COMMANDER_USER:-admin}
       HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD:-admin}
     ports:
@@ -276,6 +327,47 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
+    # Monitoring must stay lean on the 4-core/16GB host so it doesn't starve
+    # the app it measures (audit: these previously had no limits at all).
+    cpus: ${PROMETHEUS_CPU_LIMIT:-0.5}
+    mem_limit: ${PROMETHEUS_MEMORY_LIMIT:-1G}
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: quizup_loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - quizup_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    cpus: ${LOKI_CPU_LIMIT:-0.5}
+    mem_limit: ${LOKI_MEMORY_LIMIT:-512M}
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: quizup_promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ./logs:/var/log/quizup:ro   # the apps' JSON log files (bind-mounted per service)
+      - promtail_positions:/tmp
+    networks:
+      - quizup_network
+    depends_on:
+      - loki
+    restart: unless-stopped
+    cpus: ${PROMTAIL_CPU_LIMIT:-0.15}
+    mem_limit: ${PROMTAIL_MEMORY_LIMIT:-128M}
 
   grafana:
     image: grafana/grafana-oss:9.5.18
@@ -289,13 +381,16 @@ services:
       - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     networks:
       - quizup_network
     depends_on:
       - prometheus
+      - loki
     restart: unless-stopped
+    cpus: ${GRAFANA_CPU_LIMIT:-0.5}
+    mem_limit: ${GRAFANA_MEMORY_LIMIT:-512M}
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -314,6 +409,31 @@ services:
     networks:
       - quizup_network
     restart: unless-stopped
+    cpus: ${NODE_EXPORTER_CPU_LIMIT:-0.15}
+    mem_limit: ${NODE_EXPORTER_MEMORY_LIMIT:-128M}
+
+  # Per-container CPU / memory / network bandwidth for EVERY service (postgres,
+  # redis, backend, matchserver incl. its worker processes, nginx, ...). This
+  # is what node-exporter (host-only) and the app/exporter metrics (DB-level,
+  # or master-process-only for the match server) cannot give: uniform
+  # per-service resource + bandwidth usage.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: quizup_cadvisor
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8088:8080"
+    networks:
+      - quizup_network
+    restart: unless-stopped
+    cpus: ${CADVISOR_CPU_LIMIT:-0.3}
+    mem_limit: ${CADVISOR_MEMORY_LIMIT:-256M}
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
@@ -331,6 +451,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    cpus: ${POSTGRES_EXPORTER_CPU_LIMIT:-0.15}
+    mem_limit: ${POSTGRES_EXPORTER_MEMORY_LIMIT:-128M}
 
   redis-exporter:
     image: oliver006/redis_exporter:latest
@@ -338,7 +460,7 @@ services:
     ports:
       - "9121:9121"
     environment:
-      REDIS_ADDR: "redis://redis:6379"
+      REDIS_ADDR: "redis://:${REDIS_PASSWORD}@redis:6379"
       REDIS_EXPORTER_LOG_FORMAT: "txt"
     networks:
       - quizup_network
@@ -346,6 +468,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    cpus: ${REDIS_EXPORTER_CPU_LIMIT:-0.15}
+    mem_limit: ${REDIS_EXPORTER_MEMORY_LIMIT:-128M}
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -361,31 +485,9 @@ services:
     networks:
       - quizup_network
     restart: unless-stopped
+    cpus: ${ALERTMANAGER_CPU_LIMIT:-0.15}
+    mem_limit: ${ALERTMANAGER_MEMORY_LIMIT:-128M}
 
-  influxdb:
-    image: influxdb:2.7-alpine
-    container_name: quizup_influxdb
-    ports:
-      - "8086:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: admin123
-      DOCKER_INFLUXDB_INIT_ORG: quizup
-      DOCKER_INFLUXDB_INIT_BUCKET: cloudflare
-      DOCKER_INFLUXDB_INIT_RETENTION: 30d
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
-      - influxdb_config:/etc/influxdb2
-    networks:
-      - quizup_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 # =============================================================================
 # NETWORKS
 # =============================================================================
@@ -404,15 +506,13 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  matchserver_logs:  # ADD THIS
-    driver: local
   prometheus_data:
+    driver: local
+  promtail_positions:
     driver: local
   grafana_data:
     driver: local
   alertmanager_data:
     driver: local
-  influxdb_data:
-    driver: local
-  influxdb_config:
+  loki_data:
     driver: local

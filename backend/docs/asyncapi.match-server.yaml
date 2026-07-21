@@ -1,0 +1,681 @@
+asyncapi: 3.0.0
+info:
+  title: QuizUP Match Server (Socket.IO)
+  version: 1.0.0
+  description: |
+    Realtime match-making and quiz gameplay over Socket.IO WebSocket connections.
+    This API handles friend match creation, player joining, game flow, and answer submission.
+
+    Socket.IO client connection example:
+
+    ```js
+    import io from 'socket.io-client';
+
+    const socket = io('ws://localhost:3001', {
+      auth: { token: '<JWT>' },
+      transports: ['websocket']
+    });
+    ```
+  contact:
+    name: QuizUP Team
+    email: dev@quizup.com
+  license:
+    name: MIT
+
+servers:
+  production:
+    host: match.quizdash.dpdns.org
+    protocol: wss
+    description: Production match server
+    variables:
+      port:
+        default: '443'
+  staging:
+    host: match-staging.quizdash.dpdns.org
+    protocol: wss
+    description: Staging match server
+  development:
+    host: localhost:3001
+    protocol: ws
+    description: Local development match server
+
+channels:
+  /:
+    description: Default Socket.IO namespace for match operations
+    address: /
+    messages:
+      authenticate:
+        $ref: '#/components/messages/Authenticate'
+      createFriendMatch:
+        $ref: '#/components/messages/CreateFriendMatch'
+      joinMatch:
+        $ref: '#/components/messages/JoinMatch'
+      connectToMatch:
+        $ref: '#/components/messages/ConnectToMatch'
+      playerReady:
+        $ref: '#/components/messages/PlayerReady'
+      clientReady:
+        $ref: '#/components/messages/ClientReady'
+      submitAnswer:
+        $ref: '#/components/messages/SubmitAnswer'
+      authenticated:
+        $ref: '#/components/messages/Authenticated'
+      matchCreated:
+        $ref: '#/components/messages/MatchCreated'
+      friendMatchCreated:
+        $ref: '#/components/messages/FriendMatchCreated'
+      matchJoined:
+        $ref: '#/components/messages/MatchJoined'
+      matchReadyAcknowledged:
+        $ref: '#/components/messages/MatchReadyAcknowledged'
+      loadGameScene:
+        $ref: '#/components/messages/LoadGameScene'
+      playerListUpdated:
+        $ref: '#/components/messages/PlayerListUpdated'
+      playerReadyEvent:
+        $ref: '#/components/messages/PlayerReadyEvent'
+      matchStarted:
+        $ref: '#/components/messages/MatchStarted'
+      nextQuestion:
+        $ref: '#/components/messages/NextQuestion'
+      matchCompleted:
+        $ref: '#/components/messages/MatchCompleted'
+      matchError:
+        $ref: '#/components/messages/MatchError'
+      error:
+        $ref: '#/components/messages/Error'
+
+components:
+  messages:
+    # Client → Server Events (Publish)
+    Authenticate:
+      name: authenticate
+      title: Authenticate User
+      description: |
+        Authenticate a user with the match server.
+
+        ```js
+        socket.emit('authenticate', { userId: 123, username: 'player1' });
+        ```
+      payload:
+        $ref: '#/components/schemas/AuthenticatePayload'
+
+    CreateFriendMatch:
+      name: create_friend_match
+      title: Create Friend Match
+      description: |
+        Create a new friend match (1v1 with join code).
+
+        ```js
+        socket.emit('create_friend_match', { quizId: 110 });
+        ```
+      payload:
+        $ref: '#/components/schemas/CreateFriendMatchPayload'
+
+    JoinMatch:
+      name: join_match
+      title: Join Match by Code
+      description: |
+        Join an existing match using a join code.
+
+        ```js
+        socket.emit('join_match', { joinCode: 'ABC123' });
+        ```
+      payload:
+        $ref: '#/components/schemas/JoinMatchPayload'
+
+    ConnectToMatch:
+      name: connect_to_match
+      title: Connect to Match
+      description: Connect to an existing match by ID
+      payload:
+        $ref: '#/components/schemas/ConnectToMatchPayload'
+
+    PlayerReady:
+      name: player_ready
+      title: Player Ready
+      description: Signal that player is ready to start the match
+      payload:
+        $ref: '#/components/schemas/PlayerReadyPayload'
+
+    ClientReady:
+      name: CLIENT_READY
+      title: Client Ready
+      description: |
+        Signal that client has loaded the game UI and is ready to receive questions.
+
+        This is required for the match to start in production.
+
+        ```js
+        socket.emit('CLIENT_READY', { matchId, userId });
+        ```
+      payload:
+        $ref: '#/components/schemas/ClientReadyPayload'
+
+    SubmitAnswer:
+      name: submit_answer
+      title: Submit Answer
+      description: |
+        Submit an answer to the current question.
+
+        ```js
+        socket.emit('submit_answer', {
+          matchId,
+          questionId,
+          selectedOptions: [4011],
+          timeSpent: 12
+        });
+        ```
+      payload:
+        $ref: '#/components/schemas/SubmitAnswerPayload'
+
+    # Server → Client Events (Subscribe)
+    Authenticated:
+      name: authenticated
+      title: Authentication Successful
+      description: Confirmation that user has been authenticated
+      payload:
+        $ref: '#/components/schemas/AuthenticatedPayload'
+
+    MatchCreated:
+      name: match_created
+      title: Match Created
+      description: Confirmation that a match has been created (creator receives this)
+      payload:
+        $ref: '#/components/schemas/MatchCreatedPayload'
+
+    FriendMatchCreated:
+      name: friend_match_created
+      title: Friend Match Created
+      description: Confirmation that a friend match has been created
+      payload:
+        $ref: '#/components/schemas/FriendMatchCreatedPayload'
+
+    MatchJoined:
+      name: match_joined
+      title: Match Joined
+      description: Confirmation that player has joined a match
+      payload:
+        $ref: '#/components/schemas/MatchJoinedPayload'
+
+    MatchReadyAcknowledged:
+      name: match_ready_acknowledged
+      title: Match Ready Acknowledged
+      description: Server acknowledges player is ready and sends initial game data
+      payload:
+        $ref: '#/components/schemas/MatchReadyAcknowledgedPayload'
+
+    LoadGameScene:
+      name: LOAD_GAME_SCENE
+      title: Load Game Scene
+      description: Instruction to load the game UI scene with match data
+      payload:
+        $ref: '#/components/schemas/LoadGameScenePayload'
+
+    PlayerListUpdated:
+      name: player_list_updated
+      title: Player List Updated
+      description: Broadcast when player list changes (someone joins or leaves)
+      payload:
+        $ref: '#/components/schemas/PlayerListUpdatedPayload'
+
+    PlayerReadyEvent:
+      name: player_ready
+      title: Player Ready Event
+      description: Broadcast when a player marks themselves as ready
+      payload:
+        $ref: '#/components/schemas/PlayerReadyEventPayload'
+
+    MatchStarted:
+      name: match_started
+      title: Match Started
+      description: Broadcast when match starts with first question
+      payload:
+        $ref: '#/components/schemas/MatchStartedPayload'
+
+    NextQuestion:
+      name: next_question
+      title: Next Question
+      description: Broadcast next question to all players in match
+      payload:
+        $ref: '#/components/schemas/NextQuestionPayload'
+
+    MatchCompleted:
+      name: match_completed
+      title: Match Completed
+      description: Broadcast when match is completed with final results
+      payload:
+        $ref: '#/components/schemas/MatchCompletedPayload'
+
+    MatchError:
+      name: match_error
+      title: Match Error
+      description: Error event related to match operations
+      payload:
+        $ref: '#/components/schemas/MatchErrorPayload'
+
+    Error:
+      name: error
+      title: Error
+      description: General error event
+      payload:
+        $ref: '#/components/schemas/ErrorPayload'
+
+  schemas:
+    # Payloads for Client → Server
+    AuthenticatePayload:
+      type: object
+      required: [userId, username]
+      examples:
+        - userId: 123
+          username: player1
+      properties:
+        userId:
+          type: integer
+          description: User ID
+        username:
+          type: string
+          description: Username
+        id:
+          type: integer
+          description: Alternative field for user ID
+
+    CreateFriendMatchPayload:
+      type: object
+      required: [quizId]
+      examples:
+        - quizId: 110
+      properties:
+        quizId:
+          type: integer
+          description: Quiz ID for the match
+
+    JoinMatchPayload:
+      type: object
+      required: [joinCode]
+      examples:
+        - joinCode: ABC123
+      properties:
+        joinCode:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: 6-character join code
+
+    ConnectToMatchPayload:
+      type: object
+      required: [matchId]
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          userId: 123
+          username: player1
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: Match ID
+        userId:
+          type: integer
+          description: User ID
+        username:
+          type: string
+          description: Username
+
+    PlayerReadyPayload:
+      type: object
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          ready: true
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: Match ID (optional, server can infer)
+        userId:
+          type: integer
+          description: User ID (optional)
+        ready:
+          type: boolean
+          default: true
+          description: Ready status
+
+    ClientReadyPayload:
+      type: object
+      required: [matchId, userId]
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          userId: 123
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: Match ID
+        userId:
+          type: integer
+          description: User ID
+
+    SubmitAnswerPayload:
+      type: object
+      required: [questionId, selectedOptions, timeSpent]
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          questionId: 1005
+          selectedOptions: [4011]
+          timeSpent: 12
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: Match ID
+        userId:
+          type: integer
+          description: User ID (optional, server infers)
+        questionId:
+          type: integer
+          description: Question ID
+        selectedOptions:
+          type: array
+          items:
+            type: integer
+          description: Array of selected option IDs
+        timeSpent:
+          type: integer
+          description: Time spent on question in seconds
+
+    # Payloads for Server → Client
+    AuthenticatedPayload:
+      type: object
+      examples:
+        - user:
+            id: 123
+            username: player1
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+
+    MatchCreatedPayload:
+      type: object
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          joinCode: ABC123
+          players:
+            - userId: 123
+              username: player1
+              isReady: false
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        joinCode:
+          type: string
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Player'
+
+    FriendMatchCreatedPayload:
+      type: object
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          joinCode: ABC123
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        joinCode:
+          type: string
+
+    MatchJoinedPayload:
+      type: object
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          players:
+            - userId: 123
+              username: player1
+              isReady: false
+            - userId: 456
+              username: player2
+              isReady: false
+          quiz:
+            id: 110
+            title: General Knowledge
+            description: Mixed questions
+            timeLimit: 15
+          totalQuestions: 10
+          questionIndex: 0
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Player'
+        quiz:
+          $ref: '#/components/schemas/Quiz'
+        totalQuestions:
+          type: integer
+        question:
+          $ref: '#/components/schemas/Question'
+        questionIndex:
+          type: integer
+
+    MatchReadyAcknowledgedPayload:
+      type: object
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        userId:
+          type: integer
+
+    LoadGameScenePayload:
+      type: object
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          players:
+            - userId: 123
+              username: player1
+              isReady: true
+            - userId: 456
+              username: player2
+              isReady: true
+          quiz:
+            id: 110
+            title: General Knowledge
+            description: Mixed questions
+            timeLimit: 15
+          totalQuestions: 10
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Player'
+        quiz:
+          $ref: '#/components/schemas/Quiz'
+        totalQuestions:
+          type: integer
+
+    PlayerListUpdatedPayload:
+      type: object
+      properties:
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Player'
+
+    PlayerReadyEventPayload:
+      type: object
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        isReady:
+          type: boolean
+
+    MatchStartedPayload:
+      type: object
+      examples:
+        - questionIndex: 0
+          totalQuestions: 10
+          question:
+            id: 1005
+            questionText: What is 2 + 2?
+            options:
+              - id: 4011
+                optionText: '4'
+              - id: 4012
+                optionText: '5'
+            timeLimit: 15
+            difficulty: EASY
+      properties:
+        question:
+          $ref: '#/components/schemas/Question'
+        questionIndex:
+          type: integer
+        totalQuestions:
+          type: integer
+
+    NextQuestionPayload:
+      type: object
+      examples:
+        - questionIndex: 1
+          question:
+            id: 1006
+            questionText: What is the capital of France?
+            options:
+              - id: 4013
+                optionText: Paris
+              - id: 4014
+                optionText: London
+            timeLimit: 15
+            difficulty: EASY
+      properties:
+        question:
+          $ref: '#/components/schemas/Question'
+        questionIndex:
+          type: integer
+
+    MatchCompletedPayload:
+      type: object
+      examples:
+        - matchId: 550e8400-e29b-41d4-a716-446655440000
+          results:
+            - userId: 123
+              username: player1
+              score: 7
+              correctAnswers: 7
+              totalAnswers: 10
+            - userId: 456
+              username: player2
+              score: 5
+              correctAnswers: 5
+              totalAnswers: 10
+          winner:
+            userId: 123
+            username: player1
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: integer
+              username:
+                type: string
+              score:
+                type: integer
+              correctAnswers:
+                type: integer
+              totalAnswers:
+                type: integer
+        winner:
+          type: object
+          properties:
+            userId:
+              type: integer
+            username:
+              type: string
+
+    MatchErrorPayload:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+
+    ErrorPayload:
+      type: object
+      examples:
+        - message: Not in any match
+          code: NOT_IN_MATCH
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+
+    # Shared schemas
+    Player:
+      type: object
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        isReady:
+          type: boolean
+        score:
+          type: integer
+        currentQuestionIndex:
+          type: integer
+
+    Quiz:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        timeLimit:
+          type: integer
+          description: Time limit per question in seconds
+
+    Question:
+      type: object
+      properties:
+        id:
+          type: integer
+        questionText:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              optionText:
+                type: string
+        timeLimit:
+          type: integer
+          description: Time limit for this question in seconds
+        difficulty:
+          type: string
+          enum: [EASY, MEDIUM, HARD]

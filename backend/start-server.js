@@ -109,7 +109,7 @@ async function startup() {
     if (isMatchServer) {
       console.log(`Starting Match Server on port ${config.matchPort}...`);
       process.env.PORT = config.matchPort;
-      require('./dist/matchServer-enhanced.js');
+      require('./dist/matchServerMaster.js');
     } else {
       console.log(`Starting Backend API Server on port ${config.port}...`);
       process.env.PORT = config.port;

@@ -13,7 +13,8 @@ console.log('🔍 Pre-build verification starting...');
 // Check required files
 const requiredFiles = [
   'src/server.ts',
-  'src/matchServer-enhanced.ts',
+  'src/matchServerMaster.ts',
+  'src/matchServerWorker.ts',
   'package.json',
   'tsconfig.json',
   'start.sh',
@@ -57,7 +58,7 @@ requiredDirectories.forEach(dir => {
 console.log('\n🔧 Checking TypeScript source files...');
 const srcFiles = [
   'src/server.ts',
-  'src/matchServer-enhanced.ts'
+  'src/matchServerMaster.ts'
 ];
 
 srcFiles.forEach(file => {
@@ -78,7 +79,7 @@ srcFiles.forEach(file => {
 console.log('\n📦 Checking package.json scripts...');
 if (fs.existsSync('package.json')) {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  const requiredScripts = ['build', 'start', 'start:match'];
+  const requiredScripts = ['build', 'start', 'start:match:pool'];
   
   requiredScripts.forEach(script => {
     if (pkg.scripts && pkg.scripts[script]) {
@@ -121,4 +122,4 @@ console.log('');
 console.log('🔧 To run locally for development:');
 console.log('   npm install');
 console.log('   npm run build');
-console.log('   npm run start:all');
+console.log('   npm run start:all:pool');

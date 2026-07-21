@@ -36,12 +36,18 @@ export class CategoryService {
       if (params?.hierarchy !== undefined) queryParams.append('hierarchy', params.hierarchy.toString());
 
       const url = queryParams.toString() ? `${this.endpoint}?${queryParams}` : this.endpoint;
-      const response = await apiClient.get<ApiResponse<Category[]>>(url);
-      
-      return {
-        categories: response.data.data,
-        pagination: response.data.pagination
-      };
+      const response = await apiClient.get<ApiResponse<any>>(url);
+
+      const responseData = response.data?.data;
+      const categories = Array.isArray(responseData)
+        ? responseData
+        : Array.isArray(responseData?.categories)
+          ? responseData.categories
+          : [];
+
+      const pagination = responseData?.pagination ?? response.data?.pagination;
+
+      return { categories, pagination };
     } catch (error) {
       console.error('Error fetching categories:', error);
       throw error;
@@ -109,8 +115,17 @@ export class CategoryService {
    */
   async getCategoryHierarchy(maxDepth = 5): Promise<Category[]> {
     try {
-      const response = await apiClient.get<ApiResponse<Category[]>>(`${this.endpoint}?hierarchy=true&depth=${maxDepth}&limit=1000`);
-      return response.data.data;
+      const url = `${this.endpoint}?hierarchy=true&depth=${maxDepth}&limit=1000`;
+      const response = await apiClient.get<ApiResponse<any>>(url);
+
+      const responseData = response.data?.data;
+      const categories = Array.isArray(responseData)
+        ? responseData
+        : Array.isArray(responseData?.categories)
+          ? responseData.categories
+          : [];
+
+      return categories;
     } catch (error) {
       console.error('Error fetching category hierarchy:', error);
       throw error;

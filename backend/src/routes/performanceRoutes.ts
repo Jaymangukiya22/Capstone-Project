@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
-import { getQuizPerformanceData, getStudentPerformance, getFriendMatchHistory, getMyMatchHistory, getCombinedQuizPerformance } from '../controllers/performanceController';
+import { getQuizPerformanceData, getStudentPerformance, getFriendMatchHistory, getMyMatchHistory, getCombinedQuizPerformance, getMatchQuestionAnalytics } from '../controllers/performanceController';
 
 const router = Router();
 
@@ -15,6 +15,9 @@ router.get('/student-performance/:userId', authenticateToken, requireAdmin, getS
 
 // Get friend match history (admin only)
 router.get('/friend-matches', authenticateToken, requireAdmin, getFriendMatchHistory);
+
+// Get per-question analytics for a match (admin only)
+router.get('/match-analytics/:matchId', authenticateToken, requireAdmin, getMatchQuestionAnalytics);
 
 // Get my match history (player can see their own)
 router.get('/my-matches', authenticateToken, getMyMatchHistory);

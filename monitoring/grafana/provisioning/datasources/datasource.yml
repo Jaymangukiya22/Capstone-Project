@@ -1,5 +1,9 @@
 apiVersion: 1
 
+# Clean rebuild: only the two datasources the dashboard actually uses. The
+# previous file also declared a redis-datasource and a golioth-websocket
+# datasource that require external Grafana plugins (not installed) and were
+# unused - removed.
 datasources:
   - name: Prometheus
     type: prometheus
@@ -9,18 +13,10 @@ datasources:
     isDefault: true
     editable: true
 
-  - name: Redis
-    type: redis-datasource
+  - name: Loki
+    type: loki
     access: proxy
-    url: redis://redis:6379
-    uid: redis
-    isDefault: false
-    editable: true
-
-  - name: WebSocket API
-    type: golioth-websocket-datasource
-    access: proxy
-    url: ws://matchserver:3001
-    uid: websocket
+    url: http://loki:3100
+    uid: loki
     isDefault: false
     editable: true

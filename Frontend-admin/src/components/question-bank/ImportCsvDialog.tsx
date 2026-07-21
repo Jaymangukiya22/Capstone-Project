@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
@@ -16,8 +16,9 @@ import {
   SelectValue,
 } from "../ui/select"
 import { Upload, Download, AlertCircle, CheckCircle } from "lucide-react"
-import * as XLSX from "xlsx"
 import { useCategories } from "../../hooks/useCategories"
+import type { Category } from "../../types/api"
+import { questionBankService } from "../../services/questionBankService"
 
 interface ImportCsvDialogProps {
   open: boolean
@@ -38,20 +39,55 @@ export function ImportCsvDialog({
   const [targetCategoryId, setTargetCategoryId] = useState<number | null>(selectedCategoryId || null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const { categories: apiCategories } = useCategories()
+  const { categories: apiCategories, fetchCategories } = useCategories({
+    autoFetch: false,
+  })
 
-  const downloadTemplate = () => {
+  useEffect(() => {
+    fetchCategories({ limit: 1000 })
+  }, [fetchCategories])
+
+  const getCategoryDisplayName = (
+    category: Category,
+    categories: Category[],
+  ): string => {
+    const categoriesById = new Map<number, Category>()
+    for (const item of categories) {
+      categoriesById.set(item.id, item)
+    }
+
+    const names: string[] = []
+    const visited = new Set<number>()
+    let current: Category | undefined = category
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id)
+      names.unshift(current.name)
+      if (current.parentId == null) break
+      current = categoriesById.get(current.parentId)
+    }
+
+    return names.join(' > ')
+  }
+
+  const categoriesWithDisplayNames = (Array.isArray(apiCategories)
+    ? apiCategories
+    : []) as Category[]
+
+  const downloadTemplate = async () => {
     const templateData = [
       {
         question: "Fastest language",
         option_a: "C++",
-        option_b: "C", 
+        option_b: "C",
         option_c: "Java",
         option_d: "Python",
         correct_answer: "option_b"
       }
     ]
 
+    // xlsx is ~1MB — load it only when the user actually downloads the template.
+    const XLSX = await import("xlsx")
     const ws = XLSX.utils.json_to_sheet(templateData)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Questions")
@@ -70,26 +106,13 @@ export function ImportCsvDialog({
     try {
       setIsLoading(true)
       setError(null)
-      
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('categoryId', targetCategoryId.toString())
-      
-      const response = await fetch('http://localhost:3000/api/question-bank/upload-excel', {
-        method: 'POST',
-        body: formData
-      })
-      
-      const result = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(result.message || 'Upload failed')
-      }
-      
+
+      const result = await questionBankService.uploadExcel(file, targetCategoryId)
       setUploadResult(result)
       onImportComplete()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      const message = err instanceof Error ? err.message : 'Upload failed'
+      setError(message)
     } finally {
       setIsLoading(false)
     }
@@ -112,12 +135,14 @@ export function ImportCsvDialog({
               <SelectTrigger>
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
-              <SelectContent>
-                {apiCategories?.filter(category => category.id && category.id.toString().trim() !== '').map((category: any) => (
-                  <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name}
-                  </SelectItem>
-                ))}
+              <SelectContent className="max-h-72 overflow-y-auto">
+                {categoriesWithDisplayNames
+                  .filter(category => category.id && category.id.toString().trim() !== '')
+                  .map(category => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {getCategoryDisplayName(category, categoriesWithDisplayNames)}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

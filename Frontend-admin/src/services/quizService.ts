@@ -8,6 +8,12 @@ import type { Quiz, CreateQuizDto, UpdateQuizDto, QuizStats } from '../types/api
 export class QuizService {
   private readonly endpoint = '/quizzes';
 
+  private extractQuizzes(payload: any): Quiz[] {
+    if (Array.isArray(payload)) return payload as Quiz[]
+    if (Array.isArray(payload?.quizzes)) return payload.quizzes as Quiz[]
+    return []
+  }
+
   /**
    * Get all quizzes
    */
@@ -27,11 +33,14 @@ export class QuizService {
       const response = await apiClient.get<ApiResponse<any>>(
         `${this.endpoint}${params.toString() ? '?' + params.toString() : ''}`
       );
-      
-      return {
-        quizzes: response.data.data.quizzes || [],
-        total: response.data.data.pagination?.total || 0
-      };
+
+      const responseData = response.data?.data
+      const quizzes = this.extractQuizzes(responseData)
+
+      const pagination = responseData?.pagination
+      const total = typeof pagination?.total === 'number' ? pagination.total : quizzes.length
+
+      return { quizzes, total };
     } catch (error) {
       console.error('Error fetching quizzes:', error);
       throw error;
@@ -44,6 +53,9 @@ export class QuizService {
   async getQuizById(id: number): Promise<Quiz> {
     try {
       const response = await apiClient.get<ApiResponse<Quiz>>(`${this.endpoint}/${id}`);
+      if (!response.data.data) {
+        throw new Error('No data returned from server')
+      }
       return response.data.data;
     } catch (error) {
       console.error(`Error fetching quiz ${id}:`, error);
@@ -56,11 +68,13 @@ export class QuizService {
    */
   async createQuiz(quizData: CreateQuizDto): Promise<Quiz> {
     try {
-      const response = await apiClient.post<ApiResponse<{ quiz: Quiz }>>(this.endpoint, quizData);
-      if (!response.data.data) {
+      const response = await apiClient.post<ApiResponse<any>>(this.endpoint, quizData);
+      const responseData = response.data?.data
+      const quiz = responseData?.quiz ?? responseData
+      if (!quiz) {
         throw new Error('No data returned from server');
       }
-      return response.data.data.quiz;
+      return quiz as Quiz;
     } catch (error) {
       console.error('Error creating quiz:', error);
       throw error;
@@ -72,11 +86,16 @@ export class QuizService {
    */
   async updateQuiz(id: number, quizData: UpdateQuizDto): Promise<Quiz> {
     try {
-      const response = await apiClient.put<ApiResponse<{ quiz: Quiz }>>(`${this.endpoint}/${id}`, quizData);
-      if (!response.data.data) {
+      const response = await apiClient.put<ApiResponse<any>>(
+        `${this.endpoint}/${id}`,
+        quizData,
+      );
+      const responseData = response.data?.data
+      const quiz = responseData?.quiz ?? responseData
+      if (!quiz) {
         throw new Error('No data returned from server');
       }
-      return response.data.data.quiz;
+      return quiz as Quiz;
     } catch (error) {
       console.error(`Error updating quiz ${id}:`, error);
       throw error;
@@ -101,6 +120,9 @@ export class QuizService {
   async getQuizStats(id: number): Promise<QuizStats> {
     try {
       const response = await apiClient.get<ApiResponse<QuizStats>>(`${this.endpoint}/${id}/stats`);
+      if (!response.data.data) {
+        throw new Error('No data returned from server')
+      }
       return response.data.data;
     } catch (error) {
       console.error(`Error fetching quiz stats for ${id}:`, error);
@@ -113,8 +135,10 @@ export class QuizService {
    */
   async getQuizzesByCategory(categoryId: number): Promise<Quiz[]> {
     try {
-      const response = await apiClient.get<ApiResponse<Quiz[]>>(`${this.endpoint}?categoryId=${categoryId}`);
-      return response.data.data;
+      const response = await apiClient.get<ApiResponse<any>>(
+        `${this.endpoint}?categoryId=${categoryId}`
+      );
+      return this.extractQuizzes(response.data?.data);
     } catch (error) {
       console.error(`Error fetching quizzes for category ${categoryId}:`, error);
       throw error;
@@ -126,8 +150,10 @@ export class QuizService {
    */
   async getQuizzesByDifficulty(difficulty: 'EASY' | 'MEDIUM' | 'HARD'): Promise<Quiz[]> {
     try {
-      const response = await apiClient.get<ApiResponse<Quiz[]>>(`${this.endpoint}?difficulty=${difficulty}`);
-      return response.data.data;
+      const response = await apiClient.get<ApiResponse<any>>(
+        `${this.endpoint}?difficulty=${difficulty}`
+      );
+      return this.extractQuizzes(response.data?.data);
     } catch (error) {
       console.error(`Error fetching ${difficulty} quizzes:`, error);
       throw error;

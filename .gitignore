@@ -4,7 +4,16 @@ node_modules/
 
 # Environment files
 *.env
-.env*
+.env.staging
+.env.production
+
+# Deployment env files (injected by CI/CD)
+configs/envs/.env.staging.config
+configs/envs/.env.production.config
+!configs/envs/.env.ci.config
+!configs/envs/.env.e2e.config
+
+*.env*
 !.env.example
 .env.tunnel
 # Logs
@@ -79,4 +88,9 @@ Thumbs.db
 *logs/
 backend/dist/
 Frontend-admin/docs/
-backend/docs/
+!backend/docs/
+
+# Diagrams
+docs/diagrams/
+deploy-ec2*
+MODULE_DESCRIPTION.md

@@ -3,13 +3,14 @@ import { register, login, refreshToken, getProfile, updateProfile } from '../con
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
 import { registerSchema, loginSchema, refreshTokenSchema, updateProfileSchema } from '../utils/validation';
+import { authLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-// Public routes
-router.post('/register', validateRequest(registerSchema), register);
-router.post('/login', validateRequest(loginSchema), login);
-router.post('/refresh', validateRequest(refreshTokenSchema), refreshToken);
+// Public routes (rate-limited: register/login only, not refresh)
+router.post('/register', authLimiter, validateRequest(registerSchema), register);
+router.post('/login', authLimiter, validateRequest(loginSchema), login);
+router.post('/refresh', refreshToken);
 
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);

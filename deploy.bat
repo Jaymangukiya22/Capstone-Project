@@ -1,8 +1,8 @@
 @echo off
 REM =============================================================================
 REM QuizUP Multi-Host Deployment Script (Windows)
-REM Supports: localhost, network, self-hosted (Cloudflare Tunnel)
-REM Usage: deploy.bat [localhost|network|self-hosted]
+REM Supports: localhost, self-hosted (Cloudflare Tunnel)
+REM Usage: deploy.bat [localhost|self-hosted]
 REM =============================================================================
 
 setlocal enabledelayedexpansion
@@ -37,14 +37,6 @@ exit /b 0
 :print_info
 echo [93mℹ️  %~1[0m
 exit /b 0
-
-:detect_network_ip
-for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4 Address"') do (
-    set NETWORK_IP=%%a
-    set NETWORK_IP=!NETWORK_IP:~1!
-    exit /b 0
-)
-exit /b 1
 
 :setup_localhost
 call :print_header "🚀 LOCALHOST DEPLOYMENT"
@@ -87,67 +79,6 @@ echo    Frontend: http://localhost:5173
 echo    API: http://localhost:3000
 echo    Match Server: http://localhost:3001
 echo    Nginx Proxy: http://localhost:8090
-echo.
-exit /b 0
-
-:setup_network
-call :print_header "🌐 NETWORK DEPLOYMENT"
-
-call :print_info "Detecting network IP..."
-call :detect_network_ip
-if %errorlevel% neq 0 (
-    call :print_error "Could not detect network IP"
-    set /p NETWORK_IP="Enter your network IP: "
-) else (
-    call :print_success "Network IP detected: !NETWORK_IP!"
-)
-
-call :print_info "Setting up network environment..."
-copy .env.network .env >nul 2>&1
-copy backend\.env.network backend\.env >nul 2>&1
-copy Frontend-admin\.env.network Frontend-admin\.env >nul 2>&1
-
-REM Update environment files with network IP
-powershell -Command "(Get-Content .env) -replace 'NETWORK_IP=auto', 'NETWORK_IP=!NETWORK_IP!' | Set-Content .env"
-powershell -Command "(Get-Content .env) -replace 'http://localhost:8090', 'http://!NETWORK_IP!:8090' | Set-Content .env"
-powershell -Command "(Get-Content .env) -replace 'ws://localhost:3001', 'ws://!NETWORK_IP!:3001' | Set-Content .env"
-
-call :print_success "Environment files configured"
-
-call :print_info "Building Docker images..."
-docker-compose build --no-cache
-if %errorlevel% neq 0 (
-    call :print_error "Docker build failed"
-    exit /b 1
-)
-
-call :print_success "Docker images built"
-
-call :print_info "Starting services..."
-docker-compose up -d
-if %errorlevel% neq 0 (
-    call :print_error "Failed to start services"
-    exit /b 1
-)
-
-call :print_success "Services started"
-
-call :print_info "Waiting for services to be healthy..."
-timeout /t 10 /nobreak >nul
-
-echo.
-echo ╔════════════════════════════════════════════════════════════════╗
-echo ║ ✅ NETWORK DEPLOYMENT COMPLETE
-echo ╚════════════════════════════════════════════════════════════════╝
-echo.
-echo 📍 Access Points (from any device on network):
-echo    Frontend: http://!NETWORK_IP!:5173
-echo    API: http://!NETWORK_IP!:3000
-echo    Match Server: http://!NETWORK_IP!:3001
-echo    Nginx Proxy: http://!NETWORK_IP!:8090
-echo.
-echo 💡 Share this URL with your friends:
-echo    http://!NETWORK_IP!:5173
 echo.
 exit /b 0
 
@@ -204,16 +135,14 @@ echo.
 exit /b 0
 
 :show_usage
-echo Usage: %0 [localhost^|network^|self-hosted]
+echo Usage: %0 [localhost^|self-hosted]
 echo.
 echo Modes:
 echo   localhost    - Deploy on single machine (http://localhost:5173)
-echo   network      - Deploy on network (http://{NETWORK_IP}:5173)
 echo   self-hosted  - Deploy with Cloudflare Tunnel (https://quizdash.dpdns.org)
 echo.
 echo Examples:
 echo   %0 localhost
-echo   %0 network
 echo   %0 self-hosted
 echo.
 exit /b 0
@@ -233,9 +162,6 @@ set MODE=%~1
 
 if /i "%MODE%"=="localhost" (
     call :setup_localhost
-    exit /b !errorlevel!
-) else if /i "%MODE%"=="network" (
-    call :setup_network
     exit /b !errorlevel!
 ) else if /i "%MODE%"=="self-hosted" (
     call :setup_self_hosted

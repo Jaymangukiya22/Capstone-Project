@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { logInfo, logError } from '../utils/logger';
 import { getMatchService } from '../services/matchService';
 import { getRedisClient } from '../config/redis';
+import { authenticateToken } from '../middleware/auth';
 
 // Simple HTTP client instead of axios
 const httpClient = {
@@ -65,6 +66,14 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
+// Every friend-match route requires a verified JWT. Previously the whole
+// router was unauthenticated: POST / created matches trusting a client-
+// supplied body userId (the REST sibling of AUDIT_FINDINGS.md S1), and the
+// GET routes leaked match data / listed all active matches to anyone. The
+// frontend's apiClient already attaches the Bearer token on every call, so
+// this doesn't change the real flow.
+router.use(authenticateToken);
+
 // Match service URL - use container name in Docker, localhost for development
 const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://quizup_matchserver:3001';
 
@@ -74,18 +83,21 @@ const MATCH_SERVICE_URL = process.env.MATCH_SERVICE_URL || 'http://quizup_matchs
  */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { quizId, userId: bodyUserId, username: bodyUsername } = req.body;
-    
-    // Get userId from request body if provided (for testing), otherwise from auth
-    const userId = bodyUserId || req.user?.id || 1;
-    const username = bodyUsername || req.user?.username || `User${userId}`;
+    const { quizId } = req.body;
+
+    // Identity comes from the verified JWT (authenticateToken middleware),
+    // NOT from the request body - a client-supplied userId/username used to
+    // let anyone create a match as any user with no authentication at all.
+    const userId = req.user!.id;
+    const username = req.user!.username;
 
     logInfo('Friend match request received', { quizId, userId, username, MATCH_SERVICE_URL });
 
     if (!quizId) {
       return res.status(400).json({
         success: false,
-        error: 'Quiz ID is required'
+        error: 'VALIDATION_ERROR',
+        message: 'Please select a quiz to start a friend match.'
       });
     }
 
@@ -119,8 +131,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     logError('Error details', new Error(`Status: ${error.response?.status}, Message: ${error.message}`));
     return res.status(500).json({
       success: false,
-      error: 'Failed to create friend match',
-      details: error.message
+      error: 'FRIEND_MATCH_CREATE_FAILED',
+      message: 'Could not create a friend match right now. Please try again.'
     });
   }
 });
@@ -136,7 +148,8 @@ router.get('/code/:joinCode', async (req, res) => {
     if (!joinCode || joinCode.length !== 6) {
       return res.status(400).json({
         success: false,
-        error: 'Valid 6-character join code is required'
+        error: 'VALIDATION_ERROR',
+        message: 'Please enter a valid 6-character join code.'
       });
     }
 
@@ -148,7 +161,8 @@ router.get('/code/:joinCode', async (req, res) => {
       logInfo('Match not found for join code', { joinCode });
       return res.status(404).json({
         success: false,
-        error: 'No match found with that join code'
+        error: 'MATCH_NOT_FOUND',
+        message: 'No match found for that join code. Please check the code and try again.'
       });
     }
 
@@ -158,7 +172,8 @@ router.get('/code/:joinCode', async (req, res) => {
       logInfo('Match data not found in Redis', { matchId, joinCode });
       return res.status(404).json({
         success: false,
-        error: 'Match data not found'
+        error: 'MATCH_NOT_FOUND',
+        message: 'Match details could not be found. Please try again.'
       });
     }
 
@@ -183,7 +198,8 @@ router.get('/code/:joinCode', async (req, res) => {
     logError('Failed to find match by code', error as Error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to find match by code'
+      error: 'FRIEND_MATCH_LOOKUP_FAILED',
+      message: 'Could not look up that join code right now. Please try again.'
     });
   }
 });
@@ -206,7 +222,8 @@ router.get('/', async (req: Request, res: Response) => {
     logError('Failed to get active matches', error as Error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to get active matches'
+      error: 'FRIEND_MATCH_LIST_FAILED',
+      message: 'Could not load active matches right now. Please try again.'
     });
   }
 });
@@ -231,14 +248,16 @@ router.get('/:matchId', async (req: Request, res: Response) => {
     if (error.response?.status === 404) {
       return res.status(404).json({
         success: false,
-        error: 'Match not found'
+        error: 'MATCH_NOT_FOUND',
+        message: 'Match not found.'
       });
     }
 
     logError('Failed to get match details', error as Error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to get match details'
+      error: 'FRIEND_MATCH_DETAILS_FAILED',
+      message: 'Could not load match details right now. Please try again.'
     });
   }
 });

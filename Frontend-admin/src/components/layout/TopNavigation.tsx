@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useNavigate } from "react-router-dom"
 import { useTheme } from "@/hooks/useTheme"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -46,6 +47,7 @@ function getDisplayName(firstName?: string, lastName?: string, username?: string
 export function TopNavigation() {
   const { theme, setTheme } = useTheme()
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   // Get user display data
   const initials = user ? getUserInitials(user.firstName, user.lastName, user.username, user.email) : 'U'
@@ -55,7 +57,7 @@ export function TopNavigation() {
   const handleLogout = () => {
     logout();
     // Redirect to login page after logout
-    window.location.href = '/login';
+    navigate('/login', { replace: true });
   }
 
   return (

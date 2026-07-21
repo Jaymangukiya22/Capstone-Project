@@ -15,6 +15,7 @@ import {
 import { mockQuizModes, type StudentQuiz } from '@/services/studentQuizService'
 import { matchService, type AIOpponent } from '@/services/matchService'
 import { PlayWithFriendModal } from './PlayWithFriendModal'
+import { AutoMatchmakingModal } from './AutoMatchmakingModal'
 
 interface QuizOverviewPanelProps {
   selectedQuiz: StudentQuiz | null
@@ -31,6 +32,7 @@ export function QuizOverviewPanel({
 }: QuizOverviewPanelProps) {
   const [selectedMode, setSelectedMode] = useState<string>('')
   const [showFriendModal, setShowFriendModal] = useState(false)
+  const [showAutoMatchModal, setShowAutoMatchModal] = useState(false)
   const [aiOpponents, setAIOpponents] = useState<AIOpponent[]>([])
   const [selectedAIOpponent, setSelectedAIOpponent] = useState<string>('')
   const [isLoadingAI, setIsLoadingAI] = useState(false)
@@ -77,6 +79,8 @@ export function QuizOverviewPanel({
 
     if (selectedMode === 'play-with-friend') {
       setShowFriendModal(true)
+    } else if (selectedMode === 'auto-match') {
+      setShowAutoMatchModal(true)
     } else if (selectedMode === 'solo') {
       // Create solo match with AI opponent
       try {
@@ -392,6 +396,12 @@ export function QuizOverviewPanel({
         selectedQuiz={selectedQuiz}
         onJoinGame={handleJoinGame}
         onCreateGame={handleCreateGame}
+      />
+
+      <AutoMatchmakingModal
+        open={showAutoMatchModal}
+        onOpenChange={setShowAutoMatchModal}
+        selectedQuiz={selectedQuiz}
       />
     </div>
   )

@@ -21,8 +21,43 @@ export interface CategoryQueryOptions {
 }
 
 export class CategoryService {
+  private strip_children_beyond_depth(nodes: any[], max_depth: number, depth: number) {
+    if (!Array.isArray(nodes)) return;
+    for (const node of nodes) {
+      if (!node) continue;
+      if (depth >= max_depth) {
+        if ('children' in node) {
+          delete (node as any).dataValues?.children;
+          delete (node as any).children;
+        }
+        continue;
+      }
+
+      const children = (node as any).children;
+      if (Array.isArray(children) && children.length > 0) {
+        this.strip_children_beyond_depth(children, max_depth, depth + 1);
+      } else if (depth + 1 >= max_depth) {
+        if ('children' in node) {
+          delete (node as any).dataValues?.children;
+          delete (node as any).children;
+        }
+      }
+    }
+  }
+
   async createCategory(data: CreateCategoryData): Promise<any> {
     try {
+      const existing = await Category.findOne({
+        where: {
+          name: data.name,
+          parentId: data.parentId ?? null,
+        },
+      });
+
+      if (existing) {
+        throw new Error('Category name already exists');
+      }
+
       // Validate parent exists if provided
       if (data.parentId) {
         const parent = await Category.findByPk(data.parentId);
@@ -67,6 +102,10 @@ export class CategoryService {
       
       // Build where clause
       const whereClause: any = {};
+
+      if (includeChildren && parentId === undefined) {
+        whereClause.parentId = null;
+      }
       
       if (parentId !== undefined) {
         whereClause.parentId = parentId;
@@ -154,12 +193,12 @@ export class CategoryService {
         include: includeClause
       });
 
-      if (category) {
-        logInfo('Retrieved category by ID', { categoryId: id, includeChildren, depth });
-      } else {
+      if (!category) {
         logInfo('Category not found', { categoryId: id });
+        throw new Error('Category not found');
       }
 
+      logInfo('Retrieved category by ID', { categoryId: id, includeChildren, depth });
       return category;
     } catch (error) {
       logError('Failed to retrieve category by ID', error as Error, { categoryId: id });
@@ -214,6 +253,10 @@ export class CategoryService {
           hasChildren: !!cat.children
         });
       });
+
+      if (maxDepth > 0) {
+        this.strip_children_beyond_depth(rootCategories as any[], maxDepth, 1);
+      }
       
       return rootCategories;
     } catch (error) {
@@ -284,7 +327,7 @@ export class CategoryService {
       const existingCategory = await Category.findByPk(id);
 
       if (!existingCategory) {
-        return null;
+        throw new Error('Category not found');
       }
 
       // Validate parent relationship if parentId is being updated
@@ -329,6 +372,14 @@ export class CategoryService {
 
   async deleteCategory(id: number): Promise<boolean> {
     try {
+      const existingCategory = await Category.findByPk(id, {
+        attributes: ['id']
+      });
+
+      if (!existingCategory) {
+        throw new Error('Category not found');
+      }
+
       // Check if category has children
       const children = await Category.findAll({
         where: { parentId: id }

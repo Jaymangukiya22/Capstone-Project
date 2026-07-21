@@ -1,48 +1,29 @@
 import { Request, Response } from 'express';
 import { User, UserRole } from '../models';
-import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/auth';
+import { hashPassword, comparePassword, generateToken, generateRefreshToken, verifyRefreshToken, DUMMY_PASSWORD_HASH } from '../utils/auth';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { Op } from 'sequelize';
+import { UniqueConstraintError } from 'sequelize';
 import { logInfo, logError } from '../utils/logger';
+import jwt from 'jsonwebtoken';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log('Registration attempt:', { body: req.body });
-    const { username, email, password, firstName, lastName, role } = req.body;
-
-    // Check if user already exists
-    console.log('Checking for existing user...');
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [{ email }, { username }]
-      }
-    });
-
-    if (existingUser) {
-      console.log('User already exists:', existingUser.username);
-      res.status(409).json({
-        success: false,
-        error: 'User with this email or username already exists'
-      });
-      return;
-    }
+    const { username, email, password, firstName, lastName } = req.body;
 
     // Hash password
-    console.log('Hashing password...');
     const passwordHash = await hashPassword(password);
 
-    // Create user
-    console.log('Creating user with data:', { username, email, firstName, lastName, role });
-    // Default to ADMIN for testing (change to PLAYER in production)
+    // Create directly and rely on the DB unique constraints (email/username).
+    // A pre-insert findOne existence check is a TOCTOU race under concurrency;
+    // the UniqueConstraintError catch below handles duplicates atomically.
     const user = await User.create({
       username,
       email,
       passwordHash,
       firstName,
       lastName,
-      role: UserRole.PLAYER  // Changed from PLAYER to ADMIN for testing
+      role: UserRole.PLAYER
     });
-    console.log('User created successfully:', user.id);
 
     // Return user without password
     const userResponse = {
@@ -78,13 +59,18 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
+    // Handled locally (not rethrown to the global errorHandler) so the
+    // response keeps the specific USER_ALREADY_EXISTS code.
+    if (error instanceof UniqueConstraintError) {
+      res.status(409).json({
+        success: false,
+        error: 'USER_ALREADY_EXISTS',
+        message: 'An account with this email or username already exists. Please log in instead.'
+      });
+      return;
+    }
+
     const err: any = error;
-    console.error('Detailed registration error:', {
-      name: err?.name,
-      message: err?.message,
-      parent: err?.parent,
-      original: err?.original,
-    });
     logError('Registration error', err as Error, {
       body: req.body,
       name: err?.name,
@@ -102,20 +88,43 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const { username, email, password } = req.body;
+    const identifier = username || email;
+
+    if (!identifier || !password) {
+      res.status(400).json({
+        success: false,
+        error: 'VALIDATION_ERROR',
+        message: 'Please enter your email/username and password.'
+      });
+      return;
+    }
 
     // Find user by email or username (email field can contain username)
     const user = await User.findOne({
       where: {
-        [email.includes('@') ? 'email' : 'username']: email
+        [identifier.includes('@') ? 'email' : 'username']: identifier
       }
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
+      // Username enumeration defenses: same error code as a wrong password,
+      // and a dummy bcrypt compare so the response time matches the
+      // user-found path (no timing side-channel).
+      await comparePassword(password, DUMMY_PASSWORD_HASH);
       res.status(401).json({
         success: false,
-        error: 'Invalid credentials',
-        message: 'Email or password is incorrect'
+        error: 'INVALID_CREDENTIALS',
+        message: 'Email/username or password is incorrect.'
+      });
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(401).json({
+        success: false,
+        error: 'ACCOUNT_INACTIVE',
+        message: 'Your account is inactive. Please contact support.'
       });
       return;
     }
@@ -125,17 +134,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!isPasswordValid) {
       res.status(401).json({
         success: false,
-        error: 'Invalid credentials',
-        message: 'Email or password is incorrect'
+        error: 'INVALID_CREDENTIALS',
+        message: 'Email/username or password is incorrect.'
       });
       return;
     }
 
-    // Update last login
-    await User.update(
+    // Update last login — fire-and-forget; login must not block on this write
+    User.update(
       { lastLoginAt: new Date() },
       { where: { id: user.id } }
-    );
+    ).catch(err => logError('lastLoginAt update failed', err as Error));
 
     // Generate tokens
     const token = generateToken({
@@ -172,7 +181,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    console.error('Detailed login error:', error);
     logError('Login error', error as Error);
     res.status(500).json({
       success: false,
@@ -185,28 +193,40 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { refreshToken } = req.body;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-    if (!refreshToken) {
-      res.status(400).json({
+    if (!token) {
+      res.status(401).json({
         success: false,
-        error: 'Refresh token required'
+        error: 'AUTH_REQUIRED',
+        message: 'Please log in to continue.'
       });
       return;
     }
 
-    // Verify refresh token
-    const decoded = verifyRefreshToken(refreshToken);
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      res.status(500).json({
+        success: false,
+        error: 'SERVER_CONFIG_ERROR',
+        message: 'Server configuration error. Please try again later.'
+      });
+      return;
+    }
+
+    const decoded = jwt.verify(token, jwtSecret) as any;
 
     // Get user
     const user = await User.findByPk(decoded.userId, {
-      attributes: ['id', 'username', 'email', 'role', 'isActive']
+      attributes: ['id', 'username', 'email', 'role', 'isActive', 'firstName', 'lastName']
     });
 
     if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Invalid refresh token'
+        error: 'INVALID_TOKEN',
+        message: 'Your session has expired. Please log in again.'
       });
       return;
     }
@@ -225,14 +245,23 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       success: true,
       data: {
         token: newToken,
-        refreshToken: newRefreshToken
+        refreshToken: newRefreshToken,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: (user as any).firstName,
+          lastName: (user as any).lastName,
+          role: user.role,
+        }
       }
     });
   } catch (error) {
     logError('Token refresh error', error as Error);
     res.status(401).json({
       success: false,
-      error: 'Invalid refresh token'
+      error: 'INVALID_TOKEN',
+      message: 'Your session has expired. Please log in again.'
     });
   }
 };
@@ -252,20 +281,22 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
     if (!user) {
       res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: 'USER_NOT_FOUND',
+        message: 'User not found.'
       });
       return;
     }
 
     res.json({
       success: true,
-      data: { user }
+      data: user
     });
   } catch (error) {
     logError('Get profile error', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch profile'
+      error: 'PROFILE_FETCH_FAILED',
+      message: 'Could not load your profile right now. Please try again.'
     });
   }
 };
@@ -298,7 +329,8 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     logError('Update profile error', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update profile'
+      error: 'PROFILE_UPDATE_FAILED',
+      message: 'Could not update your profile right now. Please try again.'
     });
   }
 };

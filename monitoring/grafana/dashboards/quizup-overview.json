@@ -1,0 +1,166 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "title": "QuizUP Overview",
+  "uid": "quizup-overview",
+  "tags": ["quizup"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    { "type": "row", "title": "Live", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "type": "stat", "title": "Live connected users", "gridPos": { "h": 5, "w": 5, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(matchserver_connected_users)", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "Live active matches", "gridPos": { "h": 5, "w": 5, "x": 5, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": null }] } } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(matchserver_active_matches_total)", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "Active API users (60s)", "gridPos": { "h": 5, "w": 5, "x": 10, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(quizup_active_api_users)", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "Matches created / min", "gridPos": { "h": 5, "w": 4, "x": 15, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(rate(matchserver_matches_created_total[1m])) * 60", "refId": "A" }]
+    },
+    {
+      "type": "stat", "title": "Reconnections / min", "gridPos": { "h": 5, "w": 5, "x": 19, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(rate(matchserver_reconnections_total[5m])) * 60", "refId": "A" }]
+    },
+
+    { "type": "row", "title": "Match flow", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 } },
+    {
+      "type": "timeseries", "title": "Answers / sec by result", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
+      "targets": [{ "expr": "sum by (result) (rate(matchserver_answers_total[1m]))", "legendFormat": "{{result}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Answer time (seconds)", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum(rate(matchserver_answer_time_seconds_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(matchserver_answer_time_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries", "title": "Match duration (seconds)", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum(rate(matchserver_match_duration_seconds_bucket[10m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(matchserver_match_duration_seconds_bucket[10m])) by (le))", "legendFormat": "p95", "refId": "B" }
+      ]
+    },
+
+    { "type": "row", "title": "Workers & event loop", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 } },
+    {
+      "type": "timeseries", "title": "Matches per worker", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "matchserver_worker_matches", "legendFormat": "worker {{worker_id}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Event-loop lag", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "matchserver_worker_event_loop_lag_seconds", "legendFormat": "worker {{worker_id}}", "refId": "A" },
+        { "expr": "nodejs_eventloop_lag_seconds{job=\"api-server\"}", "legendFormat": "backend", "refId": "B" }
+      ]
+    },
+
+    { "type": "row", "title": "API", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 } },
+    {
+      "type": "timeseries", "title": "API requests / sec by status", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
+      "targets": [{ "expr": "sum by (status_code) (rate(http_request_duration_seconds_count[1m]))", "legendFormat": "{{status_code}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "API latency p95 (s)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }]
+    },
+
+    { "type": "row", "title": "Infrastructure", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 } },
+    {
+      "type": "timeseries", "title": "DB connection pool (backend)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "quizup_db_pool_used", "legendFormat": "used", "refId": "A" },
+        { "expr": "quizup_db_pool_size", "legendFormat": "size", "refId": "B" },
+        { "expr": "quizup_db_pool_waiting", "legendFormat": "waiting (starvation)", "refId": "C" }
+      ]
+    },
+    {
+      "type": "timeseries", "title": "Redis connected clients vs maxclients", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "redis_connected_clients", "legendFormat": "connected", "refId": "A" },
+        { "expr": "redis_config_maxclients", "legendFormat": "maxclients", "refId": "B" }
+      ]
+    },
+
+    { "type": "row", "title": "Per-user time spent (logs)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 } },
+    {
+      "type": "logs", "title": "answer_submitted (userId, timeSpent, correct)", "gridPos": { "h": 10, "w": 12, "x": 0, "y": 43 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTime": true, "wrapLogMessage": true, "dedupStrategy": "none", "enableLogDetails": true },
+      "targets": [{ "expr": "{service=\"matchserver\"} | json | event=`answer_submitted`", "refId": "A" }]
+    },
+    {
+      "type": "logs", "title": "match_completed (userId, totalTimeSpent, score)", "gridPos": { "h": 10, "w": 12, "x": 12, "y": 43 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTime": true, "wrapLogMessage": true, "dedupStrategy": "none", "enableLogDetails": true },
+      "targets": [{ "expr": "{service=\"matchserver\"} | json | event=`match_completed`", "refId": "A" }]
+    },
+
+    { "type": "row", "title": "Per-container resources (cAdvisor - populates on a Linux host; Docker Desktop can't resolve container names)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 53 } },
+    {
+      "type": "timeseries", "title": "CPU cores per container", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"quizup_.*\"}[1m]))", "legendFormat": "{{name}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Memory per container", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [{ "expr": "container_memory_usage_bytes{name=~\"quizup_.*\"}", "legendFormat": "{{name}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries", "title": "Network bandwidth per container (rx/tx)", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "sum by (name) (rate(container_network_receive_bytes_total{name=~\"quizup_.*\"}[1m]))", "legendFormat": "{{name}} rx", "refId": "A" },
+        { "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name=~\"quizup_.*\"}[1m]))", "legendFormat": "{{name}} tx", "refId": "B" }
+      ]
+    }
+  ]
+}

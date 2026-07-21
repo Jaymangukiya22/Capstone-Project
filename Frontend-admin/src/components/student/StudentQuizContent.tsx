@@ -38,8 +38,11 @@ export function StudentQuizContent() {
   const isLoading = quizzesLoading || categoriesLoading
 
   // Transform quizzes to include category names
-  const enrichedQuizzes: StudentQuiz[] = (quizzes || []).map(quiz => {
-    const category = categories.find(cat => cat.id === quiz.categoryId)
+  const quizzesArray = Array.isArray(quizzes) ? quizzes : []
+  const categoriesArray = Array.isArray(categories) ? categories : []
+
+  const enrichedQuizzes: StudentQuiz[] = quizzesArray.map(quiz => {
+    const category = categoriesArray.find(cat => cat.id === quiz.categoryId)
     return {
       ...quiz,
       categoryName: category?.name || 'Uncategorized'
@@ -312,6 +315,7 @@ export function StudentQuizContent() {
                   id: selectedQuiz.id.toString(),
                   name: selectedQuiz.title,
                   description: selectedQuiz.description || '',
+                  categoryId: selectedQuiz.categoryId,
                   category: selectedQuiz.categoryName || 'Uncategorized',
                   subcategory: '',
                   difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
@@ -512,6 +516,7 @@ export function StudentQuizContent() {
             id: selectedQuiz.id.toString(),
             name: selectedQuiz.title,
             description: selectedQuiz.description || '',
+            categoryId: selectedQuiz.categoryId,
             category: selectedQuiz.categoryName || 'Uncategorized',
             subcategory: '',
             difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 
@@ -547,6 +552,7 @@ export function StudentQuizContent() {
                 id: selectedQuiz.id.toString(),
                 name: selectedQuiz.title,
                 description: selectedQuiz.description || '',
+                categoryId: selectedQuiz.categoryId,
                 category: selectedQuiz.categoryName || 'Uncategorized',
                 subcategory: '',
                 difficulty: selectedQuiz.difficulty === 'EASY' ? 'easy' as const : 

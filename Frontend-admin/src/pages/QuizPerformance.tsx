@@ -1,11 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Search, Download, ChevronDown, ChevronUp, Trophy, Clock, Target, Users, Swords, Bot } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { apiClient } from '@/services/api';
+
+const toArray = <T,>(value: unknown): T[] => {
+  return Array.isArray(value) ? (value as T[]) : []
+}
 
 interface QuizPerformanceData {
   quiz: {
@@ -37,6 +48,7 @@ interface StudentAttempt {
   id: number | string;
   type: 'SOLO_VS_AI' | 'PLAY_WITH_FRIEND';
   matchId?: string;
+  matchMode?: 'FRIEND' | 'AUTO';
   user: {
     id: number;
     username: string;
@@ -56,6 +68,60 @@ interface StudentAttempt {
   isWinner?: boolean;
 }
 
+type MatchAnalyticsOption = {
+  id: number;
+  optionText: string;
+  isCorrect: boolean;
+};
+
+type MatchAnalyticsUser = {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string;
+};
+
+type MatchAnalyticsAnswer = {
+  user: MatchAnalyticsUser;
+  selectedOptions: number[];
+  correctOptions: number[];
+  isCorrect: boolean;
+  timeSpent: number;
+  points: number;
+  submittedAt: string;
+};
+
+type MatchAnalyticsQuestion = {
+  questionIndex: number;
+  questionId: number;
+  questionText: string;
+  explanation: string | null;
+  options: MatchAnalyticsOption[];
+  answers: MatchAnalyticsAnswer[];
+};
+
+type MatchAnalyticsResponse = {
+  match: {
+    id: number;
+    matchId: string;
+    quizId: number;
+    status: string;
+    mode: 'FRIEND' | 'AUTO';
+    type: string;
+    startedAt?: string;
+    endedAt?: string;
+    createdAt: string;
+  };
+  players: Array<{
+    userId: number;
+    score: number;
+    correctAnswers: number;
+    timeSpent: number;
+    user: MatchAnalyticsUser;
+  }>;
+  questions: MatchAnalyticsQuestion[];
+};
+
 export default function QuizPerformance() {
   const [performanceData, setPerformanceData] = useState<QuizPerformanceData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +138,11 @@ export default function QuizPerformance() {
     totalUniqueStudents: 0
   });
 
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsMatchId, setAnalyticsMatchId] = useState<string | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<MatchAnalyticsResponse | null>(null);
+
   useEffect(() => {
     fetchPerformanceData();
     fetchCategories();
@@ -80,7 +151,7 @@ export default function QuizPerformance() {
   const fetchCategories = async () => {
     try {
       const response = await apiClient.get('/categories');
-      setCategories(response.data.data || []);
+      setCategories(toArray<any>(response.data?.data));
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -96,7 +167,7 @@ export default function QuizPerformance() {
       }
       
       const response = await apiClient.get('/performance/quiz-performance', { params });
-      setPerformanceData(response.data.data || []);
+      setPerformanceData(toArray<QuizPerformanceData>(response.data?.data));
       setSummary(response.data.summary || {
         totalQuizzes: 0,
         totalAttempts: 0,
@@ -156,6 +227,58 @@ export default function QuizPerformance() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
+  };
+
+  const optionTextById = useMemo(() => {
+    const map = new Map<number, string>();
+    if (!analyticsData) return map;
+    for (const q of toArray<MatchAnalyticsQuestion>(analyticsData.questions)) {
+      for (const opt of toArray<MatchAnalyticsOption>(q.options)) {
+        map.set(opt.id, opt.optionText);
+      }
+    }
+    return map;
+  }, [analyticsData]);
+
+  const formatOptions = (optionIds: number[]) => {
+    if (!optionIds || optionIds.length === 0) return '—';
+    return optionIds
+      .map((id) => optionTextById.get(id) || `#${id}`)
+      .join(', ');
+  };
+
+  const openMatchAnalytics = async (matchId: string) => {
+    setAnalyticsOpen(true);
+    setAnalyticsMatchId(matchId);
+    setAnalyticsLoading(true);
+    setAnalyticsData(null);
+
+    try {
+      const response = await apiClient.get(`/performance/match-analytics/${matchId}`);
+      const data = response.data?.data
+      if (!data) {
+        setAnalyticsData(null)
+      } else {
+        setAnalyticsData({
+          ...data,
+          players: toArray<any>(data.players),
+          questions: toArray<any>(data.questions).map((q: any) => ({
+            ...q,
+            options: toArray<any>(q.options),
+            answers: toArray<any>(q.answers).map((a: any) => ({
+              ...a,
+              selectedOptions: toArray<number>(a.selectedOptions),
+              correctOptions: toArray<number>(a.correctOptions),
+            })),
+          })),
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching match analytics:', error);
+      setAnalyticsData(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
   };
 
   const filteredData = performanceData.filter(item => {
@@ -391,6 +514,7 @@ export default function QuizPerformance() {
                             <th className="text-left py-2 px-4">Correct Answers</th>
                             <th className="text-left py-2 px-4">Time Spent</th>
                             <th className="text-left py-2 px-4">Date</th>
+                            <th className="text-left py-2 px-4">Details</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -428,7 +552,7 @@ export default function QuizPerformance() {
                                 ) : (
                                   <Badge variant="outline" className="gap-1 bg-pink-50 text-pink-700 border-pink-200">
                                     <Swords className="h-3 w-3" />
-                                    Friend
+                                    {attempt.matchMode === 'AUTO' ? 'Auto' : 'Friend'}
                                     {attempt.isWinner && ' 🏆'}
                                   </Badge>
                                 )}
@@ -467,6 +591,19 @@ export default function QuizPerformance() {
                                   'Not completed'
                                 }
                               </td>
+                              <td className="py-3 px-4">
+                                {attempt.matchId ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openMatchAnalytics(attempt.matchId!)}
+                                  >
+                                    View Questions
+                                  </Button>
+                                ) : (
+                                  <span className="text-sm text-gray-400">—</span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -479,6 +616,103 @@ export default function QuizPerformance() {
           ))
         )}
       </div>
+
+      <Dialog
+        open={analyticsOpen}
+        onOpenChange={(open) => {
+          setAnalyticsOpen(open);
+          if (!open) {
+            setAnalyticsMatchId(null);
+            setAnalyticsData(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Match Analytics</DialogTitle>
+            <DialogDescription>
+              {analyticsMatchId ? `Match: ${analyticsMatchId}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          {analyticsLoading ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              Loading per-question analytics...
+            </div>
+          ) : !analyticsData ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              No analytics available.
+            </div>
+          ) : (
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="text-sm">
+                  <div className="font-medium">
+                    Mode: {analyticsData.match.mode} | Status: {analyticsData.match.status}
+                  </div>
+                  <div className="text-gray-500">
+                    Players: {toArray<any>(analyticsData.players).map((p: any) => p.user?.fullName || p.user?.username || 'Player').join(' vs ')}
+                  </div>
+                </div>
+                <Badge variant="outline">
+                  {toArray<any>(analyticsData.questions).length} questions
+                </Badge>
+              </div>
+
+              {toArray<any>(analyticsData.questions).map((q: any) => (
+                <div key={`${q.questionId}-${q.questionIndex}`} className="rounded-lg border p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-semibold">
+                        Q{q.questionIndex + 1}
+                      </div>
+                      <div className="text-sm text-gray-800 mt-1">
+                        {q.questionText}
+                      </div>
+                    </div>
+                    <Badge variant="outline">ID: {q.questionId}</Badge>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {toArray<any>(q.answers).map((a: any) => (
+                      <div key={a.user.id} className="rounded-md border p-3 bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-medium">{a.user.fullName}</div>
+                          <Badge className={a.isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                            {a.isCorrect ? 'Correct' : 'Wrong'}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-600 space-y-1">
+                          <div>
+                            <span className="font-medium">Selected:</span> {formatOptions(a.selectedOptions)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Correct:</span> {formatOptions(a.correctOptions)}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">Time:</span> {a.timeSpent}s
+                            </div>
+                            <div>
+                              <span className="font-medium">Points:</span> {a.points}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {q.explanation && (
+                    <div className="mt-3 text-xs text-gray-600">
+                      <span className="font-medium">Explanation:</span> {q.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -20,6 +20,10 @@ import { MatchStatus, MatchType } from '../types/enums';
 @Table({
   tableName: 'matches',
   timestamps: true,
+  // Backstop for [M10]: one Postgres row per logical match. The match-server
+  // persistence path (ensureDbMatch) now upserts against this; without it,
+  // concurrent first-answer writes raced to INSERT twin rows.
+  indexes: [{ unique: true, fields: ['matchId'], name: 'matches_matchid_uq' }],
 })
 export class Match extends Model {
   @PrimaryKey
@@ -38,6 +42,10 @@ export class Match extends Model {
   @Default(MatchType.MULTIPLAYER)
   @Column(DataType.ENUM(...Object.values(MatchType)))
   type!: MatchType;
+
+  @Default('FRIEND')
+  @Column(DataType.STRING(20))
+  mode!: 'FRIEND' | 'AUTO';
 
   @Default(MatchStatus.WAITING)
   @Column(DataType.ENUM(...Object.values(MatchStatus)))

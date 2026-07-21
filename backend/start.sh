@@ -47,7 +47,7 @@ fi
 # Start the appropriate server based on SERVICE_TYPE
 if [ "$SERVICE_TYPE" = "matchserver" ] || [ "$MATCH_SERVICE_PORT" ]; then
   echo "Starting Match Server on port ${MATCH_SERVICE_PORT:-3001}..."
-  exec node dist/matchServer-enhanced.js
+  exec node dist/matchServerMaster.js
 else
   echo "Starting Backend API Server on port ${PORT:-3000}..."
   exec node dist/server.js

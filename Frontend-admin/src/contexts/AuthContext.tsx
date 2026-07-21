@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authService } from '../services/authService';
-import type { AuthData, User, LoginRequest, RegisterRequest } from '../services/authService';
+import type { User, LoginRequest, RegisterRequest } from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('✅ Setting user in AuthContext from login:', authData.user);
       setUser(authData.user);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+      const errorMessage = error?.friendlyMessage || error.response?.data?.message || error.message || 'Login failed';
       console.error('❌ Login failed:', errorMessage);
       setError(errorMessage);
       throw error;
@@ -79,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const authData = await authService.register(userData);
       setUser(authData.user);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Registration failed';
+      const errorMessage = error?.friendlyMessage || error.response?.data?.message || error.message || 'Registration failed';
       setError(errorMessage);
       throw error;
     } finally {

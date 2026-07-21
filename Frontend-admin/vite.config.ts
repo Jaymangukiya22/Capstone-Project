@@ -42,12 +42,8 @@ console.log('🔧 Vite Config - Environment:', {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react({
-      // Enable React Fast Refresh
-      fastRefresh: true,
-      // Use automatic JSX runtime
-      jsxRuntime: 'automatic',
-    }),
+    // Fast Refresh + automatic JSX runtime are on by default in @vitejs/plugin-react v5.
+    react(),
     tailwindcss()
   ],
   
@@ -71,7 +67,9 @@ export default defineConfig({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: false, // Keep console.logs for debugging
+        // Strip noisy debug logging from the production bundle (smaller + no
+        // console spam) while keeping console.error/console.warn for real issues.
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
         drop_debugger: true,
       },
     },
@@ -157,7 +155,6 @@ export default defineConfig({
       'axios',
       'socket.io-client',
     ],
-    exclude: ['@vitest/browser'],
   },
   
   assetsInclude: ['/*.html'],

@@ -10,9 +10,9 @@ export const registerSchema = Joi.object({
 });
 
 export const loginSchema = Joi.object({
-  email: Joi.string().min(3).required(), // Accept both username and email
+  email: Joi.string().min(3).required(),
   password: Joi.string().required()
-});
+}).rename('username', 'email', { override: true, ignoreUndefined: true });
 
 export const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string().required()
@@ -72,6 +72,16 @@ export const createQuizSchema = Joi.object({
   timeLimit: Joi.number().integer().positive().optional(),
   maxQuestions: Joi.number().integer().positive().optional(),
   categoryId: Joi.number().integer().positive().required()
+});
+
+export const updateQuizSchema = Joi.object({
+  title: Joi.string().min(1).max(200).optional(),
+  description: Joi.string().optional().allow(''),
+  tags: Joi.array().items(Joi.string().trim().min(1).max(50)).max(20).optional(),
+  difficulty: Joi.string().valid('EASY', 'MEDIUM', 'HARD').optional(),
+  timeLimit: Joi.number().integer().positive().optional(),
+  maxQuestions: Joi.number().integer().positive().optional(),
+  categoryId: Joi.number().integer().positive().optional()
 });
 
 // Question Bank validation schemas

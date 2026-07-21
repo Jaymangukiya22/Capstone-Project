@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { connectDatabase } from '../config/database';
 import { 
   User, 

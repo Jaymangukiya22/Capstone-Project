@@ -77,6 +77,8 @@ The autoscaler spawned a 4th worker under load; matches stayed evenly balanced.
 
 ## 4. Load-test harness reference
 
+> Full how-to (seeding, in-container/host/prod-URL runs, monitoring, DB verification, tuning, gotchas): **[docs/STRESS_TESTING.md](docs/STRESS_TESTING.md)**.
+
 `backend/scripts/loadtest.js` — mints JWTs for existing user IDs (bypasses the auth rate limit).
 
 **In-container (required to exceed ~2000 connections):**

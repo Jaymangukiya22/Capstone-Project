@@ -3,6 +3,8 @@
 Branch: **`fix/audit-reliability-and-security`** @ `64f0ce5` — **pushed** to `origin`.
 Everything below is committed. Working tree is clean.
 
+> **Update (multi-quiz 5K+ stress test, this session).** Seeded the user pool to **17,000** active users (IDs 1–17,000; bulk-inserted 10,043–17,000 in Postgres). Added `QUIZ_IDS` round-robin support to the harness (commit `df60d65`). Drove matches across all **52 quizzes** with parallel in-container generators and hit a peak of **7,970 concurrent matches / 15,940 users, 0 connection errors** — the box's **4 shared cores** are the ceiling, not the match server (event-loop lag stayed flat ~22 ms; workers dead-even). Correctness at scale is **mostly** intact but the play-mode batch surfaced two new persistence findings — see **[AUDIT_FINDINGS.md](AUDIT_FINDINGS.md) Section 6 [M10]/[M11]**: `matches`/`match_players` accumulate duplicate rows under concurrent play (non-atomic `findOne`-then-`create`, no unique constraint) and abandoned matches are never DB-reconciled. Live gameplay (winners/scores) is correct; the Postgres audit tables are polluted. **Not fixed** — proposed fixes are in Section 6.
+
 ---
 
 ## 1. What was done

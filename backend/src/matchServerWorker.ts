@@ -331,16 +331,36 @@ class WorkerMatchService {
     // include on every match hydration for a quiz already loaded on this worker.
     const cached = this.questionsCache.get(quizId);
     if (cached && cached.expiresAt > Date.now()) {
-      // Return a deep copy so per-match mutation can't corrupt the shared cache.
-      return cached.questions.map(q => ({ ...q, options: q.options.map((o: any) => ({ ...o })) }));
+      // Return the SHARED cached array (not a per-match deep copy). Questions are
+      // read-only for the life of a match - only indexed for reads and sanitized
+      // into fresh objects before every emit (sanitizeQuestion), never mutated
+      // (verified: no writes to match.questions[*], no in-place sort/splice). So
+      // thousands of matches on one worker share a single frozen copy per quiz
+      // instead of each holding its own - big cut to per-match memory and to the
+      // allocation churn of copying 10 questions on every create/hydrate at ramp.
+      return cached.questions;
     }
 
     const loaded = await this.loadQuizQuestionsFromDb(quizId);
     if (loaded.length > 0) {
+      // Freeze once so the sharing above stays safe even if a future edit tries
+      // to mutate a shared question (it would throw instead of corrupting every
+      // match on the worker).
+      this.deepFreezeQuestions(loaded);
       this.questionsCache.set(quizId, { questions: loaded, expiresAt: Date.now() + this.questionsCacheTtlMs });
     }
-    // Deep copy on the way out too, for the same isolation reason.
-    return loaded.map(q => ({ ...q, options: q.options.map((o: any) => ({ ...o })) }));
+    return loaded;
+  }
+
+  private deepFreezeQuestions(questions: any[]): void {
+    for (const q of questions) {
+      if (q && Array.isArray(q.options)) {
+        for (const o of q.options) Object.freeze(o);
+        Object.freeze(q.options);
+      }
+      Object.freeze(q);
+    }
+    Object.freeze(questions);
   }
 
   private async loadQuizQuestionsFromDb(quizId: number): Promise<any[]> {
@@ -1294,7 +1314,12 @@ class WorkerMatchService {
         questionStartTime: match.questionStartTime,
         timeLimit: match.timeLimit,
         createdAt: match.createdAt.toISOString(),
-        questions: match.questions,
+        // Store only the COUNT, not the full questions array. Hydration always
+        // reloads questions fresh via loadQuizQuestions(quizId) (see the
+        // JSON.parse sites) and never reads snapshot.questions - the array was
+        // dead weight rewritten into Redis on every question advance. The master
+        // only needs the count (for the disconnect-state totalQuestions).
+        totalQuestions: match.questions.length,
         workerId,
         traceId: match.traceId,
         players: Array.from(match.players.values()).map(p => ({

@@ -1131,7 +1131,9 @@ ${workers.map((w) =>
           status: 'DISCONNECTED',
           matchStatus: match?.status,
           currentQuestionIndex: (match?.currentQuestionIndex ?? 0) + 1,
-          totalQuestions: match?.questions?.length ?? 0,
+          // Worker snapshot now stores a totalQuestions count instead of the full
+          // questions array; fall back to the old field for any in-flight snapshot.
+          totalQuestions: match?.totalQuestions ?? match?.questions?.length ?? 0,
         };
 
         await redisClient.setex(

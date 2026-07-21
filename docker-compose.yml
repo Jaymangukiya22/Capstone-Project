@@ -154,13 +154,19 @@ services:
       MATCH_SERVICE_PORT: 3001
       MASTER_HOST: 0.0.0.0
       UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-64}
+      # Per-process V8 heap cap for the master + forked workers (see .env). Keeps
+      # the 5 processes in this cgroup from each auto-sizing to the whole limit
+      # and collectively OOMing. 1536 x 5 = 7.5G < the 8G mem_limit below.
+      NODE_OPTIONS: ${MATCHSERVER_NODE_OPTIONS:---max-old-space-size=1536}
       # Worker Pool Configuration
       # RIGHT-SIZED FOR A 4-CORE / 16GB HOST.
       # Quiz matches are idle-heavy I/O state machines, NOT CPU hogs, so a
       # single Node process holds thousands of them fine. Forking one OS process
       # per ~8 matches (old: 500 workers) would need ~625 processes for 5k
       # matches and OOM the box. Instead: a few workers, each holding many.
-      #   3 workers x 2500 matches = 7500 match capacity (> the 5k target)
+      #   4 workers x 6000 matches = 24,000 match capacity (tuned up from
+      #   4x2500=10k after the ceiling test showed ~88 MiB/1000 matches and flat
+      #   event-loop lag - memory, raised to 8G below, is the real ceiling).
       # NOTE: do not set MAX_MATCHES here. The pool forks each worker with
       # MAX_MATCHES = MAX_MATCHES_PER_WORKER (enhancedWorkerPool.spawnWorker),
       # so a separate MAX_MATCHES env is dead config and previously contradicted
@@ -168,7 +174,7 @@ services:
       # MAX_MATCHES_PER_WORKER; the worker's own cap derives from it.
       MIN_WORKERS: ${MIN_WORKERS:-3}
       MAX_WORKERS: ${MAX_WORKERS:-4}
-      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-2500}
+      MAX_MATCHES_PER_WORKER: ${MAX_MATCHES_PER_WORKER:-6000}
       WORKER_IDLE_TIMEOUT: ${WORKER_IDLE_TIMEOUT:-300000}
       # Scaling
       SCALE_UP_THRESHOLD: ${SCALE_UP_THRESHOLD:-0.5}
@@ -205,8 +211,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    cpus: ${MATCHSERVER_CPU_LIMIT:-6.0}
-    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-16G}
+    cpus: ${MATCHSERVER_CPU_LIMIT:-3.0}
+    mem_limit: ${MATCHSERVER_MEMORY_LIMIT:-8G}
     ulimits:
       nproc: 65535
       nofile:

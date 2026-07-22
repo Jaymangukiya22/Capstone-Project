@@ -69,7 +69,7 @@ describe('Category Controller Integration Tests', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('validation');
+      expect(response.body.error).toBe('VALIDATION_ERROR');
     });
 
     it('should return 409 for duplicate category name', async () => {
@@ -225,7 +225,7 @@ describe('Category Controller Integration Tests', () => {
         .expect(404);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('not found');
+      expect(response.body.error).toBe('CATEGORY_NOT_FOUND');
     });
   });
 
@@ -323,7 +323,7 @@ describe('Category Controller Integration Tests', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('subcategories');
+      expect(response.body.error).toBe('CATEGORY_DELETE_FAILED');
     });
   });
 
@@ -373,7 +373,7 @@ describe('Category Controller Integration Tests', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('query');
+      expect(response.body.error).toBe('VALIDATION_ERROR');
     });
   });
 

@@ -54,7 +54,7 @@ describe('Quiz Controller Integration Tests', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('validation');
+      expect(response.body.error).toBe('VALIDATION_ERROR');
     });
 
     it('should return 400 for invalid difficulty', async () => {
@@ -351,7 +351,7 @@ describe('Quiz Controller Integration Tests', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('query');
+      expect(response.body.error).toBe('VALIDATION_ERROR');
     });
   });
 

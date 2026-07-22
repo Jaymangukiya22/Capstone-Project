@@ -36,3 +36,20 @@ Removed the code/config the observability rebuild made dead, plus the deployment
 - **29 orphaned root `.env` variables** — zero references in `backend/src`, `Frontend-admin/src`, or the three compose files, but may still be consumed by deploy shell scripts not covered by this pass's grep scope. Listed in AUDIT_FINDINGS.md, not pruned.
 - **3 duplicate-ish prometheus.yml files and near-duplicate Grafana dashboards** — none are byte-identical or empty, so out of scope for "exact dupes and empties only"; catalogued in AUDIT_FINDINGS.md Section 4 for the later monitoring rebuild.
 - **`Frontend-admin/src/services/matchClient.ts`** — shows modified in `git status` but is outside this audit's backend/matchserver scope; untouched.
+
+---
+
+## Old test-system cleanup + CI green (branch `fix/audit-reliability-and-security`)
+
+Removed old load-test scaffolding (superseded by `backend/scripts/loadtest.js` +
+[docs/STRESS_TESTING.md](docs/STRESS_TESTING.md)) and an unreferenced duplicate docs dir:
+
+| Removed | Why |
+|---|---|
+| `tests/` (root: `stress-test-{bots-small,debug,master-worker,parallel-10-fixed,sequential}.js`, `seed-2000-users.sql`, `seed-users.js`, `monitor-resources.js`, `debug-ui-selectors.js`, `grafana-dashboard.json`, `package.json`, `package-lock.json`, + `QUICK-START.md`/`README-ULTIMATE.md`/`README-MULTI-ENVIRONMENT-TESTING.md`/`STRESS_TEST_100_README.md`) | Abandoned standalone stress harness. Unreferenced by CI/Docker/compose. Superseded by the reusable, documented `backend/scripts/loadtest.js` (hold/play modes, multi-quiz, prod-URL support). |
+| `backend/test-worker-pool.ps1`, `backend/test-worker-pool.sh` | One-off worker-pool smoke scripts, never wired into `npm test`/CI. Superseded by the load harness. |
+| `backend/dumb.sql` | Scratch SQL, unreferenced. |
+| `backend/SCALING_TO_2000_MATCHES.md` | Obsolete planning doc (target was 2,000 matches); the system is now validated to a 24,000-match cap — see [docs/STRESS_TESTING.md](docs/STRESS_TESTING.md) and [docs/RUNNING.md](docs/RUNNING.md). |
+| `system_design/` (`architecture-diagrams.md`, `database-schema.sql`, `DEV_NOTES.md`, `openapi.yaml`, `README.md`, `socket_spec.md`, `SYSTEM_DESIGN.md`) | Unreferenced near-duplicate of `docs/` (5 of 7 byte-identical; `docs/` is the canonical location referenced by `README.md` and served by the app at `/api-docs/`). Divergent content preserved in git history. |
+
+Kept `start.sh`/`start-server.js` (copied by `backend/Dockerfile`; already repointed to `matchServerMaster.js` in an earlier pass).

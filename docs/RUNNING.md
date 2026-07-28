@@ -62,22 +62,33 @@ Interactive **Swagger UI** is always mounted by the backend:
 
 ---
 
-## 3. Database: schema & seeding
+## 3. Database: schema, migrations & seeding
 
-Schema is managed by **Sequelize sync** at startup (models in `backend/src/models`),
-not SQL migrations — `NODE_ENV=production` uses `sync({ force:false })` (create
-missing tables only; never alters/drops). On a **fresh empty DB** the backend
+**Tables** are created by **Sequelize sync** at startup from the models
+(`backend/src/models`) — `NODE_ENV=production` uses `sync({ force:false })`
+(create missing tables only; never alters/drops). A **fresh empty DB** also
 auto-seeds categories/quizzes.
 
-One-off SQL migrations that sync can't express live in `backend/src/migrations/`
-and are applied manually, e.g. the match unique-constraint migration:
+**Migrations** — things sync can't express (indexes, unique constraints,
+back-fills) live as idempotent `*.sql` files in `backend/src/migrations/` and are
+applied by a small tracked runner. Just run one command; it applies any files not
+yet in the `schema_migrations` table, in filename order, and is safe to re-run:
 
 ```bash
-docker cp backend/src/migrations/add-match-unique-constraints.sql quizup_postgres:/tmp/m.sql
-MSYS_NO_PATHCONV=1 docker exec quizup_postgres psql -U quizup_user -d quizup_db -f /tmp/m.sql
+# local / dev:
+cd backend && npm run migrate
+# in a running container (prod-style):
+docker compose exec backend node dist/scripts/migrate.js
 ```
 
-Seeding helpers (backend `package.json`): `npm run db:setup`, `seed:quick`,
+The production deploy runs `node dist/scripts/migrate.js` automatically after the
+containers come up (see `.github/workflows/ci.yml` → `deploy`). **Add a
+migration:** drop `NNN-description.sql` (zero-padded numeric prefix orders it)
+into `backend/src/migrations/`, keep it idempotent (`IF NOT EXISTS` /
+`ON CONFLICT`), and run the command. `npm run build` copies the `.sql` files into
+`dist/migrations/` so the compiled runner finds them.
+
+**Seeding** helpers (backend `package.json`): `npm run db:setup`, `seed:quick`,
 `seed:massive`. For **load-test users**, bulk-insert directly — see
 [STRESS_TESTING.md §1](STRESS_TESTING.md).
 

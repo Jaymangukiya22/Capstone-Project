@@ -1,9 +1,10 @@
 # Session Handoff — audit, fixes, observability, frontend, load testing
 
-Branch: **`fix/audit-reliability-and-security`** @ `4fab5ba` — **pushed** to `origin`.
-Everything below is committed. Working tree is clean. **PR not yet opened** — see
-[PR_DESCRIPTION.md](PR_DESCRIPTION.md) for the ready-to-paste title/body and the
-compare URL (`gh` isn't installed locally).
+Branch: **`fix/audit-reliability-and-security`** — **pushed** to `origin`.
+Everything below is committed. Working tree is clean. **PR not yet opened** —
+open it from the compare page:
+`https://github.com/Jaymangukiya22/Capstone-Project/compare/main...fix/audit-reliability-and-security`
+(`gh` isn't installed locally).
 
 **Docs to read first:** [docs/RUNNING.md](docs/RUNNING.md) (start the stack, API
 docs, prod Cloudflare tunnel, capacity tuning) · [docs/STRESS_TESTING.md](docs/STRESS_TESTING.md)

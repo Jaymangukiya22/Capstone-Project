@@ -94,3 +94,12 @@ Frontend-admin/docs/
 docs/diagrams/
 deploy-ec2*
 MODULE_DESCRIPTION.md
+
+# Claude Code / AI agent tooling
+# Commit CLAUDE.md, .claude/settings.json, .claude/commands/* (shared).
+# Keep personal/local settings and locally-installed skills out of git.
+.claude/settings.local.json
+.claude/*.local.json
+.agents/
+skills-lock.json
+.claude/skills/

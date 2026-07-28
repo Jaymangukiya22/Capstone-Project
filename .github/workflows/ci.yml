@@ -573,5 +573,13 @@ jobs:
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
+          # Apply DB migrations once the backend container is up. Idempotent and
+          # tracked in schema_migrations; `set -e` aborts the deploy if one fails.
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.prod.yml exec -T backend true 2>/dev/null; then break; fi
+            echo "waiting for backend container ($i/30)..."; sleep 3
+          done
+          docker compose -f docker-compose.prod.yml exec -T backend node dist/scripts/migrate.js
+
           docker compose -f docker-compose.prod.yml ps
 

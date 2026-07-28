@@ -6,7 +6,7 @@
   "scripts": {
     "prebuild": "node pre-build.js",
     "build": "tsc",
-    "postbuild": "echo '✅ TypeScript compilation completed'",
+    "postbuild": "node -e \"const fs=require('fs'),p=require('path'),s='src/migrations',d='dist/migrations';if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});for(const f of fs.readdirSync(s))if(f.endsWith('.sql'))fs.copyFileSync(p.join(s,f),p.join(d,f))}\" && echo 'build + migrations copied'",
     "start": "node dist/server.js",
     "start:match:pool": "node dist/matchServerMaster.js",
     "start:all:pool": "concurrently \"npm run start\" \"npm run start:match:pool\"",
@@ -18,7 +18,8 @@
     "seed:massive": "ts-node src/scripts/seedDatabase.ts",
     "seed:quick": "ts-node --transpile-only src/scripts/quickSeed.ts",
     "seed:dev": "ts-node-dev --respawn --transpile-only src/scripts/seedDatabase.ts",
-    "migrate:tags": "ts-node src/scripts/migrate-tags.ts",
+    "migrate": "ts-node src/scripts/migrate.ts",
+    "migrate:prod": "node dist/scripts/migrate.js",
     "test": "jest --detectOpenHandles --forceExit",
     "test:watch": "jest --watch --detectOpenHandles",
     "test:coverage": "jest --coverage --detectOpenHandles --forceExit",

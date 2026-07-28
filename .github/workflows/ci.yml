@@ -49,6 +49,9 @@ jobs:
 
     - name: Dependency Review (PRs)
       if: ${{ github.event_name == 'pull_request' }}
+      # Requires the repo's Dependency Graph feature (Settings → Security).
+      # Non-fatal so the lint job doesn't fail where that feature is off.
+      continue-on-error: true
       uses: actions/dependency-review-action@v4
       
     - name: Setup Node.js
@@ -375,7 +378,7 @@ jobs:
         output: 'trivy-results.sarif'
     
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
@@ -492,7 +495,7 @@ jobs:
         output: 'trivy-backend.sarif'
 
     - name: Upload Trivy backend scan results
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
       with:
         sarif_file: 'trivy-backend.sarif'

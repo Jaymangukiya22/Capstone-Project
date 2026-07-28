@@ -103,7 +103,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(409);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('already exists');
+      expect(response.body.error).toBe('USER_ALREADY_EXISTS');
     });
 
     it('should return 409 for duplicate email', async () => {
@@ -134,7 +134,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(409);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('already exists');
+      expect(response.body.error).toBe('USER_ALREADY_EXISTS');
     });
   });
 
@@ -236,7 +236,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('Account is inactive');
+      expect(response.body.error).toBe('ACCOUNT_INACTIVE');
     });
 
     it('should return 400 for missing credentials', async () => {
@@ -251,7 +251,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('validation');
+      expect(response.body.error).toBe('VALIDATION_ERROR');
     });
   });
 
@@ -296,7 +296,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('token');
+      expect(response.body.error).toBe('AUTH_REQUIRED');
     });
 
     it('should return 401 for invalid token', async () => {
@@ -306,7 +306,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('token');
+      expect(response.body.error).toBe('INVALID_TOKEN');
     });
 
     it('should return 401 for inactive user', async () => {
@@ -372,7 +372,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('token');
+      expect(response.body.error).toBe('AUTH_REQUIRED');
     });
 
     it('should return 401 for invalid token', async () => {
@@ -382,7 +382,7 @@ describe('Auth Controller Integration Tests', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('token');
+      expect(response.body.error).toBe('INVALID_TOKEN');
     });
   });
 });

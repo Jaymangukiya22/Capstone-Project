@@ -134,10 +134,29 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       target: matchserver-master
-    container_name: quizup_matchserver
+    # NOTE: deliberately NO `container_name` here (unlike the other
+    # services). A fixed container_name collides across replicas and blocks
+    # Compose scaling outright - `docker compose up -d --scale matchserver=N`
+    # (N>1) fails immediately with "Conflict. The container name ... is
+    # already in use". Without it, Compose auto-names each replica
+    # (matchserver-1, matchserver-2, ...) and Docker's embedded DNS resolves
+    # the *service* name `matchserver` to ALL replica IPs (see
+    # `upstream matchserver_cluster` in nginx.conf, which now targets
+    # `matchserver:3001` instead of the old fixed `quizup_matchserver:3001`).
+    # Compose's default scale is 1, so plain `docker compose up -d` still
+    # runs exactly one matchserver, same as before this change.
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       SERVICE_NAME: matchserver  # log label; Promtail ships ./logs/matchserver to Loki
+      # Unique per-replica identity used for cross-replica matchmaking
+      # routing (backend reads process.env.SERVER_ID, default os.hostname()).
+      # Left unset on purpose: each replica's container hostname (its own
+      # container ID, assigned by Docker) is already unique, so the backend's
+      # os.hostname() fallback gives every replica a distinct SERVER_ID with
+      # zero extra wiring. Only set this explicitly if you need a stable,
+      # human-readable ID across container restarts (e.g. for log
+      # correlation) - and if you do, give each replica a DIFFERENT value.
+      SERVER_ID: ${SERVER_ID:-}
       DB_NAME: quizup_db
       DB_USER: quizup_user
       DB_PASSWORD: quizup_password
@@ -192,7 +211,18 @@ services:
       # production. Default off; set LOG_TO_CONSOLE=true to override.
       LOG_TO_CONSOLE: ${LOG_TO_CONSOLE:-false}
     ports:
-      - "${MATCH_SERVICE_PORT:-3001}:3001"
+      # Published as a HOST PORT RANGE -> single container port 3001. At the
+      # default scale of 1 (`docker compose up -d`), only
+      # ${MATCH_SERVICE_PORT:-3001} is ever bound - identical to before this
+      # change. When scaled (`docker compose up -d --scale matchserver=N`),
+      # Compose hands each replica the next free host port in the range
+      # (3001, 3002, ...) so they don't collide on the host; a single fixed
+      # host port here would make replica #2+ fail to start with "port is
+      # already allocated". Widen MATCH_SERVICE_PORT_MAX in .env for >10
+      # replicas. Normal traffic reaches matchserver through nginx (see
+      # nginx.conf), not this host-published port - it's for direct/local
+      # debugging only.
+      - "${MATCH_SERVICE_PORT:-3001}-${MATCH_SERVICE_PORT_MAX:-3010}:3001"
     # ADD VOLUMES FOR PERSISTENCE ✅
     volumes:
       - ./backend/src:/app/src:ro  # Source code (read-only)

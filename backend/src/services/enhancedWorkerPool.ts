@@ -333,6 +333,12 @@ export class EnhancedWorkerPool {
 
   // ===== PUBLIC METHODS =====
 
+  // NOTE (cross-replica): this pool only ever knows about workers forked by THIS
+  // replica, so assignMatch/sendToWorker are inherently LOCAL. In multi-replica
+  // AUTO matchmaking the replica whose sweep pops a pair is the match owner and
+  // assigns one of its own workers here; peer replicas forward inbound events to
+  // the owner over the socket.io Redis adapter (see matchServerMaster.ts
+  // routeMatchEvent / mm_match_event) rather than calling into this pool.
   public async assignMatch(matchId: string): Promise<number | null> {
     // Check if already assigned (reconnection)
     const existingWorker = this.matchToWorker.get(matchId);

@@ -61,6 +61,34 @@ export const workerEventLoopLag = new client.Gauge({
   labelNames: ['worker_id'] as const,
 });
 
+// ---- AUTO matchmaking (owned by the master; mutated directly, no worker IPC) ----
+
+// Current depth of the AUTO matchmaking queue, one series per category. The
+// master sets this every sweep from the queue snapshot and zeroes categories
+// that emptied since the previous tick so no stale non-zero series lingers.
+export const matchmakingQueueDepth = new client.Gauge({
+  name: 'matchserver_matchmaking_queue_depth',
+  help: 'Players currently waiting in the AUTO matchmaking queue, by category',
+  labelNames: ['category'] as const,
+});
+
+// How long players waited before being paired (both players observed per match).
+export const matchmakingWaitSeconds = new client.Histogram({
+  name: 'matchserver_matchmaking_wait_seconds',
+  help: 'Time a player waited in the AUTO queue before being matched (seconds)',
+  buckets: [1, 2, 5, 10, 15, 30, 60, 120, 300],
+});
+
+export const matchmakingMatchesFoundTotal = new client.Counter({
+  name: 'matchserver_matchmaking_matches_found_total',
+  help: 'Total AUTO matchmaking pairs successfully matched',
+});
+
+export const matchmakingTimeoutsTotal = new client.Counter({
+  name: 'matchserver_matchmaking_timeouts_total',
+  help: 'Total AUTO matchmaking searches that timed out without a match',
+});
+
 /** Record one submitted answer's outcome + time spent. */
 export function recordAnswer(result: 'correct' | 'incorrect' | 'timeout', timeSpentSeconds: number) {
   answersTotal.inc({ result });
@@ -74,5 +102,12 @@ export function recordMatchCompleted(durationSeconds: number) {
   matchesCompletedTotal.inc();
   if (typeof durationSeconds === 'number' && durationSeconds >= 0) {
     matchDurationSeconds.observe(durationSeconds);
+  }
+}
+
+/** Record how long a matched player waited in the AUTO queue (seconds). */
+export function recordMatchmakingWait(seconds: number) {
+  if (typeof seconds === 'number' && seconds >= 0) {
+    matchmakingWaitSeconds.observe(seconds);
   }
 }

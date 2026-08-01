@@ -2,12 +2,17 @@
 
 How to load-test QuizUP's real-time match server (`backend/scripts/loadtest.js`):
 seed users, ramp thousands of concurrent 2-player matches across many quizzes,
-watch the system, and verify correctness at scale.
+watch the system, and verify correctness at scale. The harness also has a
+matchmaking mode (`MODE=auto`, §3D) that ramps AUTO-matchmaking searchers
+instead of FRIEND matches and proves the no-double-match pairing invariant —
+see [docs/MATCHMAKING.md](MATCHMAKING.md) for the full design + contract.
 
 - **Harness:** [`backend/scripts/loadtest.js`](../backend/scripts/loadtest.js)
 - **What it exercises:** `POST /api/friend-matches` (create) on the backend, then
   the full socket.io match flow on the match server (authenticate → join by code
-  → ready → play → complete), with per-match Postgres persistence.
+  → ready → play → complete), with per-match Postgres persistence. `MODE=auto`
+  instead exercises `start_auto_matchmaking` → `auto_match_found` (no REST
+  create/join-by-code) — see §3D.
 - **Verified ceiling (4-core / 16 GB box, this stack):** the match server holds
   **10–13 k concurrent matches on a 2–3 CPU / 8 GiB slice at flat ~22–27 ms
   event-loop lag**; the configured cap is **24,000** (`MAX_WORKERS 4 ×
@@ -154,6 +159,37 @@ MSYS_NO_PATHCONV=1 docker run --rm --network quizup_quizup_network \
 
 The prod path needs the tunnel up (`cloudflared tunnel run`) — see
 [CLOUDFLARE_TUNNEL_SETUP.md](../CLOUDFLARE_TUNNEL_SETUP.md) and §7 gotchas.
+
+### D. AUTO matchmaking (`MODE=auto`) — proving no-double-match
+
+Instead of FRIEND matches, ramps `NUM_MATCHES * 2` sockets into the AUTO
+matchmaking queue for a shared `CATEGORY_ID`, in tight concurrent waves to
+stress the pairing path, then asserts the invariant: **every user receives
+`auto_match_found` at most once, and every `matchId` is reported by at most 2
+distinct users.** A violation fails loudly and exits non-zero. It also prints
+search-wait latency (p50/p95) and, best-effort, the `matchserver_matchmaking_*`
+metrics after the run. Full design + socket contract: [docs/MATCHMAKING.md](MATCHMAKING.md).
+
+Find a `categoryId` first (all searchers in a run must share one to pair):
+```sql
+SELECT DISTINCT q.category_id, c.name
+FROM quizzes q JOIN categories c ON c.id = q.category_id
+WHERE q.is_active = true ORDER BY q.category_id;
+```
+
+Run in-container (same pattern as §3A):
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm --name loadgen-auto \
+  --network quizup_quizup_network --ulimit nofile=65535:65535 \
+  -v /d/Capstone-Project/backend:/app -w /app \
+  -e MATCH_URL=http://matchserver:3001 -e API_URL=http://backend:3000 \
+  -e NUM_MATCHES=500 -e USER_OFFSET=0 -e MODE=auto -e CATEGORY_ID=1 \
+  node:20-alpine node --max-old-space-size=3072 scripts/loadtest.js
+```
+
+A clean run ends with `=== PASS: no-double-match invariant holds ... ===` and
+exit code 0; a broken pairing path ends with `=== FAIL: no-double-match
+invariant VIOLATED ===`, the offending user IDs / matchIds, and exit code 1.
 
 ---
 

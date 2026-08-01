@@ -69,19 +69,42 @@ services:
 
   matchserver:
     image: ${REGISTRY}/quizup-matchserver:${IMAGE_TAG}
-    container_name: quizup_matchserver
+    # NOTE: deliberately NO `container_name` here (unlike the other
+    # services) - mirrors docker-compose.yml. A fixed container_name
+    # collides across replicas and blocks `docker compose -f
+    # docker-compose.prod.yml up -d --scale matchserver=N`. Without it,
+    # Compose auto-names each replica and Docker's embedded DNS resolves the
+    # *service* name `matchserver` to ALL replica IPs (nginx.conf's
+    # `upstream matchserver_cluster` targets `matchserver:3001`, not the old
+    # fixed `quizup_matchserver:3001`). Default scale is 1, so plain `up -d`
+    # still runs exactly one matchserver, same as before.
     env_file:
       - ./configs/envs/.env.${APP_ENV}.config
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
+      # Shared Redis (same instance/URL as the backend service below) - this
+      # is how replicas coordinate: socket.io's Redis adapter plus a
+      # Redis-backed matchmaking queue let matches split across replicas
+      # find each other without any replica-to-replica networking.
       REDIS_URL: redis://redis:6379
       MATCH_SERVICE_PORT: 3001
       NODE_ENV: ${NODE_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       LOG_TO_CONSOLE: ${LOG_TO_CONSOLE:-true}
+      # Unique per-replica identity for cross-replica matchmaking routing
+      # (backend reads process.env.SERVER_ID, default os.hostname()). Left
+      # unset on purpose: each replica's container hostname (its own
+      # Docker-assigned container ID) is already unique, so the backend's
+      # os.hostname() fallback is enough. Set explicitly only for a stable,
+      # human-readable ID - and give each replica a DIFFERENT value if so.
+      SERVER_ID: ${SERVER_ID:-}
     ports:
-      - "${MATCH_SERVICE_PORT:-3001}:3001"
+      # HOST PORT RANGE -> single container port, same rationale as
+      # docker-compose.yml: at scale=1 only ${MATCH_SERVICE_PORT:-3001} is
+      # bound (unchanged behavior); scaling assigns each replica the next
+      # free port in the range instead of colliding on a fixed host port.
+      - "${MATCH_SERVICE_PORT:-3001}-${MATCH_SERVICE_PORT_MAX:-3010}:3001"
     networks:
       - quizup_network
     depends_on:

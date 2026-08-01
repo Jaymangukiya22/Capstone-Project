@@ -405,7 +405,17 @@ jobs:
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    
+
+    # Docker/OCI image references must be all-lowercase; github.repository_owner
+    # preserves the real-case GitHub login (e.g. "Jaymangukiya22"). GHCR and
+    # docker/metadata-action's `images:` input both lowercase automatically on
+    # push, but anywhere we manually rebuild a ref (Trivy's image-ref below,
+    # and the deploy job's REGISTRY) has to use this same lowercased value or
+    # it points at an image that was never actually pushed.
+    - name: Compute lowercase image owner
+      id: owner
+      run: echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
     - name: Login to GHCR
       uses: docker/login-action@v3
       if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
@@ -413,12 +423,12 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Extract metadata (backend)
       id: meta_backend
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/quizup-backend
+        images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/quizup-backend
         tags: |
           type=raw,value=${{ github.sha }}
           type=raw,value=latest,enable={{is_default_branch}}
@@ -427,7 +437,7 @@ jobs:
       id: meta_matchserver
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/quizup-matchserver
+        images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/quizup-matchserver
         tags: |
           type=raw,value=${{ github.sha }}
           type=raw,value=latest,enable={{is_default_branch}}
@@ -436,7 +446,7 @@ jobs:
       id: meta_frontend
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/quizup-frontend
+        images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/quizup-frontend
         tags: |
           type=raw,value=${{ github.sha }}
           type=raw,value=latest,enable={{is_default_branch}}
@@ -490,7 +500,7 @@ jobs:
       if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
       with:
         scan-type: 'image'
-        image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/quizup-backend:${{ github.sha }}
+        image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/quizup-backend:${{ github.sha }}
         format: 'sarif'
         output: 'trivy-backend.sarif'
 
@@ -557,7 +567,10 @@ jobs:
           git reset --hard ${{ github.sha }}
 
           export APP_ENV=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-          export REGISTRY=${{ env.REGISTRY }}/${{ github.repository_owner }}
+          # Images were pushed under the lowercased owner (GHCR/metadata-action
+          # lowercase automatically) - github.repository_owner here preserves
+          # real case, so lowercase it or `docker compose pull` 404s.
+          export REGISTRY=${{ env.REGISTRY }}/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           export IMAGE_TAG=${{ github.sha }}
 
           mkdir -p configs/envs

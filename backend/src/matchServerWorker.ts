@@ -5,6 +5,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { User, Quiz, QuizQuestion, QuestionBankItem, QuestionBankOption, Match, MatchPlayer as MatchPlayerModel, MatchAnswer } from './models/index';
 import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis';
 import { logInfo, logError } from './utils/logger';
+import { computeEloUpdate } from './utils/elo';
 import { v4 as uuidv4 } from 'uuid';
 
 if (!cluster.isWorker) {
@@ -58,11 +59,29 @@ interface MatchRoom {
   lastActivityAt: number; // updated on answer submission, question advance, player join/reconnect
   traceId?: string; // correlation id threaded through this match's structured logs
   startedAtMs?: number; // wall-clock ms when the match started (for duration metric)
+  // Owner replica for cross-replica event routing (master's routeMatchEvent /
+  // mm_match_event - see matchServerMaster.ts). Unset for FRIEND matches.
+  // Must be preserved on every Redis round-trip (hydrate -> saveMatchState) or
+  // the master loses track of ownership and every replica starts treating
+  // itself as local, splitting match state across replicas.
+  serverId?: string;
 }
 
 class WorkerMatchService {
   private matches: Map<string, MatchRoom> = new Map();
   private userToMatch: Map<number, string> = new Map();
+  // Guards concurrent joinMatch() hydration for the SAME brand-new matchId.
+  // AUTO matches forward join_match IPC for both players back-to-back with
+  // neither having created the room locally first (unlike FRIEND, where the
+  // creator's synchronous create_friend_match already puts the match in
+  // `matches` before the joiner's join_match_by_code ever reaches a worker).
+  // Without this, two concurrent joinMatch() calls for the same new matchId
+  // both pass `if (!match)`, each build a SEPARATE match object with its own
+  // player-restore + socketId assignment, and the second this.matches.set()
+  // silently clobbers the first - the first player's socketId is lost,
+  // connectedCount can never reach maxPlayers, and LOAD_GAME_SCENE never
+  // fires (the match hangs at WAITING forever).
+  private hydratingMatches: Map<string, Promise<MatchRoom>> = new Map();
   private redis: any;
   private questionTimers: Map<string, NodeJS.Timeout> = new Map();
   private staleMatchReaperInterval: NodeJS.Timeout | null = null;
@@ -492,20 +511,16 @@ class WorkerMatchService {
     });
   }
 
-  public async joinMatch(data: any) {
-    const { matchId, userId, username, socketId } = data;
+  private async hydrateMatchFromRedis(matchId: string, callerUserId: number): Promise<MatchRoom> {
+    const inFlight = this.hydratingMatches.get(matchId);
+    if (inFlight) return inFlight;
 
-    logInfo(`Worker ${workerId}: JOIN_MATCH started`, {
-      matchId,
-      userId,
-      matchExistsLocally: this.matches.has(matchId),
-      allLocalMatches: Array.from(this.matches.keys())
-    });
+    const promise = (async (): Promise<MatchRoom> => {
+      // Re-check in case a prior hydration already landed while this call
+      // was queued behind the lock.
+      const already = this.matches.get(matchId);
+      if (already) return already;
 
-    let match = this.matches.get(matchId);
-
-    // Load from Redis if not in memory
-    if (!match) {
       logInfo(`Worker ${workerId}: Match not in local memory, loading from Redis`, { matchId });
       const matchData = await this.redis.get(`match:${matchId}`);
       if (!matchData) {
@@ -517,7 +532,7 @@ class WorkerMatchService {
       const storedMatch = JSON.parse(matchData);
       const questions = await this.loadQuizQuestions(storedMatch.quizId);
 
-      match = {
+      const match: MatchRoom = {
         id: matchId,
         quizId: storedMatch.quizId,
         quiz: storedMatch.quiz,
@@ -532,7 +547,8 @@ class WorkerMatchService {
         joinCode: storedMatch.joinCode,
         mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
         lastActivityAt: Date.now(),
-        traceId: storedMatch.traceId || uuidv4()
+        traceId: storedMatch.traceId || uuidv4(),
+        serverId: storedMatch.serverId
       };
 
       // Restore players
@@ -558,10 +574,13 @@ class WorkerMatchService {
       // Inform master that this match now exists on this worker so it can
       // correctly track active matches and utilization, even for matches that
       // originated via HTTP/Redis instead of a direct create_match message.
+      // Fires exactly once per match now that hydration is deduplicated (it
+      // used to fire once per concurrent caller, double-incrementing the
+      // worker's matchCount for every AUTO match).
       this.notifyMaster({
         type: 'match_created',
         matchId,
-        userId
+        userId: callerUserId
       });
 
       logInfo(`Worker ${workerId}: MATCH INITIALIZED FROM REDIS`, {
@@ -572,6 +591,35 @@ class WorkerMatchService {
       });
 
       this.ensureQuestionTimerForHydratedMatch(matchId, match);
+      return match;
+    })();
+
+    this.hydratingMatches.set(matchId, promise);
+    try {
+      return await promise;
+    } finally {
+      this.hydratingMatches.delete(matchId);
+    }
+  }
+
+  public async joinMatch(data: any) {
+    const { matchId, userId, username, socketId } = data;
+
+    logInfo(`Worker ${workerId}: JOIN_MATCH started`, {
+      matchId,
+      userId,
+      matchExistsLocally: this.matches.has(matchId),
+      allLocalMatches: Array.from(this.matches.keys())
+    });
+
+    let match = this.matches.get(matchId);
+
+    // Load from Redis if not in memory. Concurrent calls for the SAME new
+    // matchId (both AUTO players' join_match IPC land back-to-back with
+    // neither having created the room locally first) share one in-flight
+    // hydration instead of each building + clobbering their own MatchRoom.
+    if (!match) {
+      match = await this.hydrateMatchFromRedis(matchId, userId);
     }
 
     if (match.status !== 'WAITING' && !match.players.has(userId)) {
@@ -589,6 +637,16 @@ class WorkerMatchService {
       player.socketId = socketId;
       this.userToMatch.set(userId, matchId);
       match.lastActivityAt = Date.now();
+
+      // The MASTER's userId->matchId map (used by getUserMatch, which
+      // cross-replica event routing depends on) is only populated from the
+      // 'match_created'/'player_joined' IPC messages. 'match_created' now
+      // fires once total per match (see hydrateMatchFromRedis), carrying only
+      // whichever caller happened to trigger hydration - so every reconnect
+      // path must independently register ITS OWN userId, or the other AUTO
+      // player (who took this branch and never hit 'match_created') is never
+      // tracked on the master at all.
+      this.notifyMaster({ type: 'player_joined', matchId, userId });
 
       // Send reconnection state
       if (match.status === 'IN_PROGRESS') {
@@ -774,7 +832,8 @@ class WorkerMatchService {
         joinCode: storedMatch.joinCode,
         mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
         lastActivityAt: Date.now(),
-        traceId: storedMatch.traceId || uuidv4()
+        traceId: storedMatch.traceId || uuidv4(),
+        serverId: storedMatch.serverId
       };
 
       // Restore players
@@ -966,7 +1025,8 @@ class WorkerMatchService {
         joinCode: storedMatch.joinCode,
         mode: storedMatch.mode || (storedMatch.joinCode ? 'FRIEND' : 'AUTO'),
         lastActivityAt: Date.now(),
-        traceId: storedMatch.traceId || uuidv4()
+        traceId: storedMatch.traceId || uuidv4(),
+        serverId: storedMatch.serverId
       };
 
       if (storedMatch.players && Array.isArray(storedMatch.players)) {
@@ -1287,6 +1347,34 @@ class WorkerMatchService {
             } as any);
           }
         }));
+
+        // Ranked Elo + win/loss/total-match updates for AUTO (ranked) matches
+        // only - FRIEND matches are unranked and must not move ratings.
+        // Only handles the 1v1 case for now; N>2 players would need pairwise
+        // round-robin Elo (each player vs every other), which this guard
+        // intentionally skips as a safe no-op rather than guessing.
+        if (match.mode === 'AUTO' && results.length === 2) {
+          const [pa, pb] = results;
+          const users = await User.findAll({ where: { id: [pa.userId, pb.userId] } });
+          const ua = users.find(u => u.id === pa.userId);
+          const ub = users.find(u => u.id === pb.userId);
+          if (ua && ub) {
+            const upd = computeEloUpdate(ua.eloRating, ub.eloRating, pa.score, pb.score);
+            const draw = pa.score === pb.score;
+            await Promise.all([
+              User.update({ eloRating: upd.ratingA }, { where: { id: ua.id } }),
+              User.update({ eloRating: upd.ratingB }, { where: { id: ub.id } }),
+              User.increment(
+                { totalMatches: 1, wins: draw ? 0 : (upd.outcomeA === 1 ? 1 : 0), losses: draw ? 0 : (upd.outcomeA === 0 ? 1 : 0) },
+                { where: { id: ua.id } }
+              ),
+              User.increment(
+                { totalMatches: 1, wins: draw ? 0 : (upd.outcomeB === 1 ? 1 : 0), losses: draw ? 0 : (upd.outcomeB === 0 ? 1 : 0) },
+                { where: { id: ub.id } }
+              ),
+            ]);
+          }
+        }
       })
       .catch((error) => logError(`Worker ${workerId}: Failed to save match to database`, error as Error));
 
@@ -1321,6 +1409,7 @@ class WorkerMatchService {
         // only needs the count (for the disconnect-state totalQuestions).
         totalQuestions: match.questions.length,
         workerId,
+        serverId: match.serverId,
         traceId: match.traceId,
         players: Array.from(match.players.values()).map(p => ({
           userId: p.userId,

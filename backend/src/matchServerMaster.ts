@@ -1,4 +1,5 @@
 import cluster from 'cluster';
+import os from 'os';
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -13,7 +14,22 @@ import { initializeRedis, getRedisPubSub, getRedisClient } from './config/redis'
 import { EnhancedWorkerPool } from './services/enhancedWorkerPool';
 import sequelize from './config/database';
 import { User, Quiz, QuizQuestion } from './models';
-import { matchRegister } from './matchMetrics';
+import {
+  matchRegister,
+  matchmakingQueueDepth,
+  matchmakingMatchesFoundTotal,
+  matchmakingTimeoutsTotal,
+  recordMatchmakingWait,
+} from './matchMetrics';
+import {
+  createMatchmakingQueue,
+  DEFAULT_SWEEP_CONFIG,
+  AUTO_MATCH_START_RANGE,
+  AUTO_MATCH_TIMEOUT_MS,
+  type QueueEntry,
+  type MatchPair,
+  type QueueSnapshot,
+} from './services/matchmakingQueue';
 
 // Mirrors middleware/auth.ts's cache key/TTL exactly, so a socket connect
 // right after a REST request can hit the same warm cache entry instead of
@@ -24,6 +40,13 @@ const authCacheKey = (userId: number) => `user:${userId}:auth`;
 dotenv.config();  
 
 const MASTER_PORT = parseInt(process.env.MASTER_PORT || '3001', 10);
+
+// Identifies this match-server replica across the cluster. The replica whose
+// sweep pops a matchmaking pair becomes the match "owner" (stored in the
+// match:<id> Redis blob); inbound client events for that match are routed to
+// the owner via the Redis adapter's serverSideEmit. Single-replica default:
+// owner === self, so every path short-circuits to the local worker pool.
+const SERVER_ID = process.env.SERVER_ID || os.hostname();
 
 const createSocketErrorPayload = (error: string, message: string) => {
   return { success: false, error, message };
@@ -98,92 +121,111 @@ async function startMaster() {
   // Initialize Worker Pool
   const workerPool = new EnhancedWorkerPool(io, redisClient);
 
-  type AutoMatchmakingPreference = {
-    categoryId: number;
-    quizId?: number;
+  // ===== AUTO matchmaking =====
+  // The queue now lives behind an abstraction (Redis-backed by default so every
+  // replica shares it; in-memory for MATCHMAKING_BACKEND=memory / tests). A
+  // single central sweep replaces the old per-player widen/timeout timers, and
+  // the finalize path CLAIMS the pair (atomic lock+ZREM) before any await, which
+  // fixes the double-grab race.
+  const queue = createMatchmakingQueue(redisClient);
+  const sweepConfig = DEFAULT_SWEEP_CONFIG;
+  const AUTO_MATCH_SWEEP_INTERVAL_MS = parseInt(
+    process.env.AUTO_MATCH_SWEEP_INTERVAL_MS || '1500',
+    10,
+  );
+
+  // Small in-process cache of the quiz-id pool per category so a burst of AUTO
+  // matches in the same category doesn't hit the DB once per pair.
+  const AUTO_MATCH_QUIZ_CACHE_TTL_MS = parseInt(
+    process.env.AUTO_MATCH_QUIZ_CACHE_TTL_MS || '60000',
+    10,
+  );
+  const quizPoolByCategory: Map<number, { quizIds: number[]; expiresAt: number }> = new Map();
+
+  // Ring buffer of recent matched wait durations (ms) → estimatedWaitMs shown to
+  // waiting players. Null until we have a few samples so we don't show noise.
+  const WAIT_SAMPLE_CAP = 50;
+  const recentWaitMs: number[] = [];
+  const pushWait = (ms: number) => {
+    recentWaitMs.push(ms);
+    if (recentWaitMs.length > WAIT_SAMPLE_CAP) recentWaitMs.shift();
+  };
+  const estimatedWaitMs = (): number | null => {
+    if (recentWaitMs.length < 5) return null;
+    const mean = recentWaitMs.reduce((sum, v) => sum + v, 0) / recentWaitMs.length;
+    return Math.min(AUTO_MATCH_TIMEOUT_MS, Math.max(0, Math.round(mean)));
   };
 
-  type AutoMatchmakingEntry = {
-    socketId: string;
-    userId: number;
-    username: string;
-    eloRating: number;
-    preference: AutoMatchmakingPreference;
-    startedAtMs: number;
-    currentRange: number;
-    widenTimer?: NodeJS.Timeout;
-    timeoutTimer?: NodeJS.Timeout;
+  // Throttle matchmaking_update: only emit when something the client cares about
+  // changed, or at most once every UPDATE_MIN_INTERVAL_MS.
+  const UPDATE_MIN_INTERVAL_MS = 2500;
+  type UpdateSnapshot = {
+    range: number;
+    position: number;
+    players: number;
+    expanding: boolean;
+    atMs: number;
+  };
+  const lastUpdateByUserId: Map<number, UpdateSnapshot> = new Map();
+  const clearMatchmakingState = (userId: number) => {
+    lastUpdateByUserId.delete(userId);
   };
 
-  const autoMatchQueueByUserId: Map<number, AutoMatchmakingEntry> = new Map();
-
-  const AUTO_MATCH_TIMEOUT_MS = 5 * 60 * 1000;
-  const AUTO_MATCH_START_RANGE = 50;
-  const AUTO_MATCH_RANGE_STEP = 50;
-  const AUTO_MATCH_MAX_RANGE = 300;
-  const AUTO_MATCH_WIDEN_INTERVAL_MS = 15 * 1000;
-
-  const cleanupAutoQueueEntry = (userId: number) => {
-    const entry = autoMatchQueueByUserId.get(userId);
-    if (!entry) return;
-    if (entry.widenTimer) clearInterval(entry.widenTimer);
-    if (entry.timeoutTimer) clearTimeout(entry.timeoutTimer);
-    autoMatchQueueByUserId.delete(userId);
-  };
-
-  const emitMatchmakingErrorToBoth = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry, message: string) => {
+  const emitMatchmakingErrorToBoth = (a: QueueEntry, b: QueueEntry, message: string) => {
     io.to(a.socketId).emit('matchmaking_error', createSocketErrorPayload('MATCHMAKING_FAILED', message));
     io.to(b.socketId).emit('matchmaking_error', createSocketErrorPayload('MATCHMAKING_FAILED', message));
   };
 
-  const isCompatible = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
-    if (a.userId === b.userId) return false;
-    if (a.preference.categoryId !== b.preference.categoryId) return false;
-
-    const aQuizId = a.preference.quizId;
-    const bQuizId = b.preference.quizId;
-    if (aQuizId && bQuizId) return aQuizId === bQuizId;
-    return true;
-  };
-
-  const canMatchByElo = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
-    const diff = Math.abs(a.eloRating - b.eloRating);
-    const allowed = Math.max(a.currentRange, b.currentRange);
-    return diff <= allowed;
-  };
-
-  const chooseQuizId = async (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry) => {
+  const chooseQuizId = async (a: QueueEntry, b: QueueEntry): Promise<number | null> => {
     const preferredQuizId = a.preference.quizId || b.preference.quizId;
     if (preferredQuizId) return preferredQuizId;
 
-    const quizQuestionRows = await QuizQuestion.findAll({
-      attributes: ['quizId'],
-      include: [
-        {
-          model: Quiz,
-          as: 'quiz',
-          required: true,
-          where: {
-            isActive: true,
-            categoryId: a.preference.categoryId,
+    const categoryId = a.preference.categoryId;
+    const now = Date.now();
+    let pool = quizPoolByCategory.get(categoryId);
+    if (!pool || pool.expiresAt <= now) {
+      const quizQuestionRows = await QuizQuestion.findAll({
+        attributes: ['quizId'],
+        include: [
+          {
+            model: Quiz,
+            as: 'quiz',
+            required: true,
+            where: {
+              isActive: true,
+              categoryId,
+            },
+            attributes: [],
           },
-          attributes: [],
-        },
-      ],
-      group: ['QuizQuestion.quizId'],
-      limit: 1000,
-    });
+        ],
+        // Bare attribute name, not 'QuizQuestion.quizId' - Sequelize doesn't
+        // translate the dotted form to the underscored column (quiz_id) here,
+        // it passes it through literally, and the root model's query alias is
+        // "QuizQuestion" (class name) not the table name, so that string
+        // produced invalid SQL (`GROUP BY "QuizQuestion"."quizId"`, a column
+        // that doesn't exist - the real column is quiz_id). The bare form
+        // resolves to the SELECT list's output alias, which Postgres accepts
+        // directly in GROUP BY. Verified against the compiled models.
+        group: ['quizId'],
+        limit: 1000,
+      });
+      const quizIds = quizQuestionRows
+        .map((row) => (row as any).quizId as number)
+        .filter((id) => typeof id === 'number');
+      pool = { quizIds, expiresAt: now + AUTO_MATCH_QUIZ_CACHE_TTL_MS };
+      quizPoolByCategory.set(categoryId, pool);
+    }
 
-    if (!quizQuestionRows.length) return null;
-    const randomIndex = Math.floor(Math.random() * quizQuestionRows.length);
-    return (quizQuestionRows[randomIndex] as any).quizId as number;
+    if (!pool.quizIds.length) return null;
+    const randomIndex = Math.floor(Math.random() * pool.quizIds.length);
+    return pool.quizIds[randomIndex];
   };
 
   const createAutoMatchRedisPayload = (
     matchId: string,
     quizId: number,
-    a: AutoMatchmakingEntry,
-    b: AutoMatchmakingEntry,
+    a: QueueEntry,
+    b: QueueEntry,
   ) => {
     return {
       matchId,
@@ -191,6 +233,9 @@ async function startMaster() {
       status: 'WAITING',
       createdAt: new Date().toISOString(),
       mode: 'AUTO',
+      // Owner replica: the one whose sweep popped this pair. Used to route
+      // inbound client events cross-replica (see routeMatchEvent).
+      serverId: SERVER_ID,
       players: [
         { userId: a.userId, username: a.username },
         { userId: b.userId, username: b.username },
@@ -198,18 +243,13 @@ async function startMaster() {
     };
   };
 
+  // Cross-replica-safe: io.in([socketId]).socketsJoin() reaches a socket even if
+  // it's connected to a different replica (routed via the Redis adapter).
   const joinSocketsToMatchRoom = (matchId: string, socketIds: string[]) => {
-    for (const socketId of socketIds) {
-      const s = io.sockets.sockets.get(socketId);
-      if (s) s.join(matchId);
-    }
+    io.in(socketIds).socketsJoin(matchId);
   };
 
-  const forwardJoinToWorker = (
-    workerId: number,
-    matchId: string,
-    entry: AutoMatchmakingEntry,
-  ) => {
+  const forwardJoinToWorker = (workerId: number, matchId: string, entry: QueueEntry) => {
     return workerPool.sendToWorker(workerId, {
       type: 'join_match',
       matchId,
@@ -219,57 +259,240 @@ async function startMaster() {
     });
   };
 
-  const finalizeAutoMatch = (a: AutoMatchmakingEntry, b: AutoMatchmakingEntry, matchId: string, quizId: number) => {
-    io.to(a.socketId).emit('auto_match_found', { matchId, quizId });
-    io.to(b.socketId).emit('auto_match_found', { matchId, quizId });
-    cleanupAutoQueueEntry(a.userId);
-    cleanupAutoQueueEntry(b.userId);
-  };
-
-  const tryFindMatchFor = async (entry: AutoMatchmakingEntry) => {
-    for (const other of autoMatchQueueByUserId.values()) {
-      if (!isCompatible(entry, other) || !canMatchByElo(entry, other)) continue;
-      const quizId = await chooseQuizId(entry, other);
+  // Finalize an already-CLAIMED pair (both entries are removed from the queue
+  // before we get here, so no other attempt can grab either player). On any
+  // failure past this point we emit matchmaking_error and do NOT re-add them.
+  const finalizePair = async (pair: MatchPair): Promise<void> => {
+    const { a, b } = pair;
+    const now = Date.now();
+    try {
+      const quizId = await chooseQuizId(a, b);
       if (!quizId) {
-        emitMatchmakingErrorToBoth(entry, other, 'No quizzes available for the selected category');
-        cleanupAutoQueueEntry(entry.userId);
-        cleanupAutoQueueEntry(other.userId);
+        emitMatchmakingErrorToBoth(a, b, 'No quizzes available for the selected category');
+        clearMatchmakingState(a.userId);
+        clearMatchmakingState(b.userId);
         return;
       }
+
       const matchId = `auto_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-      const matchPayload: any = createAutoMatchRedisPayload(matchId, quizId, entry, other);
+      const matchPayload: any = createAutoMatchRedisPayload(matchId, quizId, a, b);
       await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(matchPayload));
+
+      // Owner replica assigns one of ITS local workers.
       const workerId = await workerPool.assignMatch(matchId);
       if (!workerId) {
-        emitMatchmakingErrorToBoth(entry, other, 'No available workers');
+        emitMatchmakingErrorToBoth(a, b, 'No available workers');
         await redisClient.del(`match:${matchId}`);
-        cleanupAutoQueueEntry(entry.userId);
-        cleanupAutoQueueEntry(other.userId);
+        clearMatchmakingState(a.userId);
+        clearMatchmakingState(b.userId);
         return;
       }
       matchPayload.workerId = workerId;
       await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(matchPayload));
-      joinSocketsToMatchRoom(matchId, [entry.socketId, other.socketId]);
-      const sentA = forwardJoinToWorker(workerId, matchId, entry);
-      const sentB = forwardJoinToWorker(workerId, matchId, other);
+
+      joinSocketsToMatchRoom(matchId, [a.socketId, b.socketId]);
+      const sentA = forwardJoinToWorker(workerId, matchId, a);
+      const sentB = forwardJoinToWorker(workerId, matchId, b);
       if (!sentA || !sentB) {
-        emitMatchmakingErrorToBoth(entry, other, 'Match worker not available');
-        cleanupAutoQueueEntry(entry.userId);
-        cleanupAutoQueueEntry(other.userId);
+        emitMatchmakingErrorToBoth(a, b, 'Match worker not available');
+        clearMatchmakingState(a.userId);
+        clearMatchmakingState(b.userId);
         return;
       }
-      finalizeAutoMatch(entry, other, matchId, quizId);
-      return;
+
+      io.to(a.socketId).emit('auto_match_found', { matchId, quizId });
+      io.to(b.socketId).emit('auto_match_found', { matchId, quizId });
+
+      const waitA = Math.max(0, now - a.startedAtMs);
+      const waitB = Math.max(0, now - b.startedAtMs);
+      recordMatchmakingWait(waitA / 1000);
+      recordMatchmakingWait(waitB / 1000);
+      matchmakingMatchesFoundTotal.inc();
+      pushWait(waitA);
+      pushWait(waitB);
+
+      clearMatchmakingState(a.userId);
+      clearMatchmakingState(b.userId);
+    } catch (error) {
+      logError('finalizePair error', error as Error);
+      emitMatchmakingErrorToBoth(a, b, 'Could not start the match right now. Please try again.');
+      clearMatchmakingState(a.userId);
+      clearMatchmakingState(b.userId);
     }
   };
 
-  const getPlayersSearchingForCategory = (categoryId: number) => {
-    let count = 0;
-    for (const entry of autoMatchQueueByUserId.values()) {
-      if (entry.preference.categoryId === categoryId) count += 1;
-    }
-    return count;
+  // Emit a matchmaking_update to a still-searching player, throttled.
+  const maybeEmitMatchmakingUpdate = (
+    entry: QueueEntry,
+    playersSearching: number,
+    position: number,
+    now: number,
+  ) => {
+    const expanding = entry.currentRange > AUTO_MATCH_START_RANGE;
+    const prev = lastUpdateByUserId.get(entry.userId);
+    const changed =
+      !prev ||
+      prev.range !== entry.currentRange ||
+      prev.position !== position ||
+      prev.players !== playersSearching ||
+      prev.expanding !== expanding;
+    const stale = !prev || now - prev.atMs >= UPDATE_MIN_INTERVAL_MS;
+    if (!changed && !stale) return;
+
+    lastUpdateByUserId.set(entry.userId, {
+      range: entry.currentRange,
+      position,
+      players: playersSearching,
+      expanding,
+      atMs: now,
+    });
+    io.to(entry.socketId).emit('matchmaking_update', {
+      range: entry.currentRange,
+      elapsedMs: now - entry.startedAtMs,
+      playersSearching,
+      queuePosition: position,
+      estimatedWaitMs: estimatedWaitMs(),
+      expanding,
+    });
   };
+
+  // Zero out queue_depth series for categories that emptied since last tick so
+  // Prometheus never keeps reporting a stale non-zero depth.
+  let lastDepthLabels: Set<number> = new Set();
+  const updateQueueDepthMetrics = (snapshot: QueueSnapshot) => {
+    const current = new Set<number>();
+    for (const [categoryId, depth] of snapshot.depthByCategory) {
+      matchmakingQueueDepth.set({ category: String(categoryId) }, depth);
+      current.add(categoryId);
+    }
+    for (const categoryId of lastDepthLabels) {
+      if (!current.has(categoryId)) {
+        matchmakingQueueDepth.set({ category: String(categoryId) }, 0);
+      }
+    }
+    lastDepthLabels = current;
+  };
+
+  // The one central sweep: pair, time out, and push throttled status updates.
+  let sweepRunning = false;
+  const runSweep = async () => {
+    if (sweepRunning) return; // never overlap a slow sweep with the next tick
+    sweepRunning = true;
+    const now = Date.now();
+    try {
+      const { pairs, timedOut, stillSearching } = await queue.sweep(now, sweepConfig);
+
+      for (const pair of pairs) {
+        await finalizePair(pair);
+      }
+
+      for (const entry of timedOut) {
+        io.to(entry.socketId).emit(
+          'auto_match_timeout',
+          createSocketErrorPayload('MATCHMAKING_TIMEOUT', 'No match found within 5 minutes'),
+        );
+        matchmakingTimeoutsTotal.inc();
+        clearMatchmakingState(entry.userId);
+      }
+
+      if (stillSearching.length) {
+        const snapshot = await queue.snapshot();
+        for (const entry of stillSearching) {
+          const playersSearching = snapshot.depthByCategory.get(entry.preference.categoryId) || 0;
+          const position = await queue.queuePosition(entry.userId);
+          maybeEmitMatchmakingUpdate(entry, playersSearching, position, now);
+        }
+        updateQueueDepthMetrics(snapshot);
+      } else {
+        updateQueueDepthMetrics(await queue.snapshot());
+      }
+    } catch (error) {
+      logError('runSweep error', error as Error);
+    } finally {
+      sweepRunning = false;
+    }
+  };
+
+  // Route a client match event to the worker holding the match. If another
+  // replica owns the match (AUTO match popped elsewhere), forward it there via
+  // the adapter instead of touching the local worker pool. Single-replica:
+  // match.serverId === SERVER_ID (or unset for friend matches) → local path.
+  type RouteResult = 'ok' | 'forwarded' | 'no_match' | 'no_worker' | 'worker_unavailable';
+  const routeMatchEvent = async (params: {
+    matchId: string;
+    event: string;
+    data: any;
+    userId: number;
+    username: string;
+    socketId: string;
+  }): Promise<RouteResult> => {
+    const matchData = await redisClient.get(`match:${params.matchId}`);
+    if (!matchData) return 'no_match';
+    const match = JSON.parse(matchData);
+
+    if (match.serverId && match.serverId !== SERVER_ID) {
+      io.serverSideEmit('mm_match_event', {
+        matchId: params.matchId,
+        userId: params.userId,
+        username: params.username,
+        socketId: params.socketId,
+        event: params.event,
+        data: params.data,
+      });
+      return 'forwarded';
+    }
+
+    let workerId = match.workerId;
+    if (!workerId) {
+      workerId = await workerPool.assignMatch(params.matchId);
+      if (!workerId) return 'no_worker';
+      match.workerId = workerId;
+      await redisClient.setex(`match:${params.matchId}`, 3600, JSON.stringify(match));
+      logInfo('Assigned worker to match', { matchId: params.matchId, workerId });
+    }
+
+    const sent = workerPool.sendToWorker(workerId, {
+      type: params.event,
+      matchId: params.matchId,
+      userId: params.userId,
+      username: params.username,
+      socketId: params.socketId,
+      data: params.data,
+    });
+    return sent ? 'ok' : 'worker_unavailable';
+  };
+
+  // Peer replicas forward events for matches WE own via serverSideEmit. Dispatch
+  // to our local worker only if we're actually the owner (guards against every
+  // replica acting on the broadcast).
+  io.on('mm_match_event', async (payload: any) => {
+    try {
+      const { matchId, userId, username, socketId, event, data } = payload || {};
+      if (!matchId || !event) return;
+      const matchData = await redisClient.get(`match:${matchId}`);
+      if (!matchData) return;
+      const match = JSON.parse(matchData);
+      if (match.serverId && match.serverId !== SERVER_ID) return; // not ours to run
+
+      let workerId = match.workerId;
+      if (!workerId) {
+        workerId = await workerPool.assignMatch(matchId);
+        if (!workerId) return;
+        match.workerId = workerId;
+        await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
+      }
+      workerPool.sendToWorker(workerId, {
+        type: event,
+        matchId,
+        userId,
+        username,
+        socketId,
+        data,
+      });
+    } catch (error) {
+      logError('mm_match_event dispatch error', error as Error);
+    }
+  });
 
   // ===== HTTP ENDPOINTS =====
 
@@ -599,7 +822,9 @@ ${workers.map((w) =>
           return;
         }
 
-        cleanupAutoQueueEntry(socket.data.userId);
+        // Clear any prior search for this user before starting a new one.
+        await queue.remove(socket.data.userId);
+        clearMatchmakingState(socket.data.userId);
 
         const user = await User.findByPk(socket.data.userId, {
           attributes: ['id', 'eloRating'],
@@ -607,7 +832,7 @@ ${workers.map((w) =>
 
         const eloRating = user ? (user as any).eloRating : 1200;
 
-        const entry: AutoMatchmakingEntry = {
+        const entry: QueueEntry = {
           socketId: socket.id,
           userId: socket.data.userId,
           username: socket.data.username,
@@ -615,40 +840,34 @@ ${workers.map((w) =>
           preference: { categoryId, quizId },
           startedAtMs: Date.now(),
           currentRange: AUTO_MATCH_START_RANGE,
+          serverId: SERVER_ID,
         };
 
-        entry.widenTimer = setInterval(() => {
-          const current = autoMatchQueueByUserId.get(entry.userId);
-          if (!current) return;
-          current.currentRange = Math.min(AUTO_MATCH_MAX_RANGE, current.currentRange + AUTO_MATCH_RANGE_STEP);
-          io.to(current.socketId).emit('matchmaking_update', {
-            range: current.currentRange,
-            elapsedMs: Date.now() - current.startedAtMs,
-            playersSearching: getPlayersSearchingForCategory(current.preference.categoryId),
-          });
-          tryFindMatchFor(current).catch(() => {});
-        }, AUTO_MATCH_WIDEN_INTERVAL_MS);
+        // No per-player timers: widening + timeout are handled by the central
+        // sweep (runSweep). We just enqueue and try once immediately so a
+        // waiting partner is matched on the same tick.
+        await queue.enqueue(entry);
 
-        entry.timeoutTimer = setTimeout(() => {
-          const current = autoMatchQueueByUserId.get(entry.userId);
-          if (!current) return;
-          io.to(current.socketId).emit(
-            'auto_match_timeout',
-            createSocketErrorPayload(
-              'MATCHMAKING_TIMEOUT',
-              'No match found within 5 minutes'
-            )
-          );
-          cleanupAutoQueueEntry(entry.userId);
-        }, AUTO_MATCH_TIMEOUT_MS);
-
-        autoMatchQueueByUserId.set(entry.userId, entry);
+        const playersSearching = await queue.countByCategory(categoryId);
+        const position = await queue.queuePosition(entry.userId);
         socket.emit('matchmaking_started', {
           range: entry.currentRange,
-          playersSearching: getPlayersSearchingForCategory(entry.preference.categoryId),
+          elapsedMs: 0,
+          playersSearching,
+          queuePosition: position,
+          estimatedWaitMs: estimatedWaitMs(),
+          expanding: false,
         });
 
-        await tryFindMatchFor(entry);
+        // Immediate same-tick attempt: find the closest-ELO waiting partner and
+        // CLAIM the pair (atomic) before any await in finalizePair.
+        const partner = await queue.findBestMatchFor(entry);
+        if (partner) {
+          const claimed = await queue.claimPair(entry.userId, partner.userId);
+          if (claimed) {
+            await finalizePair(claimed);
+          }
+        }
       } catch (error) {
         logError('start_auto_matchmaking error', error as Error);
         socket.emit(
@@ -661,9 +880,10 @@ ${workers.map((w) =>
       }
     });
 
-    socket.on('cancel_auto_matchmaking', () => {
+    socket.on('cancel_auto_matchmaking', async () => {
       if (!socket.data.userId) return;
-      cleanupAutoQueueEntry(socket.data.userId);
+      await queue.remove(socket.data.userId);
+      clearMatchmakingState(socket.data.userId);
       socket.emit('matchmaking_cancelled', { success: true });
     });
 
@@ -1179,8 +1399,19 @@ ${workers.map((w) =>
             );
           }
 
-          const matchData = await redisClient.get(`match:${matchId}`);
-          if (!matchData) {
+          // routeMatchEvent sends to the local worker, or forwards to the owner
+          // replica (AUTO match popped elsewhere) via the adapter. Single-replica
+          // and friend matches always take the local path.
+          const result = await routeMatchEvent({
+            matchId,
+            event: eventName,
+            data,
+            userId: socket.data.userId,
+            username: socket.data.username,
+            socketId: socket.id,
+          });
+
+          if (result === 'no_match') {
             return socket.emit(
               'error',
               createSocketErrorPayload(
@@ -1189,48 +1420,26 @@ ${workers.map((w) =>
               )
             );
           }
-
-          const match = JSON.parse(matchData);
-          let workerId = match.workerId;
-
-          // If no worker assigned, assign one now
-          if (!workerId) {
-            workerId = await workerPool.assignMatch(matchId);
-            if (!workerId) {
-              logError('No available workers', new Error(`Cannot assign match ${matchId}`));
-              socket.emit(
-                'error',
-                createSocketErrorPayload(
-                  'NO_AVAILABLE_WORKERS',
-                  'No match workers are available right now. Please try again.'
-                )
-              );
-              io.to(matchId).emit(
-                'error',
-                createSocketErrorPayload(
-                  'NO_AVAILABLE_WORKERS',
-                  'No match workers are available right now. Please try again.'
-                )
-              );
-              return;
-            }
-            // Update Redis with assigned worker
-            match.workerId = workerId;
-            await redisClient.setex(`match:${matchId}`, 3600, JSON.stringify(match));
-            logInfo('Assigned worker to match', { matchId, workerId });
+          if (result === 'no_worker') {
+            logError('No available workers', new Error(`Cannot assign match ${matchId}`));
+            socket.emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
+            io.to(matchId).emit(
+              'error',
+              createSocketErrorPayload(
+                'NO_AVAILABLE_WORKERS',
+                'No match workers are available right now. Please try again.'
+              )
+            );
+            return;
           }
-
-          const sent = workerPool.sendToWorker(workerId, {
-            type: eventName,
-            matchId,
-            userId: socket.data.userId,
-            username: socket.data.username,
-            socketId: socket.id,
-            data
-          });
-
-          if (!sent) {
-            logError('Failed to send event to worker', new Error(`Worker ${workerId} unavailable for event ${eventName}`));
+          if (result === 'worker_unavailable') {
+            logError('Failed to send event to worker', new Error(`Worker unavailable for event ${eventName}`));
             return socket.emit(
               'error',
               createSocketErrorPayload(
@@ -1239,6 +1448,7 @@ ${workers.map((w) =>
               )
             );
           }
+          // 'ok' (dispatched locally) or 'forwarded' (owner replica): nothing else.
         } catch (error) {
           logError(`Error forwarding ${eventName}`, error as Error);
         }
@@ -1248,7 +1458,10 @@ ${workers.map((w) =>
 
     socket.on('disconnect', () => {
       if (socket.data.userId) {
-        cleanupAutoQueueEntry(socket.data.userId);
+        Promise.resolve(queue.remove(socket.data.userId)).catch((error) =>
+          logError('Failed to remove user from matchmaking queue on disconnect', error as Error),
+        );
+        clearMatchmakingState(socket.data.userId);
       }
     });
   });
@@ -1258,19 +1471,28 @@ ${workers.map((w) =>
     logInfo('Master server started', {
       port: MASTER_PORT,
       host: '0.0.0.0',
-      pid: process.pid
+      pid: process.pid,
+      serverId: SERVER_ID
     });
   });
+
+  // Central matchmaking sweep: the single driver of widening, pairing, timeouts,
+  // and throttled status updates (replaces the old per-player timers).
+  const sweepInterval: NodeJS.Timeout = setInterval(() => {
+    runSweep().catch((error) => logError('sweep tick error', error as Error));
+  }, AUTO_MATCH_SWEEP_INTERVAL_MS);
 
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     logInfo('SIGTERM received, shutting down gracefully');
+    clearInterval(sweepInterval);
     await workerPool.shutdown();
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
     logInfo('SIGINT received, shutting down gracefully');
+    clearInterval(sweepInterval);
     await workerPool.shutdown();
     process.exit(0);
   });

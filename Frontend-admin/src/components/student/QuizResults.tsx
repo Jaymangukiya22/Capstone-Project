@@ -4,7 +4,7 @@ import Leaderboard from './quiz-results/Leaderboard';
 import FriendMatchLeaderboard from './quiz-results/FriendMatchLeaderboard';
 import { useResultsNavigationGuard } from '@/hooks/useNavigationGuard';
 import { apiClient } from '@/services/api';
-import { Clock, Zap, Home, Award } from 'lucide-react';
+import { Clock, Zap, Home, Award, RefreshCw } from 'lucide-react';
 
 const toArray = <T,>(value: unknown): T[] => {
   return Array.isArray(value) ? (value as T[]) : []
@@ -479,15 +479,26 @@ export function QuizResults() {
                 </div>
               )}
 
-              {/* 5. BACK TO DASHBOARD BUTTON */}
-              <div className="flex justify-center animate-in slide-in-from-bottom duration-500 delay-400">
+              {/* 5. PLAY AGAIN + BACK TO DASHBOARD BUTTONS */}
+              <div className="flex flex-wrap justify-center gap-3 animate-in slide-in-from-bottom duration-500 delay-400">
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem('friendMatchResults');
+                    sessionStorage.removeItem('friendMatch');
+                    window.location.href = '/matchmaking';
+                  }}
+                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 shadow-lg"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  Play Again
+                </button>
                 <button
                   onClick={() => {
                     sessionStorage.removeItem('friendMatchResults');
                     sessionStorage.removeItem('friendMatch');
                     window.location.href = '/student/dashboard';
                   }}
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 shadow-lg"
+                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-secondary text-secondary-foreground font-semibold hover:bg-secondary/90 transition-all hover:scale-105 shadow-lg"
                 >
                   <Home className="w-5 h-5" />
                   Back to Dashboard

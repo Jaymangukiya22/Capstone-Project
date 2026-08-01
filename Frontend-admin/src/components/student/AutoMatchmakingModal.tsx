@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -12,12 +12,11 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import { Loader2, Users, XCircle } from 'lucide-react'
-import { gameWebSocket } from '@/services/matchService'
-import { WEBSOCKET_URL } from '@/services/api'
 import { categoryService } from '@/services/categoryService'
 import { quizService } from '@/services/quizService'
 import type { StudentQuiz } from '@/services/studentQuizService'
 import type { Category } from '@/types/api'
+import { useAutoMatchmaking, type SelectionMode } from '@/hooks/useAutoMatchmaking'
 
 interface AutoMatchmakingModalProps {
   open: boolean
@@ -25,37 +24,10 @@ interface AutoMatchmakingModalProps {
   selectedQuiz: StudentQuiz | null
 }
 
-type MatchmakingState = {
-  isSearching: boolean
-  startedAtMs: number | null
-  elapsedMs: number
-  range: number | null
-  playersSearching: number | null
-}
-
-type SelectionMode = 'random' | 'manual'
-
 const getRandomQuizId = (quizIds: number[]): number | null => {
   if (!Array.isArray(quizIds) || quizIds.length === 0) return null
   const index = Math.floor(Math.random() * quizIds.length)
   return quizIds[index] ?? null
-}
-
-const getLocalUser = () => {
-  const storedUser = localStorage.getItem('user')
-  if (!storedUser) {
-    return { userId: 1, username: 'Player1' }
-  }
-
-  try {
-    const userData = JSON.parse(storedUser)
-    return {
-      userId: Number(userData.id) || 1,
-      username: userData.email || userData.username || 'Player1',
-    }
-  } catch {
-    return { userId: 1, username: 'Player1' }
-  }
 }
 
 export function AutoMatchmakingModal({
@@ -69,16 +41,16 @@ export function AutoMatchmakingModal({
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [quizIdsForCategory, setQuizIdsForCategory] = useState<number[]>([])
   const [selectedQuizId, setSelectedQuizId] = useState<number | null>(null)
-  const [matchmaking, setMatchmaking] = useState<MatchmakingState>({
-    isSearching: false,
-    startedAtMs: null,
-    elapsedMs: 0,
-    range: null,
-    playersSearching: null,
-  })
 
-  const elapsedTimerRef = useRef<number | null>(null)
-  const isNavigatingRef = useRef(false)
+  const {
+    state: matchmaking,
+    startSearch,
+    cancelSearch,
+    resetState,
+    stopListening,
+  } = useAutoMatchmaking({
+    onBeforeNavigate: () => onOpenChange(false),
+  })
 
   const categoryId = useMemo(() => {
     if (!selectedQuiz?.categoryId) return null
@@ -112,29 +84,9 @@ export function AutoMatchmakingModal({
     }
   }
 
-  const clearElapsedTimer = () => {
-    if (elapsedTimerRef.current) {
-      window.clearInterval(elapsedTimerRef.current)
-      elapsedTimerRef.current = null
-    }
-  }
-
-  const resetState = () => {
-    clearElapsedTimer()
-    setMatchmaking({
-      isSearching: false,
-      startedAtMs: null,
-      elapsedMs: 0,
-      range: null,
-      playersSearching: null,
-    })
-  }
-
   useEffect(() => {
     if (!open) {
-      clearElapsedTimer()
-      gameWebSocket.removeAllListeners()
-      isNavigatingRef.current = false
+      stopListening()
     } else {
       resetState()
       setSelectionMode('random')
@@ -152,8 +104,7 @@ export function AutoMatchmakingModal({
     }
 
     return () => {
-      clearElapsedTimer()
-      gameWebSocket.removeAllListeners()
+      stopListening()
     }
   }, [open])
 
@@ -171,27 +122,6 @@ export function AutoMatchmakingModal({
     loadQuizIdsForCategory(selectedCategoryId).catch(() => {})
   }, [open, selectedCategoryId])
 
-  const handleAutoMatchFound = (matchId: string) => {
-    if (isNavigatingRef.current) return
-    isNavigatingRef.current = true
-
-    localStorage.removeItem('friendMatchState')
-    sessionStorage.removeItem('friendMatchState')
-
-    const friendMatchInfo = {
-      matchId,
-      joinCode: '',
-      websocketUrl: WEBSOCKET_URL,
-      quizName: selectedQuiz?.name || 'Auto Match',
-      quizId: selectedQuiz?.id || '',
-      mode: 'create',
-    }
-
-    sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
-    onOpenChange(false)
-    window.location.pathname = '/friend-match'
-  }
-
   const startMatchmaking = async () => {
     if (!effectiveCategoryId) {
       toast({
@@ -202,125 +132,33 @@ export function AutoMatchmakingModal({
       return
     }
 
-    const user = getLocalUser()
+    let quizIdToUse: number | undefined
 
-    resetState()
-    gameWebSocket.disconnect()
-    gameWebSocket.removeAllListeners()
-
-    gameWebSocket.on('authenticated', () => {
-      const payload: any = { categoryId: effectiveCategoryId }
-
-      if (selectionMode === 'manual') {
-        const quizToUse = selectedQuizId ?? getRandomQuizId(quizIdsForCategory)
-        if (quizToUse === null) {
-          toast({
-            title: 'Matchmaking error',
-            description: 'No quizzes available for the selected category.',
-            variant: 'destructive',
-          })
-          gameWebSocket.disconnect()
-          return
-        }
-        payload.quizId = quizToUse
-      } else if (useExactQuiz && quizId) {
-        payload.quizId = quizId
-      }
-
-      gameWebSocket.send('start_auto_matchmaking', payload)
-    })
-
-    gameWebSocket.on('matchmaking_started', (data: any) => {
-      const startedAtMs = Date.now()
-      setMatchmaking({
-        isSearching: true,
-        startedAtMs,
-        elapsedMs: 0,
-        range: typeof data?.range === 'number' ? data.range : null,
-        playersSearching: typeof data?.playersSearching === 'number'
-          ? data.playersSearching
-          : null,
-      })
-
-      clearElapsedTimer()
-      elapsedTimerRef.current = window.setInterval(() => {
-        setMatchmaking(prev => {
-          if (!prev.isSearching || !prev.startedAtMs) return prev
-          return { ...prev, elapsedMs: Date.now() - prev.startedAtMs }
+    if (selectionMode === 'manual') {
+      const quizToUse = selectedQuizId ?? getRandomQuizId(quizIdsForCategory)
+      if (quizToUse === null) {
+        toast({
+          title: 'Matchmaking error',
+          description: 'No quizzes available for the selected category.',
+          variant: 'destructive',
         })
-      }, 1000)
-    })
-
-    gameWebSocket.on('matchmaking_update', (data: any) => {
-      setMatchmaking(prev => ({
-        ...prev,
-        range: typeof data?.range === 'number' ? data.range : prev.range,
-        elapsedMs: typeof data?.elapsedMs === 'number' ? data.elapsedMs : prev.elapsedMs,
-        playersSearching: typeof data?.playersSearching === 'number'
-          ? data.playersSearching
-          : prev.playersSearching,
-      }))
-    })
-
-    gameWebSocket.on('auto_match_found', (data: any) => {
-      const foundMatchId = data?.matchId
-      if (typeof foundMatchId === 'string' && foundMatchId.length > 0) {
-        handleAutoMatchFound(foundMatchId)
+        return
       }
-    })
-
-    gameWebSocket.on('auto_match_timeout', (data: any) => {
-      clearElapsedTimer()
-      setMatchmaking(prev => ({ ...prev, isSearching: false }))
-      toast({
-        title: 'No match found',
-        description: data?.message || 'No match found within 5 minutes.',
-        variant: 'destructive',
-      })
-      gameWebSocket.disconnect()
-    })
-
-    gameWebSocket.on('matchmaking_cancelled', () => {
-      clearElapsedTimer()
-      setMatchmaking(prev => ({ ...prev, isSearching: false }))
-      gameWebSocket.disconnect()
-    })
-
-    gameWebSocket.on('matchmaking_error', (data: any) => {
-      clearElapsedTimer()
-      setMatchmaking(prev => ({ ...prev, isSearching: false }))
-      toast({
-        title: 'Matchmaking error',
-        description: data?.message || 'Failed to start matchmaking.',
-        variant: 'destructive',
-      })
-      gameWebSocket.disconnect()
-    })
-
-    gameWebSocket.on('error', (data: any) => {
-      clearElapsedTimer()
-      setMatchmaking(prev => ({ ...prev, isSearching: false }))
-      toast({
-        title: 'Error',
-        description: data?.message || 'Something went wrong.',
-        variant: 'destructive',
-      })
-      gameWebSocket.disconnect()
-    })
-
-    try {
-      await gameWebSocket.connect(WEBSOCKET_URL, user.userId, user.username)
-    } catch {
-      toast({
-        title: 'Connection Error',
-        description: 'Failed to connect to matchmaking server.',
-        variant: 'destructive',
-      })
+      quizIdToUse = quizToUse
+    } else if (useExactQuiz && quizId) {
+      quizIdToUse = quizId
     }
+
+    await startSearch({
+      categoryId: effectiveCategoryId,
+      quizId: quizIdToUse ?? null,
+      selectionMode,
+      quizName: selectedQuiz?.name || 'Auto Match',
+    })
   }
 
   const cancelMatchmaking = () => {
-    gameWebSocket.send('cancel_auto_matchmaking', {})
+    cancelSearch()
   }
 
   const elapsedSeconds = Math.floor(matchmaking.elapsedMs / 1000)
@@ -481,6 +319,21 @@ export function AutoMatchmakingModal({
                   ? matchmaking.playersSearching
                   : '—'}
               </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Position in queue: {typeof matchmaking.queuePosition === 'number'
+                  ? matchmaking.queuePosition
+                  : '—'}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Est. wait: {typeof matchmaking.estimatedWaitMs === 'number'
+                  ? `~${Math.round(matchmaking.estimatedWaitMs / 1000)}s`
+                  : '—'}
+              </div>
+              {matchmaking.expanding && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Expanding search…
+                </div>
+              )}
             </div>
           )}
 

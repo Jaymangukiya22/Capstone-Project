@@ -13,20 +13,9 @@ import { Loader2, Users, XCircle } from 'lucide-react'
 
 import { categoryService } from '@/services/categoryService'
 import { quizService } from '@/services/quizService'
-import { gameWebSocket } from '@/services/matchService'
-import { WEBSOCKET_URL } from '@/services/api'
 
 import type { Category, Quiz } from '@/types/api'
-
-type MatchmakingState = {
-  isSearching: boolean
-  startedAtMs: number | null
-  elapsedMs: number
-  range: number | null
-  playersSearching: number | null
-}
-
-type SelectionMode = 'random' | 'manual'
+import { useAutoMatchmaking, type SelectionMode } from '@/hooks/useAutoMatchmaking'
 
 const flattenCategoryNodes = (categories: Category[]): Category[] => {
   const result: Category[] = []
@@ -64,23 +53,6 @@ type FlatCategory = {
   id: number
   name: string
   displayName: string
-}
-
-const getLocalUser = () => {
-  const storedUser = localStorage.getItem('user')
-  if (!storedUser) {
-    return { userId: 1, username: 'Player1' }
-  }
-
-  try {
-    const userData = JSON.parse(storedUser)
-    return {
-      userId: Number(userData.id) || 1,
-      username: userData.email || userData.username || 'Player1',
-    }
-  } catch {
-    return { userId: 1, username: 'Player1' }
-  }
 }
 
 const flattenCategories = (
@@ -150,17 +122,15 @@ export function AutoMatchmakingPage() {
   const [selectedQuizId, setSelectedQuizId] = useState<number | null>(null)
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('random')
 
-  const [matchmaking, setMatchmaking] = useState<MatchmakingState>({
-    isSearching: false,
-    startedAtMs: null,
-    elapsedMs: 0,
-    range: null,
-    playersSearching: null,
-  })
+  const {
+    state: matchmaking,
+    startSearch,
+    cancelSearch,
+    resetState: resetMatchmakingState,
+  } = useAutoMatchmaking()
 
-  const elapsedTimerRef = useRef<number | null>(null)
-  const isNavigatingRef = useRef(false)
-  const selectedQuizRef = useRef<Quiz | null>(null)
+  const prefsRestoredRef = useRef(false)
+  const restoringPrefsRef = useRef(false)
 
   const parentCategories = useMemo(() => {
     if (!Array.isArray(categories) || categories.length === 0) return []
@@ -199,31 +169,6 @@ export function AutoMatchmakingPage() {
       return true
     })
   }, [allCategoriesFlat, parentCategoryId])
-
-  const clearElapsedTimer = () => {
-    if (elapsedTimerRef.current) {
-      window.clearInterval(elapsedTimerRef.current)
-      elapsedTimerRef.current = null
-    }
-  }
-
-  const resetMatchmakingState = () => {
-    clearElapsedTimer()
-    setMatchmaking({
-      isSearching: false,
-      startedAtMs: null,
-      elapsedMs: 0,
-      range: null,
-      playersSearching: null,
-    })
-  }
-
-  const cleanupSocket = () => {
-    clearElapsedTimer()
-    gameWebSocket.removeAllListeners()
-    gameWebSocket.disconnect()
-    isNavigatingRef.current = false
-  }
 
   const loadCategories = async () => {
     try {
@@ -286,7 +231,6 @@ export function AutoMatchmakingPage() {
   const handleSelectionModeChange = (mode: SelectionMode) => {
     setSelectionMode(mode)
     setSelectedQuizId(null)
-    selectedQuizRef.current = null
 
     if (mode === 'random') {
       if (selectedParent) pickRandomSubcategory(selectedParent)
@@ -301,108 +245,6 @@ export function AutoMatchmakingPage() {
     }
   }
 
-  const startElapsedTimer = () => {
-    clearElapsedTimer()
-    elapsedTimerRef.current = window.setInterval(() => {
-      setMatchmaking(prev => {
-        if (!prev.isSearching || !prev.startedAtMs) return prev
-        return { ...prev, elapsedMs: Date.now() - prev.startedAtMs }
-      })
-    }, 1000)
-  }
-
-  const handleMatchmakingStarted = (data: unknown) => {
-    const payload = data as { range?: unknown; playersSearching?: unknown }
-    const startedAtMs = Date.now()
-
-    setMatchmaking({
-      isSearching: true,
-      startedAtMs,
-      elapsedMs: 0,
-      range: typeof payload?.range === 'number' ? payload.range : null,
-      playersSearching: typeof payload?.playersSearching === 'number'
-        ? payload.playersSearching
-        : null,
-    })
-
-    startElapsedTimer()
-  }
-
-  const handleMatchmakingUpdate = (data: unknown) => {
-    const payload = data as {
-      range?: unknown
-      elapsedMs?: unknown
-      playersSearching?: unknown
-    }
-    setMatchmaking(prev => ({
-      ...prev,
-      range: typeof payload?.range === 'number' ? payload.range : prev.range,
-      elapsedMs: typeof payload?.elapsedMs === 'number' ? payload.elapsedMs : prev.elapsedMs,
-      playersSearching: typeof payload?.playersSearching === 'number'
-        ? payload.playersSearching
-        : prev.playersSearching,
-    }))
-  }
-
-  const handleAutoMatchFound = (data: unknown) => {
-    const payload = data as { matchId?: unknown }
-    const matchId = payload?.matchId
-    if (isNavigatingRef.current) return
-    if (typeof matchId !== 'string' || matchId.length === 0) return
-    isNavigatingRef.current = true
-
-    const selectedQuiz = selectedQuizRef.current
-    const friendMatchInfo = {
-      matchId,
-      joinCode: '',
-      websocketUrl: WEBSOCKET_URL,
-      quizName: selectedQuiz?.title || 'Random Quiz',
-      quizId: selectedQuiz?.id ? String(selectedQuiz.id) : '',
-      mode: 'create',
-    }
-
-    sessionStorage.setItem('friendMatch', JSON.stringify(friendMatchInfo))
-    window.location.pathname = '/friend-match'
-  }
-
-  const handleTimeout = (message?: string) => {
-    clearElapsedTimer()
-    setMatchmaking(prev => ({ ...prev, isSearching: false }))
-    toast({
-      title: 'No match found',
-      description: message || 'No match found within 5 minutes.',
-      variant: 'destructive',
-    })
-    gameWebSocket.disconnect()
-  }
-
-  const handleCancel = () => {
-    clearElapsedTimer()
-    setMatchmaking(prev => ({ ...prev, isSearching: false }))
-    gameWebSocket.disconnect()
-  }
-
-  const handleFailure = (title: string, message?: string) => {
-    clearElapsedTimer()
-    setMatchmaking(prev => ({ ...prev, isSearching: false }))
-    toast({
-      title,
-      description: message || 'Something went wrong.',
-      variant: 'destructive',
-    })
-    gameWebSocket.disconnect()
-  }
-
-  const registerSocketHandlers = () => {
-    gameWebSocket.on('matchmaking_started', handleMatchmakingStarted)
-    gameWebSocket.on('matchmaking_update', handleMatchmakingUpdate)
-    gameWebSocket.on('auto_match_found', handleAutoMatchFound)
-    gameWebSocket.on('auto_match_timeout', (data: any) => handleTimeout(data?.message))
-    gameWebSocket.on('matchmaking_cancelled', handleCancel)
-    gameWebSocket.on('matchmaking_error', (data: any) => handleFailure('Matchmaking error', data?.message))
-    gameWebSocket.on('error', (data: any) => handleFailure('Error', data?.message))
-  }
-
   const startMatchmaking = async () => {
     if (!parentCategoryId) {
       toast({
@@ -415,51 +257,93 @@ export function AutoMatchmakingPage() {
 
     const effectiveCategoryId = subcategoryId ?? parentCategoryId
 
-    resetMatchmakingState()
-    cleanupSocket()
-    registerSocketHandlers()
+    const quizIdToUse = selectionMode === 'manual'
+      ? selectedQuizId
+      : getRandomQuizId(quizzes)
 
-    gameWebSocket.on('authenticated', () => {
-      const payload: { categoryId: number; quizId?: number } = {
-        categoryId: effectiveCategoryId,
-      }
-
-      const quizIdToUse = selectionMode === 'manual'
-        ? selectedQuizId
-        : getRandomQuizId(quizzes)
-
-      if (quizIdToUse === null) {
-        handleFailure('Matchmaking error', 'No quizzes available for the selected category')
-        return
-      }
-
-      if (typeof quizIdToUse !== 'number') {
-        handleFailure('Matchmaking error', 'Please select a quiz')
-        return
-      }
-
-      payload.quizId = quizIdToUse
-      selectedQuizRef.current = quizzes.find(quiz => quiz.id === quizIdToUse) ?? null
-      gameWebSocket.send('start_auto_matchmaking', payload)
-    })
-
-    const user = getLocalUser()
-    try {
-      await gameWebSocket.connect(WEBSOCKET_URL, user.userId, user.username)
-    } catch (error) {
-      handleFailure('Connection Error', 'Failed to connect to matchmaking server.')
-      console.error('Error connecting to websocket:', error)
+    if (quizIdToUse === null) {
+      toast({
+        title: 'Matchmaking error',
+        description: 'No quizzes available for the selected category',
+        variant: 'destructive',
+      })
+      return
     }
+
+    if (typeof quizIdToUse !== 'number') {
+      toast({
+        title: 'Matchmaking error',
+        description: 'Please select a quiz',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const quiz = quizzes.find(item => item.id === quizIdToUse) ?? undefined
+
+    await startSearch({
+      categoryId: effectiveCategoryId,
+      quizId: quizIdToUse,
+      selectionMode,
+      quizName: getQuizName(quiz),
+    })
   }
 
   const cancelMatchmaking = () => {
-    gameWebSocket.send('cancel_auto_matchmaking', {})
+    cancelSearch()
   }
 
   useEffect(() => {
     loadCategories()
-    return cleanupSocket
   }, [])
+
+  // Restore the last-used category/quiz/selection-mode once categories are
+  // loaded, e.g. after "Play again" navigates back here from QuizResults.
+  useEffect(() => {
+    if (prefsRestoredRef.current) return
+    if (!Array.isArray(categories) || categories.length === 0) return
+    prefsRestoredRef.current = true
+
+    const stored = sessionStorage.getItem('matchmakingPrefs')
+    if (!stored) return
+
+    try {
+      const prefs = JSON.parse(stored) as {
+        categoryId?: unknown
+        quizId?: unknown
+        selectionMode?: unknown
+      }
+      if (typeof prefs.categoryId !== 'number') return
+
+      const flat = flattenCategoryNodes(categories)
+      const target = flat.find(category => category.id === prefs.categoryId)
+      if (!target) return
+
+      let root = target
+      while (root.parentId != null) {
+        const parent = flat.find(category => category.id === root.parentId)
+        if (!parent) break
+        root = parent
+      }
+
+      const restoredMode: SelectionMode = prefs.selectionMode === 'manual' ? 'manual' : 'random'
+
+      restoringPrefsRef.current = true
+      setParentCategoryId(root.id)
+      setSelectionMode(restoredMode)
+      setSubcategoryId(target.id)
+
+      if (restoredMode === 'manual' && typeof prefs.quizId === 'number') {
+        setSelectedQuizId(prefs.quizId)
+      }
+
+      loadQuizzesForCategory(target.id).catch(error => {
+        console.error('Error loading quizzes for restored category:', error)
+      })
+    } catch (error) {
+      console.error('Error restoring matchmaking prefs:', error)
+    }
+  }, [categories])
 
   useEffect(() => {
     if (!selectedParent) {
@@ -467,6 +351,8 @@ export function AutoMatchmakingPage() {
       setQuizzes([])
       return
     }
+
+    if (restoringPrefsRef.current) return
 
     if (selectionMode === 'random') {
       pickRandomSubcategory(selectedParent)
@@ -479,11 +365,14 @@ export function AutoMatchmakingPage() {
   }, [selectedParent])
 
   useEffect(() => {
+    if (restoringPrefsRef.current) {
+      restoringPrefsRef.current = false
+      return
+    }
     setSubcategoryId(null)
     setQuizzes([])
     setSelectedQuizId(null)
     setSelectionMode('random')
-    selectedQuizRef.current = null
     resetMatchmakingState()
   }, [parentCategoryId])
 
@@ -578,7 +467,6 @@ export function AutoMatchmakingPage() {
                   const parsed = Number(value)
                   setSubcategoryId(parsed)
                   setSelectedQuizId(null)
-                  selectedQuizRef.current = null
                   loadQuizzesForCategory(parsed).catch(error => {
                     console.error('Error loading quizzes for manual category:', error)
                   })
@@ -634,6 +522,21 @@ export function AutoMatchmakingPage() {
                 ? matchmaking.playersSearching
                 : '—'}
             </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Position in queue: {typeof matchmaking.queuePosition === 'number'
+                ? matchmaking.queuePosition
+                : '—'}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Est. wait: {typeof matchmaking.estimatedWaitMs === 'number'
+                ? `~${Math.round(matchmaking.estimatedWaitMs / 1000)}s`
+                : '—'}
+            </div>
+            {matchmaking.expanding && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Expanding search…
+              </div>
+            )}
           </div>
         )}
 
